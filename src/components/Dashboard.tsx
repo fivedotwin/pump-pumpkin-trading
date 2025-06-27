@@ -507,7 +507,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         onUpdateSOLBalance(newSOLBalance);
         
         // Show success message
-        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. You will receive SOL after admin approval.`);
+        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. Withdrawal is being processed this typically takes up to 30 minutes.`);
         
         // Clear form and close modal after a short delay
         setTimeout(() => {
