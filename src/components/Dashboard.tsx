@@ -63,6 +63,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [isLoadingWithdrawals, setIsLoadingWithdrawals] = useState(false);
   
   // Local SOL balance state for immediate UI updates
   const [currentSOLBalance, setCurrentSOLBalance] = useState(solBalance);
@@ -171,6 +173,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       console.log('💰 SOL price loaded:', `$${price.toFixed(2)}`);
     } catch (error) {
       console.error('Failed to load SOL price:', error);
+    }
+  };
+
+  const loadWithdrawalRequests = async () => {
+    setIsLoadingWithdrawals(true);
+    try {
+      const requests = await userProfileService.getWithdrawalRequests(walletAddress);
+      setWithdrawalRequests(requests);
+      console.log('📋 Withdrawal requests loaded:', requests.length);
+    } catch (error) {
+      console.error('Failed to load withdrawal requests:', error);
+    } finally {
+      setIsLoadingWithdrawals(false);
     }
   };
 
@@ -509,6 +524,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         // Show success message
         setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. Withdrawal is being processed this typically takes up to 30 minutes.`);
         
+        // Reload withdrawal requests to show the new one
+        loadWithdrawalRequests();
+        
         // Clear form and close modal after a short delay
         setTimeout(() => {
           setWithdrawAmount('');
@@ -804,7 +822,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </button>
               
               <button
-                onClick={() => setShowWithdrawModal(true)}
+                onClick={() => {
+                  setShowWithdrawModal(true);
+                  loadWithdrawalRequests();
+                }}
                 disabled={currentSOLBalance < 0.04}
                 className="flex-1 text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
@@ -1173,9 +1194,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
       {/* Withdraw Modal - Styled like Connect Wallet */}
       {showWithdrawModal && (
-        <div className="fixed inset-0 bg-black flex items-center justify-center p-4 z-50">
-          <div className="text-center max-w-md w-full">
-            <div className="flex justify-end mb-6">
+        <div className="fixed inset-0 bg-black flex items-center justify-center p-3 z-50">
+          <div className="text-center max-w-xs w-full">
+            <div className="flex justify-end mb-4">
               <button
                 onClick={() => {
                   setShowWithdrawModal(false);
@@ -1190,8 +1211,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </button>
             </div>
 
-            <div className="mb-8">
-              <div className="w-20 h-20 mx-auto">
+            <div className="mb-4">
+              <div className="w-16 h-16 mx-auto">
                 <img 
                   src="https://i.imgur.com/fWVz5td.png" 
                   alt="Pump Pumpkin Icon" 
@@ -1200,14 +1221,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </div>
             </div>
 
-            <h1 className="text-3xl font-normal mb-2">
+            <h1 className="text-2xl font-normal mb-2">
               <span style={{ color: '#1e7cfa' }}>Withdraw</span> SOL
             </h1>
             
-            <p className="text-gray-400 text-lg mb-2">Request SOL Withdrawal</p>
+            <p className="text-gray-400 text-base mb-2">Request SOL Withdrawal</p>
             
-            <p className="text-gray-500 text-sm mb-2">Available: {currentSOLBalance.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-8">Minimum withdrawal: 0.04 SOL</p>
+            <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
+            <p className="text-gray-500 text-sm mb-6">Minimum withdrawal: 0.04 SOL</p>
 
             {/* Error Message */}
             {withdrawError && (
@@ -1223,7 +1244,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </div>
             )}
 
-            <div className="mb-8">
+            <div className="mb-6">
               <input
                 type="number"
                 value={withdrawAmount}
@@ -1236,14 +1257,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 max={currentSOLBalance}
                 step="0.001"
                 disabled={isWithdrawing}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-3 text-white text-base placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
               />
             </div>
 
             <button
               onClick={handleWithdraw}
               disabled={!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing}
-              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
+              className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
               style={{ 
                 backgroundColor: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#374151' : '#1e7cfa',
                 color: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#9ca3af' : 'black'
@@ -1268,6 +1289,55 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <span>Request Withdrawal {withdrawAmount ? `${parseFloat(withdrawAmount).toFixed(4)} SOL` : ''}</span>
               )}
             </button>
+
+            {/* Withdrawal History Card */}
+            <div className="mt-4 mb-4">
+              <h3 className="text-sm font-medium text-gray-300 mb-2">Recent Withdrawals</h3>
+              
+              {isLoadingWithdrawals ? (
+                <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-400 mr-2" />
+                    <span className="text-gray-400 text-sm">Loading...</span>
+                  </div>
+                </div>
+              ) : withdrawalRequests.length > 0 ? (
+                <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                  {withdrawalRequests.slice(0, 3).map((request) => (
+                    <div key={request.id} className="bg-gray-800 border border-gray-600 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white text-sm font-medium">{parseFloat(request.amount.toString()).toFixed(4)} SOL</p>
+                          <p className="text-gray-400 text-xs">
+                            {new Date(request.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          {request.status === 'pending' ? (
+                            <span className="text-gray-400 text-xs font-medium">pending...</span>
+                          ) : request.status === 'completed' ? (
+                            <span className="text-green-400 text-xs font-medium">successful</span>
+                          ) : request.status === 'approved' ? (
+                            <span className="text-blue-400 text-xs font-medium">approved</span>
+                          ) : (
+                            <span className="text-red-400 text-xs font-medium">rejected</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 text-center">
+                  <p className="text-gray-400 text-sm">No withdrawal requests yet</p>
+                </div>
+              )}
+            </div>
 
             <p className="text-gray-600 text-xs mb-2">
               Withdrawal Request Will Be Reviewed by Admin
