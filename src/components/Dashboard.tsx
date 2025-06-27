@@ -621,6 +621,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const renderTabContent = () => {
     switch (activeTab) {
       case 'home':
+        const homePortfolioData = calculateTotalPortfolioValue();
+        
         return (
           <div className="text-center max-w-md w-full">
             {/* Character Icon */}
@@ -647,10 +649,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               Welcome Back, <span style={{ color: '#1e7cfa' }}>{currentUsername}</span>
             </h1>
             
-            {/* Balance */}
+            {/* Total Portfolio Balance */}
             <p className="text-gray-400 text-lg mb-2">Your Trading Balance</p>
             <p className="text-5xl font-bold text-white mb-4">
-              {formatCurrency(balance)}
+              {formatCurrency(homePortfolioData.totalValue)}
             </p>
 
             {/* PnL - ALWAYS SHOWS 0 BY DEFAULT */}
