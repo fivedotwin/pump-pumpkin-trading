@@ -9,6 +9,9 @@ interface TokenDetailProps {
   tokenAddress: string;
   onBack: () => void;
   onBuy: () => void;
+  userSOLBalance?: number;
+  userUSDBalance?: number;
+  walletAddress?: string;
 }
 
 interface UserPosition {
@@ -26,7 +29,7 @@ interface HoverData {
 
 type ChartPeriod = 'LIVE' | '4H' | '1D' | '1W' | '1M' | 'MAX';
 
-export default function TokenDetail({ tokenAddress, onBack, onBuy }: TokenDetailProps) {
+export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, userUSDBalance = 0, walletAddress = '' }: TokenDetailProps) {
   const { publicKey } = useWallet();
   const [tokenData, setTokenData] = useState<TokenDetailData | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition>({ value: 0, quantity: 0, type: null });
@@ -748,6 +751,9 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy }: TokenDetail
         <TradingModal
           tokenData={tokenData}
           onClose={handleCloseTradingModal}
+          userSOLBalance={userSOLBalance}
+          userUSDBalance={userUSDBalance}
+          walletAddress={walletAddress || publicKey?.toString() || ''}
         />
       )}
     </div>

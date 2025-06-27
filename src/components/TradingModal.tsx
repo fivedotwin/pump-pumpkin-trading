@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, Wallet, Calculator } from 'lucide-react';
+import { X, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, Wallet, Calculator, Loader2 } from 'lucide-react';
 import { TokenDetailData, formatPrice } from '../services/birdeyeApi';
+import { positionService, CreatePositionData } from '../services/positionService';
 
 interface TradingModalProps {
   tokenData: TokenDetailData;
   onClose: () => void;
   userSOLBalance?: number; // Add SOL balance prop
+  userUSDBalance?: number; // Add USD balance prop
+  walletAddress: string; // Add wallet address for position creation
 }
 
 type OrderType = 'Market Order' | 'Limit Order';
 type TradeDirection = 'Long' | 'Short';
 
-export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }: TradingModalProps) {
+export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, userUSDBalance = 0, walletAddress }: TradingModalProps) {
   const [tradeDirection, setTradeDirection] = useState<TradeDirection>('Long');
   const [orderType, setOrderType] = useState<OrderType>('Market Order');
   const [price, setPrice] = useState(tokenData.price.toString());
@@ -26,9 +29,12 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
     takeProfit?: string;
     position?: string;
   }>({});
+  const [isExecutingTrade, setIsExecutingTrade] = useState(false);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [tradeSuccess, setTradeSuccess] = useState<string | null>(null);
 
-  // Mock available USD balance (this would come from props in real implementation)
-  const availableUSDBalance = 0.00;
+  // Use real USD balance from props
+  const availableUSDBalance = userUSDBalance;
 
   const orderTypes: OrderType[] = ['Market Order', 'Limit Order'];
 
@@ -249,7 +255,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
     validateTpSl();
   }, [tradeDirection, orderType, price, amount, leverage, stopLoss, takeProfit, tpSl, userSOLBalance]);
 
-  const handleExecuteTrade = () => {
+  const handleExecuteTrade = async () => {
     if (!isFormValid()) return;
     
     // Final validation before execution
@@ -257,14 +263,48 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
       return;
     }
     
-    console.log('Execute trade clicked');
-    console.log('Required collateral:', calculateRequiredCollateral(), 'SOL');
-    console.log('Trade size (with leverage):', calculateTradeSize(), 'USD');
-    console.log('Leverage:', leverage + 'x');
-    console.log('Stop Loss P&L:', calculateStopLossPnL());
-    console.log('Take Profit P&L:', calculateTakeProfitPnL());
-    console.log('Liquidation Price:', calculateLiquidationPrice());
-    onClose();
+    setIsExecutingTrade(true);
+    setTradeError(null);
+    setTradeSuccess(null);
+    
+    try {
+      const positionData: CreatePositionData = {
+        wallet_address: walletAddress,
+        token_address: tokenData.address,
+        token_symbol: tokenData.symbol,
+        direction: tradeDirection,
+        order_type: orderType,
+        target_price: orderType === 'Limit Order' ? parseFloat(price) : undefined,
+        amount: parseFloat(amount),
+        leverage: leverage,
+        stop_loss: stopLoss ? parseFloat(stopLoss) : undefined,
+        take_profit: takeProfit ? parseFloat(takeProfit) : undefined,
+      };
+      
+      console.log('🚀 Creating leveraged position:', {
+        token: tokenData.symbol,
+        direction: tradeDirection,
+        leverage: leverage + 'x',
+        amount: amount,
+        collateral: calculateRequiredCollateral().toFixed(4) + ' SOL',
+        trade_size: '$' + calculateTradeSize().toFixed(2)
+      });
+      
+      const position = await positionService.createPosition(positionData);
+      
+      setTradeSuccess(`Position created successfully! Position ID: ${position.id}`);
+      
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error('💥 Error creating position:', error);
+      setTradeError(error.message || 'Failed to create position. Please try again.');
+    } finally {
+      setIsExecutingTrade(false);
+    }
   };
 
   const formatTradeSize = () => {
@@ -657,11 +697,25 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
               )}
             </div>
 
+            {/* Error Message */}
+            {tradeError && (
+              <div className="bg-red-900 border border-red-700 rounded-lg p-3 mb-3">
+                <p className="text-red-300 text-sm">{tradeError}</p>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {tradeSuccess && (
+              <div className="bg-green-900 border border-green-700 rounded-lg p-3 mb-3">
+                <p className="text-green-300 text-sm">{tradeSuccess}</p>
+              </div>
+            )}
+
             {/* Execute Trade Button - compact */}
             <button
               onClick={handleExecuteTrade}
-              disabled={!isFormValid()}
-              className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+              disabled={!isFormValid() || isExecutingTrade}
+              className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               style={{ 
                 backgroundColor: !isFormValid() ? '#374151' : '#1e7cfa',
                 color: !isFormValid() ? '#9ca3af' : 'black'
@@ -677,7 +731,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
                 }
               }}
             >
-              Execute Trade
+              {isExecutingTrade ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating Position...</span>
+                </>
+              ) : (
+                <span>Execute Trade</span>
+              )}
             </button>
           </div>
 
@@ -693,7 +754,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0 }:
           </p>
 
           {/* Custom Styles for Slider */}
-          <style jsx>{`
+          <style>{`
             .slider::-webkit-slider-thumb {
               appearance: none;
               height: 16px;

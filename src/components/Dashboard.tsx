@@ -585,6 +585,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         tokenAddress={selectedTokenAddress}
         onBack={handleBackFromTokenDetail}
         onBuy={handleBuyFromTokenDetail}
+        userSOLBalance={currentSOLBalance}
+        userUSDBalance={balance}
+        walletAddress={walletAddress}
       />
     );
   }

@@ -9,6 +9,19 @@ const birdeyeApi = axios.create({
     'X-API-KEY': BIRDEYE_API_KEY,
     'Content-Type': 'application/json',
   },
+  paramsSerializer: (params) => {
+    // Custom parameter serialization to avoid array notation
+    const searchParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      const value = params[key];
+      if (Array.isArray(value)) {
+        searchParams.append(key, value[0]); // Take first element if array
+      } else {
+        searchParams.append(key, String(value));
+      }
+    });
+    return searchParams.toString();
+  }
 });
 
 export interface TrendingToken {
@@ -87,6 +100,13 @@ export interface BirdeyeTokenCreationResponse {
   };
   success: boolean;
 }
+
+// Helper function to clean token addresses
+const cleanTokenAddress = (address: string): string => {
+  if (!address) return address;
+  // Remove any array notation suffixes like :1, :0, etc.
+  return address.split(':')[0].trim();
+};
 
 const getFallbackData = (): TrendingToken[] => [
   {
@@ -343,14 +363,15 @@ export const fetchTrendingTokens = async (): Promise<TrendingToken[]> => {
  */
 export const fetchTokenDescription = async (tokenAddress: string): Promise<string> => {
   try {
-    console.log(`📝 Fetching token description for: ${tokenAddress}`);
+    const cleanAddress = cleanTokenAddress(tokenAddress);
+    console.log(`📝 Fetching token description for: ${cleanAddress}`);
     
     // STRATEGY 1: Try token_meta endpoint (most likely to have description)
     try {
       console.log('🔍 Trying token_meta endpoint...');
       
       const metaResponse = await birdeyeApi.get('/defi/token_meta', {
-        params: { address: tokenAddress },
+        params: { address: cleanAddress },
         timeout: 15000,
       });
 
@@ -392,7 +413,7 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       console.log('🔍 Trying token_overview endpoint...');
       
       const overviewResponse = await birdeyeApi.get('/defi/token_overview', {
-        params: { address: tokenAddress },
+        params: { address: cleanAddress },
         timeout: 15000,
       });
 
@@ -436,7 +457,7 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       console.log('🔍 Trying token_security endpoint...');
       
       const securityResponse = await birdeyeApi.get('/defi/token_security', {
-        params: { address: tokenAddress },
+        params: { address: cleanAddress },
         timeout: 15000,
       });
 
@@ -493,7 +514,7 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       for (const endpoint of endpoints) {
         try {
           const response = await birdeyeApi.get(endpoint, {
-            params: { address: tokenAddress },
+            params: { address: cleanAddress },
             timeout: 10000,
           });
 
@@ -602,7 +623,8 @@ export const fetchTokenCreationTime = async (tokenAddress: string): Promise<{
   timestamp: number;
 }> => {
   try {
-    console.log(`🕐 Fetching creation time for token: ${tokenAddress}`);
+    const cleanAddress = cleanTokenAddress(tokenAddress);
+    console.log(`🕐 Fetching creation time for token: ${cleanAddress}`);
     
     // Try multiple endpoints for token creation info
     const endpoints = [
@@ -617,7 +639,7 @@ export const fetchTokenCreationTime = async (tokenAddress: string): Promise<{
         
         const response = await birdeyeApi.get(endpoint, {
           params: {
-            address: tokenAddress,
+            address: cleanAddress,
           },
           timeout: 15000,
         });
@@ -706,7 +728,7 @@ export const fetchTokenCreationTime = async (tokenAddress: string): Promise<{
       
       const overviewResponse = await birdeyeApi.get('/defi/token_overview', {
         params: {
-          address: tokenAddress,
+          address: cleanAddress,
         },
         timeout: 15000,
       });
@@ -798,12 +820,13 @@ export const fetchTokenCreationTime = async (tokenAddress: string): Promise<{
  */
 export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetailData | null> => {
   try {
-    console.log(`🔍 Fetching comprehensive token detail for: ${tokenAddress}`);
+    const cleanAddress = cleanTokenAddress(tokenAddress);
+    console.log(`🔍 Fetching comprehensive token detail for: ${cleanAddress}`);
     
     // Fetch token overview first (primary data source)
     const overviewResponse = await birdeyeApi.get<BirdeyeTokenResponse>('/defi/token_overview', {
       params: {
-        address: tokenAddress,
+        address: cleanAddress,
       },
       timeout: 20000,
     });
@@ -827,7 +850,7 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
     let description = '';
     
     try {
-      description = await fetchTokenDescription(tokenAddress);
+      description = await fetchTokenDescription(cleanAddress);
       console.log('✅ Description fetch completed:', description ? 'Success' : 'Failed');
     } catch (descriptionError) {
       console.error('💥 Description fetch failed:', descriptionError);
@@ -841,7 +864,7 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
       console.log('🔗 Fetching social links...');
       
       const metaResponse = await birdeyeApi.get<BirdeyeTokenResponse>('/defi/token_meta', {
-        params: { address: tokenAddress },
+        params: { address: cleanAddress },
         timeout: 10000,
       });
       
@@ -975,7 +998,8 @@ export const fetchTokenPriceHistory = async (
   timeframe: 'LIVE' | '4H' | '1D' | '1W' | '1M' | 'MAX' = '1D'
 ): Promise<Array<{ time: number; price: number }> | null> => {
   try {
-    console.log(`📈 Fetching price history for: ${tokenAddress} (${timeframe})`);
+    const cleanAddress = cleanTokenAddress(tokenAddress);
+    console.log(`📈 Fetching price history for: ${cleanAddress} (${timeframe})`);
     
     // FIXED: Proper Birdeye API timeframe mapping
     const timeframeConfig = {
@@ -1028,7 +1052,7 @@ export const fetchTokenPriceHistory = async (
       
       const ohlcvResponse = await birdeyeApi.get<BirdeyePriceHistoryResponse>('/defi/ohlcv', {
         params: {
-          address: tokenAddress,
+          address: cleanAddress,
           type: config.type,
           time_from: config.time_from,
           time_to: config.time_to,
@@ -1061,7 +1085,7 @@ export const fetchTokenPriceHistory = async (
         
         const historyResponse = await birdeyeApi.get<BirdeyePriceHistoryResponse>('/defi/history_price', {
           params: {
-            address: tokenAddress,
+            address: cleanAddress,
             address_type: 'token',
             type: config.type,
             time_from: config.time_from,
@@ -1096,7 +1120,7 @@ export const fetchTokenPriceHistory = async (
         
         const currentPriceResponse = await birdeyeApi.get('/defi/price', {
           params: { 
-            address: tokenAddress,
+            address: cleanAddress,
             include_liquidity: true 
           },
           timeout: 15000,
