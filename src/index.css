@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Override wallet adapter styles */
+.wallet-adapter-button {
+  background-color: #1e7cfa !important;
+  border-radius: 8px !important;
+  height: 56px !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  width: 100% !important;
+  border: none !important;
+  color: black !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.wallet-adapter-button:hover,
+.wallet-adapter-button:not([disabled]):hover {
+  background-color: #1a6ce8 !important;
+}
+
+.wallet-adapter-button[disabled] {
+  background-color: #374151 !important;
+  color: #9ca3af !important;
+}
+
+/* Modal styling */
+.wallet-adapter-modal {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+.wallet-adapter-modal-container {
+  background-color: #1f2937 !important;
+  border-radius: 12px !important;
+}
+
+.wallet-adapter-modal-title {
+  color: white !important;
+}
+
+.wallet-adapter-modal-list {
+  background-color: #1f2937 !important;
+}
+
+.wallet-adapter-modal-list-item {
+  background-color: #374151 !important;
+  border-radius: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+.wallet-adapter-modal-list-item:hover {
+  background-color: #4b5563 !important;
+}
