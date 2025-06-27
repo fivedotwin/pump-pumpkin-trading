@@ -43,6 +43,21 @@ export interface UpdateUserProfileData {
   sol_balance?: number; // Add SOL balance to update data
 }
 
+export interface WithdrawalRequest {
+  id: string;
+  wallet_address: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  admin_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateWithdrawalRequestData {
+  wallet_address: string;
+  amount: number;
+}
+
 // User profile service
 export class UserProfileService {
   /**
@@ -285,6 +300,114 @@ export class UserProfileService {
     } catch (error) {
       console.error('💥 Error in getAllProfiles:', error);
       return [];
+    }
+  }
+
+  /**
+   * Create a withdrawal request and deduct SOL balance immediately
+   */
+  async createWithdrawalRequest(
+    walletAddress: string, 
+    amount: number
+  ): Promise<WithdrawalRequest | null> {
+    try {
+      console.log('💸 Creating withdrawal request for:', walletAddress, 'amount:', amount);
+      
+      // First, get current SOL balance
+      const profile = await this.getProfile(walletAddress);
+      if (!profile) {
+        console.error('❌ Profile not found for withdrawal request');
+        return null;
+      }
+
+      if (profile.sol_balance < amount) {
+        console.error('❌ Insufficient SOL balance for withdrawal request');
+        return null;
+      }
+
+      // Create the withdrawal request
+      const { data: withdrawalRequest, error: requestError } = await supabase
+        .from('withdrawal_requests')
+        .insert([{
+          wallet_address: walletAddress,
+          amount: amount,
+          status: 'pending'
+        }])
+        .select()
+        .single();
+
+      if (requestError) {
+        console.error('❌ Error creating withdrawal request:', requestError);
+        return null;
+      }
+
+      // Deduct the amount from user's SOL balance immediately
+      const newSOLBalance = profile.sol_balance - amount;
+      const balanceUpdated = await this.updateSOLBalance(walletAddress, newSOLBalance);
+      
+      if (!balanceUpdated) {
+        console.error('❌ Failed to update SOL balance after withdrawal request');
+        // TODO: In production, we might want to delete the withdrawal request if balance update fails
+        return null;
+      }
+
+      console.log('✅ Withdrawal request created and balance deducted');
+      console.log(`📊 SOL balance: ${profile.sol_balance} → ${newSOLBalance}`);
+      
+      return withdrawalRequest;
+    } catch (error) {
+      console.error('💥 Error in createWithdrawalRequest:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get withdrawal requests for a user
+   */
+  async getWithdrawalRequests(walletAddress: string): Promise<WithdrawalRequest[]> {
+    try {
+      console.log('📋 Fetching withdrawal requests for:', walletAddress);
+      
+      const { data: requests, error } = await supabase
+        .from('withdrawal_requests')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching withdrawal requests:', error);
+        return [];
+      }
+
+      console.log(`✅ Found ${requests?.length || 0} withdrawal requests`);
+      return requests || [];
+    } catch (error) {
+      console.error('💥 Error in getWithdrawalRequests:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if user has pending withdrawal requests
+   */
+  async hasPendingWithdrawalRequest(walletAddress: string): Promise<boolean> {
+    try {
+      const { data: requests, error } = await supabase
+        .from('withdrawal_requests')
+        .select('id')
+        .eq('wallet_address', walletAddress)
+        .eq('status', 'pending')
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Error checking pending withdrawal requests:', error);
+        return false;
+      }
+
+      return (requests?.length || 0) > 0;
+    } catch (error) {
+      console.error('💥 Error in hasPendingWithdrawalRequest:', error);
+      return false;
     }
   }
 }

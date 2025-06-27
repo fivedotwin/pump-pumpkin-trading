@@ -5,7 +5,7 @@ import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } f
 import { fetchTrendingTokens, fetchSOLPrice, formatPrice, formatVolume, formatMarketCap, TrendingToken } from '../services/birdeyeApi';
 import { jupiterSwapService, SwapQuote, SwapDirection } from '../services/jupiterApi';
 import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
-import { userProfileService } from '../services/supabaseClient';
+import { userProfileService, WithdrawalRequest } from '../services/supabaseClient';
 import TokenDetail from './TokenDetail';
 import EditProfile from './EditProfile';
 import TradingSettings from './TradingSettings';
@@ -58,6 +58,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [isDepositing, setIsDepositing] = useState(false);
   const [isVerifyingTransaction, setIsVerifyingTransaction] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
+  
+  // Withdrawal transaction states
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
   
   // Local SOL balance state for immediate UI updates
   const [currentSOLBalance, setCurrentSOLBalance] = useState(solBalance);
@@ -479,15 +484,48 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
-    if (!amount || amount <= 0 || amount > balance) return;
+    if (!amount || amount <= 0 || amount < 0.04 || amount > currentSOLBalance) return;
+
+    setIsWithdrawing(true);
+    setWithdrawError(null);
+    setWithdrawSuccess(null);
 
     try {
-      const newBalance = balance - amount;
-      onUpdateBalance(newBalance);
-      setWithdrawAmount('');
-      setShowWithdrawModal(false);
-    } catch (error) {
-      console.error('Error withdrawing:', error);
+      console.log('💸 Starting SOL withdrawal request:', amount, 'SOL');
+
+      // Create withdrawal request and deduct balance
+      const withdrawalRequest = await userProfileService.createWithdrawalRequest(walletAddress, amount);
+
+      if (withdrawalRequest) {
+        console.log('✅ Withdrawal request created successfully:', withdrawalRequest.id);
+        
+        // Update local SOL balance immediately (it's already deducted in the database)
+        const newSOLBalance = currentSOLBalance - amount;
+        setCurrentSOLBalance(newSOLBalance);
+        
+        // Update parent component
+        onUpdateSOLBalance(newSOLBalance);
+        
+        // Show success message
+        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. You will receive SOL after admin approval.`);
+        
+        // Clear form and close modal after a short delay
+        setTimeout(() => {
+          setWithdrawAmount('');
+          setShowWithdrawModal(false);
+          setWithdrawSuccess(null);
+        }, 3000);
+
+        console.log(`✅ Withdrawal request submitted! New SOL balance: ${newSOLBalance.toFixed(4)} SOL`);
+      } else {
+        setWithdrawError('Failed to create withdrawal request. Please try again.');
+      }
+
+    } catch (error: any) {
+      console.error('💥 Withdrawal request error:', error);
+      setWithdrawError(error.message || 'Failed to create withdrawal request. Please try again.');
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -767,19 +805,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               
               <button
                 onClick={() => setShowWithdrawModal(true)}
-                disabled={balance <= 0}
+                disabled={currentSOLBalance < 0.04}
                 className="flex-1 text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
-                  backgroundColor: balance <= 0 ? '#374151' : '#1e7cfa',
-                  color: balance <= 0 ? '#9ca3af' : 'black'
+                  backgroundColor: currentSOLBalance < 0.04 ? '#374151' : '#1e7cfa',
+                  color: currentSOLBalance < 0.04 ? '#9ca3af' : 'black'
                 }}
                 onMouseEnter={(e) => {
-                  if (balance > 0) {
+                  if (currentSOLBalance >= 0.04) {
                     (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (balance > 0) {
+                  if (currentSOLBalance >= 0.04) {
                     (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
                   }
                 }}
@@ -1139,8 +1177,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           <div className="text-center max-w-md w-full">
             <div className="flex justify-end mb-6">
               <button
-                onClick={() => setShowWithdrawModal(false)}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setWithdrawError(null);
+                  setWithdrawSuccess(null);
+                  setWithdrawAmount('');
+                }}
+                disabled={isWithdrawing}
+                className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1157,50 +1201,79 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             </div>
 
             <h1 className="text-3xl font-normal mb-2">
-              <span style={{ color: '#1e7cfa' }}>Withdraw</span> Funds
+              <span style={{ color: '#1e7cfa' }}>Withdraw</span> SOL
             </h1>
             
-            <p className="text-gray-400 text-lg mb-2">Remove From Your Trading Balance</p>
+            <p className="text-gray-400 text-lg mb-2">Request SOL Withdrawal</p>
             
-            <p className="text-gray-500 text-sm mb-8">Available Balance: {formatCurrency(balance)}</p>
+            <p className="text-gray-500 text-sm mb-2">Available: {currentSOLBalance.toFixed(4)} SOL</p>
+            <p className="text-gray-500 text-sm mb-8">Minimum withdrawal: 0.04 SOL</p>
+
+            {/* Error Message */}
+            {withdrawError && (
+              <div className="bg-red-900 border border-red-700 rounded-lg p-3 mb-4">
+                <p className="text-red-300 text-sm">{withdrawError}</p>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {withdrawSuccess && (
+              <div className="bg-green-900 border border-green-700 rounded-lg p-3 mb-4">
+                <p className="text-green-300 text-sm">{withdrawSuccess}</p>
+              </div>
+            )}
 
             <div className="mb-8">
               <input
                 type="number"
                 value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder="Enter amount"
-                min="0"
-                max={balance}
-                step="0.01"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center"
+                onChange={(e) => {
+                  setWithdrawAmount(e.target.value);
+                  setWithdrawError(null); // Clear error when user types
+                }}
+                placeholder="Enter SOL amount (min 0.04)"
+                min="0.04"
+                max={currentSOLBalance}
+                step="0.001"
+                disabled={isWithdrawing}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
               />
             </div>
 
             <button
               onClick={handleWithdraw}
-              disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > balance}
-              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4"
+              disabled={!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing}
+              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
               style={{ 
-                backgroundColor: (!withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > balance) ? '#374151' : '#1e7cfa',
-                color: (!withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > balance) ? '#9ca3af' : 'black'
+                backgroundColor: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#374151' : '#1e7cfa',
+                color: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#9ca3af' : 'black'
               }}
               onMouseEnter={(e) => {
-                if (withdrawAmount && parseFloat(withdrawAmount) > 0 && parseFloat(withdrawAmount) <= balance) {
+                if (withdrawAmount && parseFloat(withdrawAmount) >= 0.04 && parseFloat(withdrawAmount) <= currentSOLBalance && !isWithdrawing) {
                   (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                 }
               }}
               onMouseLeave={(e) => {
-                if (withdrawAmount && parseFloat(withdrawAmount) > 0 && parseFloat(withdrawAmount) <= balance) {
+                if (withdrawAmount && parseFloat(withdrawAmount) >= 0.04 && parseFloat(withdrawAmount) <= currentSOLBalance && !isWithdrawing) {
                   (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
                 }
               }}
             >
-              Withdraw {withdrawAmount ? `$${parseFloat(withdrawAmount).toFixed(2)}` : 'Funds'}
+              {isWithdrawing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Request Withdrawal {withdrawAmount ? `${parseFloat(withdrawAmount).toFixed(4)} SOL` : ''}</span>
+              )}
             </button>
 
-            <p className="text-gray-600 text-xs">
-              Funds Will Be Removed From Your Trading Balance
+            <p className="text-gray-600 text-xs mb-2">
+              Withdrawal Request Will Be Reviewed by Admin
+            </p>
+            <p className="text-gray-500 text-xs">
+              SOL will be sent to your wallet after approval
             </p>
           </div>
         </div>
