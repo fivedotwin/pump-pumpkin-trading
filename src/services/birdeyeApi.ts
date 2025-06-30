@@ -358,6 +358,73 @@ export const fetchTrendingTokens = async (): Promise<TrendingToken[]> => {
   }
 };
 
+// Token data cache to prevent excessive API calls
+const tokenCache = new Map<string, {
+  data: TokenDetailData;
+  timestamp: number;
+  expires: number;
+}>();
+
+const CACHE_DURATION = 30000; // 30 seconds cache
+const PRICE_CACHE_DURATION = 500; // 500ms for prices (ultra-fast trading)
+
+// Rate limiting helper
+let lastApiCall = 0;
+const MIN_API_INTERVAL = 25; // Minimum 25ms between API calls (reduced for speed)
+
+const throttleApiCall = async () => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastApiCall;
+  if (timeSinceLastCall < MIN_API_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_API_INTERVAL - timeSinceLastCall));
+  }
+  lastApiCall = Date.now();
+};
+
+// Enhanced error handling for API failures
+const handleApiError = (error: any, endpoint: string): boolean => {
+  if (error.response?.status === 404) {
+    console.log(`ℹ️ ${endpoint} not available for this token (404) - this is normal for some tokens`);
+    return false; // Don't retry 404s
+  }
+  
+  if (error.response?.status === 400) {
+    console.log(`⚠️ ${endpoint} bad request (400) - skipping this endpoint`);
+    return false; // Don't retry 400s
+  }
+  
+  if (error.response?.status === 429) {
+    console.log(`🚫 ${endpoint} rate limited (429) - will retry with delay`);
+    return true; // Retry rate limits
+  }
+  
+  console.log(`❌ ${endpoint} failed:`, error.message);
+  return false;
+};
+
+// Retry mechanism with exponential backoff
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>, 
+  maxRetries: number = 3, 
+  baseDelay: number = 1000
+): Promise<T | null> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (attempt === maxRetries || !handleApiError(error, 'retry-operation')) {
+        return null;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`⏳ Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return null;
+};
+
 /**
  * COMPLETELY REWRITTEN token description fetching with multiple strategies
  */
@@ -990,6 +1057,48 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
   }
 };
 
+// Enhanced token detail with caching
+export const fetchTokenDetailCached = async (tokenAddress: string): Promise<TokenDetailData | null> => {
+  try {
+    const now = Date.now();
+    
+    // Check cache first
+    const cached = tokenCache.get(tokenAddress);
+    if (cached && now < cached.expires) {
+      console.log('✅ Using cached token data for:', tokenAddress.slice(0, 8) + '...');
+      return cached.data;
+    }
+    
+    // If cache miss or expired, fetch fresh data
+    console.log('🔄 Fetching fresh token data for:', tokenAddress.slice(0, 8) + '...');
+    await throttleApiCall();
+    
+    const tokenData = await fetchTokenDetail(tokenAddress);
+    
+    // Cache the result
+    if (tokenData) {
+      tokenCache.set(tokenAddress, {
+        data: tokenData,
+        timestamp: now,
+        expires: now + CACHE_DURATION
+      });
+    }
+    
+    return tokenData;
+  } catch (error) {
+    console.error('Error fetching cached token detail:', error);
+    
+    // Return stale cache if available on error
+    const cached = tokenCache.get(tokenAddress);
+    if (cached) {
+      console.log('⚠️ Using stale cache due to API error');
+      return cached.data;
+    }
+    
+    return null;
+  }
+};
+
 /**
  * COMPLETELY REWRITTEN price history fetching with proper Birdeye API integration
  */
@@ -1354,5 +1463,64 @@ export const formatMarketCap = (marketCap: number): string => {
     return `$${(marketCap / 1000).toFixed(1)}K`;
   } else {
     return `$${marketCap.toFixed(0)}`;
+  }
+};
+
+// Price-only cache for frequent updates
+const priceCache = new Map<string, {
+  price: number;
+  timestamp: number;
+  expires: number;
+}>();
+
+export const fetchTokenPriceCached = async (tokenAddress: string): Promise<number | null> => {
+  try {
+    const now = Date.now();
+    
+    // Check price cache first
+    const cached = priceCache.get(tokenAddress);
+    if (cached && now < cached.expires) {
+      return cached.price;
+    }
+    
+    // Fetch from token detail
+    await throttleApiCall();
+    const tokenData = await fetchTokenDetailCached(tokenAddress);
+    
+    if (tokenData) {
+      // Cache just the price
+      priceCache.set(tokenAddress, {
+        price: tokenData.price,
+        timestamp: now,
+        expires: now + PRICE_CACHE_DURATION
+      });
+      
+      return tokenData.price;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching cached price:', error);
+    
+    // Return stale price cache if available
+    const cached = priceCache.get(tokenAddress);
+    if (cached) {
+      return cached.price;
+    }
+    
+    return null;
+  }
+};
+
+// Clear cache function for manual refresh
+export const clearTokenCache = (tokenAddress?: string) => {
+  if (tokenAddress) {
+    tokenCache.delete(tokenAddress);
+    priceCache.delete(tokenAddress);
+    console.log('🗑️ Cleared cache for token:', tokenAddress.slice(0, 8) + '...');
+  } else {
+    tokenCache.clear();
+    priceCache.clear();
+    console.log('🗑️ Cleared all token caches');
   }
 };

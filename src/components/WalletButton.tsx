@@ -3,52 +3,44 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 interface WalletButtonProps {
-    onConnect?: (publicKey: string) => void;
+    onConnect: (publicKey: string) => void;
 }
 
 export default function WalletButton({ onConnect }: WalletButtonProps) {
     const { publicKey, connected } = useWallet();
 
     React.useEffect(() => {
-        if (connected && publicKey && onConnect) {
+        if (connected && publicKey) {
             onConnect(publicKey.toString());
         }
     }, [connected, publicKey, onConnect]);
 
     return (
-        <div className="wallet-button-container">
+        <div className="flex justify-center px-4">
             <WalletMultiButton 
-                style={{
-                    backgroundColor: '#1e7cfa',
-                    borderRadius: '8px',
-                    height: '56px',
-                    fontSize: '18px',
-                    fontWeight: '500',
-                    width: '100%',
-                    border: 'none',
-                    color: 'black',
-                    transition: 'background-color 0.2s ease',
-                }}
+                className="
+                    !bg-blue-600 
+                    hover:!bg-blue-700 
+                    !text-white 
+                    !border-0 
+                    !rounded-xl 
+                    !px-6 
+                    !py-4
+                    !text-base
+                    !font-medium
+                    !min-h-[56px]
+                    !w-full
+                    !max-w-[280px]
+                    transition-all 
+                    duration-200 
+                    !shadow-lg
+                    hover:!shadow-xl
+                    hover:!scale-[1.02]
+                    active:!scale-[0.98]
+                    !cursor-pointer
+                    touch-manipulation
+                " 
             />
-            <style>{`
-                .wallet-button-container .wallet-adapter-button {
-                    background-color: #1e7cfa !important;
-                    border-radius: 8px !important;
-                    height: 56px !important;
-                    font-size: 18px !important;
-                    font-weight: 500 !important;
-                    width: 100% !important;
-                    border: none !important;
-                    color: black !important;
-                    transition: background-color 0.2s ease !important;
-                }
-                .wallet-button-container .wallet-adapter-button:hover {
-                    background-color: #1a6ce8 !important;
-                }
-                .wallet-button-container .wallet-adapter-button:not([disabled]):hover {
-                    background-color: #1a6ce8 !important;
-                }
-            `}</style>
         </div>
     );
 }

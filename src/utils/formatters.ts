@@ -95,8 +95,18 @@ export const formatTokenAmount = (num: number): string => {
     }
   } else if (num >= 1) {
     return num.toFixed(2);
+  } else if (num >= 0.01) {
+    // For values between 0.01 and 1, show 2-4 decimal places
+    return num.toFixed(4);
+  } else if (num >= 0.0001) {
+    // For very small values, show 4 decimal places max
+    return num.toFixed(4);
+  } else if (num > 0) {
+    // For extremely small values, show as scientific notation or "~0"
+    return num < 0.00001 ? "~0" : num.toFixed(4);
   } else {
-    return num.toFixed(6);
+    // For zero or negative, just show "0"
+    return "0";
   }
 };
 

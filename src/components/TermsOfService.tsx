@@ -7,47 +7,47 @@ interface TermsOfServiceProps {
 
 export default function TermsOfService({ onBack }: TermsOfServiceProps) {
   return (
-    <div className="min-h-screen bg-black text-white p-4">
+    <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center mb-8">
+        {/* Header - Larger for mobile */}
+        <div className="flex items-center mb-10">
           <button 
             onClick={onBack}
             className="flex items-center text-blue-400 hover:text-blue-300 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back
+            <ArrowLeft className="w-6 h-6 mr-3" />
+            <span className="text-lg">Back</span>
           </button>
         </div>
 
         {/* Terms Content */}
         <div className="prose prose-invert max-w-none">
-          <div className="text-center mb-8">
+          <div className="text-center mb-10">
             <img 
               src="https://i.imgur.com/fWVz5td.png" 
               alt="Pump Pumpkin Icon" 
-              className="w-16 h-16 object-cover rounded-lg mx-auto mb-4"
+              className="w-24 h-24 object-cover rounded-xl mx-auto mb-6"
             />
-            <h1 className="text-3xl font-bold">TERMS OF SERVICE</h1>
+            <h1 className="text-4xl font-bold">TERMS OF SERVICE</h1>
           </div>
           
-          <div className="space-y-6 text-gray-300 leading-relaxed">
+          <div className="space-y-8 text-gray-300 leading-relaxed text-base">
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">1. ACCEPTANCE OF TERMS</h2>
+              <h2 className="text-2xl font-semibold text-white mb-5">1. ACCEPTANCE OF TERMS</h2>
               <p>
                 These Terms of Service ("Terms") constitute a legally binding agreement between you ("User", "you", or "your") and Pump Pumpkin ("Company", "we", "us", or "our") regarding your use of the Pump Pumpkin platform, website, and related services (collectively, the "Service"). By accessing, browsing, or using our Service, you acknowledge that you have read, understood, and agree to be bound by these Terms and all applicable laws and regulations. If you do not agree with any part of these Terms, you must not use our Service.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">2. DESCRIPTION OF SERVICE</h2>
+              <h2 className="text-2xl font-semibold text-white mb-5">2. DESCRIPTION OF SERVICE</h2>
               <p>
                 Pump Pumpkin provides a decentralized trading platform that enables users to engage in leveraged trading of digital assets, specifically tokens created on the Pump.fun platform. The Service allows users to open leveraged positions with various multipliers, subject to market conditions and platform limitations. The Company acts solely as a technology provider and does not provide investment advice, financial planning services, or recommendations regarding specific trading strategies.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">3. FEES AND CHARGES</h2>
+              <h2 className="text-2xl font-semibold text-white mb-5">3. FEES AND CHARGES</h2>
               <p>
                 The Company charges a flat fee of zero point three percent (0.3%) on all trades executed through the platform. This fee is calculated based on the total trade value and is automatically deducted from your account at the time of trade execution. The fee applies to both opening and closing positions, regardless of trade size, leverage multiplier, or asset type. Additional fees may apply for specific services including but not limited to: overnight funding charges, liquidation fees, withdrawal fees, and premium feature access fees.
               </p>
@@ -60,14 +60,14 @@ export default function TermsOfService({ onBack }: TermsOfServiceProps) {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">4. ELIGIBILITY AND ACCOUNT REGISTRATION</h2>
+              <h2 className="text-2xl font-semibold text-white mb-5">4. ELIGIBILITY AND ACCOUNT REGISTRATION</h2>
               <p>
                 To use our Service, you must be at least 18 years of age and have the legal capacity to enter into binding agreements in your jurisdiction. You represent and warrant that all information provided during account registration is accurate, complete, and current. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to immediately notify us of any unauthorized use of your account or any other breach of security.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">5. RISK DISCLOSURE AND ACKNOWLEDGMENT</h2>
+              <h2 className="text-2xl font-semibold text-white mb-5">5. RISK DISCLOSURE AND ACKNOWLEDGMENT</h2>
               <p>
                 Trading in digital assets, particularly with leverage, involves substantial risk of loss and is not suitable for all investors. The value of digital assets can be extremely volatile and unpredictable. Leveraged trading amplifies both potential gains and losses, and you may lose more than your initial investment. Past performance is not indicative of future results. You acknowledge and agree that you understand these risks and that you are solely responsible for determining whether leveraged trading is appropriate for your financial situation and risk tolerance.
               </p>

@@ -161,17 +161,17 @@ function AppContent() {
   if (currentState === 'loading' || isLoadingProfile) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="relative w-20 h-20 mx-auto mb-4">
+        <div className="text-center max-w-sm w-full mx-auto">
+          <div className="relative w-24 h-24 mx-auto mb-6">
             <img 
               src="https://i.imgur.com/fWVz5td.png" 
               alt="Loading" 
-              className="w-full h-full object-cover rounded-lg"
+              className="w-full h-full object-cover rounded-xl"
             />
-            <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-lg animate-spin"></div>
+            <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-xl animate-spin"></div>
           </div>
-          <p className="text-gray-400">Loading your profile...</p>
-          <p className="text-gray-500 text-sm mt-2">Connecting to database...</p>
+          <p className="text-gray-400 text-lg">Loading your profile...</p>
+          <p className="text-gray-500 text-base mt-3">Connecting to database...</p>
         </div>
       </div>
     );
@@ -205,6 +205,7 @@ function AppContent() {
         onUpdateBalance={handleUpdateBalance}
         onUpdateSOLBalance={handleUpdateSOLBalance}
         onUpdateBothBalances={handleUpdateBothBalances}
+        onShowTerms={handleShowTerms}
       />
     );
   }
@@ -212,34 +213,34 @@ function AppContent() {
   // Connect Wallet page (default)
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-      <div className="text-center max-w-md w-full">
-        {/* Character Icon */}
+      <div className="text-center max-w-sm w-full mx-auto">
+        {/* Character Icon - Mobile optimized */}
         <div className="mb-8">
-          <div className="w-20 h-20 mx-auto">
+          <div className="w-24 h-24 mx-auto">
             <img 
               src="https://i.imgur.com/fWVz5td.png" 
               alt="Pump Pumpkin Icon" 
-              className="w-full h-full object-cover rounded-lg"
+              className="w-full h-full object-cover rounded-xl"
             />
           </div>
         </div>
 
-        {/* Welcome Text */}
-        <h1 className="text-3xl font-normal mb-2">
+        {/* Welcome Text - Mobile optimized */}
+        <h1 className="text-3xl font-normal mb-4">
           Welcome To <span style={{ color: '#1e7cfa' }}>Pump Pumpkin</span>
         </h1>
         
-        {/* Subtitle */}
-        <p className="text-gray-400 text-lg mb-2">Pump.Fun Leverage Trading</p>
+        {/* Subtitle - Mobile optimized */}
+        <p className="text-gray-400 text-lg mb-4">Pump.Fun Leverage Trading</p>
         
-        {/* Connect text */}
+        {/* Connect text - Mobile optimized */}
         <p className="text-gray-500 text-sm mb-8">Connect Your Solana Wallet To Start Trading</p>
         
         {/* Wallet Connection Button */}
         <WalletButton onConnect={handleWalletConnect} />
         
-        {/* Terms */}
-        <p className="text-gray-600 text-xs mt-4">
+        {/* Terms - Larger text for mobile */}
+        <p className="text-gray-600 text-sm mt-6">
           By Connecting You Agree To Our{' '}
           <span 
             style={{ color: '#1e7cfa' }} 

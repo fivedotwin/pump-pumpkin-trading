@@ -61,17 +61,17 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
   if (step === 'loading') {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="relative w-20 h-20 mx-auto">
+        <div className="text-center max-w-sm w-full mx-auto">
+          <div className="relative w-24 h-24 mx-auto">
             {/* Main Icon */}
             <img 
               src="https://i.imgur.com/fWVz5td.png" 
               alt="Pump Pumpkin Icon" 
-              className="w-full h-full object-cover rounded-lg"
+              className="w-full h-full object-cover rounded-xl"
             />
             
             {/* Spinning Border */}
-            <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-lg animate-spin"></div>
+            <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-xl animate-spin"></div>
           </div>
         </div>
       </div>
@@ -82,44 +82,44 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
   if (step === 'username') {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="text-center max-w-md w-full">
+        <div className="text-center max-w-sm w-full mx-auto">
           {/* Back Button - positioned absolutely */}
           <button 
             onClick={onBack}
-            className="absolute top-6 left-6 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
+            className="absolute top-8 left-8 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back
+            <ArrowLeft className="w-6 h-6 mr-2" />
+            <span className="text-lg">Back</span>
           </button>
 
           {/* Connected Wallet Status - positioned absolutely */}
-          <div className="absolute top-6 right-6 flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-gray-400">
+          <div className="absolute top-8 right-8 flex items-center space-x-3">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span className="text-base text-gray-400">
               {formatWalletAddress(walletAddress)}
             </span>
           </div>
 
-          {/* Character Icon */}
+          {/* Character Icon - Mobile optimized */}
           <div className="mb-8">
-            <div className="w-20 h-20 mx-auto">
+            <div className="w-24 h-24 mx-auto">
               <img 
                 src="https://i.imgur.com/fWVz5td.png" 
                 alt="Pump Pumpkin Icon" 
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-xl"
               />
             </div>
           </div>
 
-          {/* Welcome Text */}
-          <h1 className="text-3xl font-normal mb-2">
+          {/* Welcome Text - Mobile optimized */}
+          <h1 className="text-3xl font-normal mb-4">
             Setup Your <span style={{ color: '#1e7cfa' }}>Profile</span>
           </h1>
           
-          {/* Subtitle */}
-          <p className="text-gray-400 text-lg mb-2">Choose Your Trading Name</p>
+          {/* Subtitle - Mobile optimized */}
+          <p className="text-gray-400 text-lg mb-4">Choose Your Trading Name</p>
           
-          {/* Connect text */}
+          {/* Connect text - Mobile optimized */}
           <p className="text-gray-500 text-sm mb-8">Enter A Username To Complete Your Profile</p>
           
           {/* Profile Form */}
@@ -135,23 +135,23 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
               placeholder="Enter your trading name"
             />
 
-            {/* Continue Button */}
+            {/* Continue Button - Mobile optimized */}
             <button
               type="submit"
               disabled={!username.trim()}
-              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed min-h-[56px]"
               style={{ 
                 backgroundColor: !username.trim() ? '#374151' : '#1e7cfa',
                 color: !username.trim() ? '#9ca3af' : 'black'
               }}
               onMouseEnter={(e) => {
                 if (username.trim()) {
-                  e.target.style.backgroundColor = '#1a6ce8';
+                  (e.target as HTMLButtonElement).style.backgroundColor = '#1a6ce8';
                 }
               }}
               onMouseLeave={(e) => {
                 if (username.trim()) {
-                  e.target.style.backgroundColor = '#1e7cfa';
+                  (e.target as HTMLButtonElement).style.backgroundColor = '#1e7cfa';
                 }
               }}
             >
@@ -159,8 +159,8 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
             </button>
           </form>
           
-          {/* Terms */}
-          <p className="text-gray-600 text-xs mt-4">
+          {/* Terms - Larger text */}
+          <p className="text-gray-600 text-sm mt-6">
             By Continuing You Agree To Our{' '}
             <span 
               style={{ color: '#1e7cfa' }} 
@@ -177,50 +177,50 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
   // Profile Picture Step
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-      <div className="text-center max-w-md w-full">
+      <div className="text-center max-w-sm w-full mx-auto">
         {/* Back Button - positioned absolutely */}
         <button 
           onClick={handleBackFromPicture}
-          className="absolute top-6 left-6 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
+          className="absolute top-8 left-8 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 mr-2" />
-          Back
+          <ArrowLeft className="w-6 h-6 mr-2" />
+          <span className="text-lg">Back</span>
         </button>
 
         {/* Connected Wallet Status - positioned absolutely */}
-        <div className="absolute top-6 right-6 flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-sm text-gray-400">
+        <div className="absolute top-8 right-8 flex items-center space-x-3">
+          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+          <span className="text-base text-gray-400">
             {formatWalletAddress(walletAddress)}
           </span>
         </div>
 
-        {/* Profile Picture or Default Icon */}
+        {/* Profile Picture or Default Icon - Mobile optimized */}
         <div className="mb-8">
-          <div className="w-20 h-20 mx-auto">
+          <div className="w-24 h-24 mx-auto">
             {profilePicture ? (
               <img 
                 src={profilePicture} 
                 alt="Profile Picture" 
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-xl"
               />
             ) : (
-              <div className="w-full h-full bg-gray-800 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
-                <User className="w-8 h-8 text-gray-500" />
+              <div className="w-full h-full bg-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-600">
+                <User className="w-12 h-12 text-gray-500" />
               </div>
             )}
           </div>
         </div>
 
-        {/* Welcome Text */}
-        <h1 className="text-3xl font-normal mb-2">
+        {/* Welcome Text - Mobile optimized */}
+        <h1 className="text-3xl font-normal mb-4">
           Upload Profile <span style={{ color: '#1e7cfa' }}>Picture</span>
         </h1>
         
-        {/* Subtitle */}
-        <p className="text-gray-400 text-lg mb-2">Hello, {username}!</p>
+        {/* Subtitle - Mobile optimized */}
+        <p className="text-gray-400 text-lg mb-4">Hello, {username}!</p>
         
-        {/* Connect text */}
+        {/* Connect text - Mobile optimized */}
         <p className="text-gray-500 text-sm mb-8">Add A Profile Picture To Complete Your Setup</p>
         
         {/* Hidden file input */}
@@ -232,27 +232,27 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
           className="hidden"
         />
 
-        {/* Upload Button */}
+        {/* Upload Button - Mobile optimized */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="w-full bg-gray-800 border border-gray-600 hover:border-blue-400 text-white font-medium py-4 px-6 rounded-lg text-lg transition-all mb-4 flex items-center justify-center space-x-2"
+          className="w-full bg-gray-800 border border-gray-600 hover:border-blue-400 text-white font-medium py-4 px-6 rounded-lg text-lg transition-all mb-6 flex items-center justify-center space-x-2 min-h-[56px]"
         >
           <Upload className="w-5 h-5" />
           <span>{profilePicture ? 'Change Picture' : 'Upload Picture'}</span>
         </button>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Mobile optimized */}
         <div className="space-y-3">
           {profilePicture && (
             <button
               onClick={handleCompleteSetup}
-              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors"
+              className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors min-h-[56px]"
               style={{ backgroundColor: '#1e7cfa' }}
               onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#1a6ce8';
+                (e.target as HTMLButtonElement).style.backgroundColor = '#1a6ce8';
               }}
               onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#1e7cfa';
+                (e.target as HTMLButtonElement).style.backgroundColor = '#1e7cfa';
               }}
             >
               Complete Setup
@@ -261,14 +261,14 @@ export default function SetupProfile({ onBack, onComplete, walletAddress }: Setu
 
           <button
             onClick={handleSkipPicture}
-            className="w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-400 hover:text-gray-300 font-medium py-4 px-6 rounded-lg text-lg transition-colors"
+            className="w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-400 hover:text-gray-300 font-medium py-4 px-6 rounded-lg text-lg transition-colors min-h-[56px]"
           >
             Skip For Now
           </button>
         </div>
         
-        {/* Terms */}
-        <p className="text-gray-600 text-xs mt-4">
+        {/* Terms - Larger text */}
+        <p className="text-gray-600 text-sm mt-6">
           By Completing Setup You Agree To Our{' '}
           <span 
             style={{ color: '#1e7cfa' }} 
