@@ -48,6 +48,8 @@ const PLATFORM_WALLET = 'CTDZ5teoWajqVcAsWQyEmmvHQzaDiV1jrnvwRmcL1iWv';
 export default function Dashboard({ username, profilePicture, walletAddress, balance, solBalance, onUpdateBalance, onUpdateSOLBalance, onUpdateBothBalances, onShowTerms }: DashboardProps) {
   const { publicKey, signTransaction, disconnect } = useWallet();
   const [caInput, setCaInput] = useState('');
+  const [isValidatingCA, setIsValidatingCA] = useState(false);
+  const [caValidationError, setCaValidationError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -885,13 +887,54 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     soundManager.playClick();
   };
 
-  const handleCASubmit = (e: React.FormEvent) => {
+  const handleCASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!caInput.trim()) return;
     
-    setSelectedTokenAddress(caInput.trim());
-    setViewState('token-detail');
-    setCaInput('');
+    const tokenAddress = caInput.trim();
+    
+    setIsValidatingCA(true);
+    setCaValidationError(null);
+    
+    try {
+      console.log('🔍 Validating token market cap for:', tokenAddress);
+      
+      // Fetch token data to check market cap
+      const tokenData = await fetchTokenDetailCached(tokenAddress);
+      
+      if (!tokenData) {
+        setCaValidationError('Token not found or invalid contract address');
+        return;
+      }
+      
+      const marketCap = tokenData.marketCap || 0;
+      const minimumMarketCap = 120000; // $120k minimum
+      
+      console.log('💰 Token market cap:', `$${marketCap.toLocaleString()}`);
+      console.log('📊 Minimum required:', `$${minimumMarketCap.toLocaleString()}`);
+      
+      if (marketCap < minimumMarketCap) {
+        setCaValidationError(
+          `Market cap too low: $${marketCap.toLocaleString()}. ` +
+          `Minimum required: $${minimumMarketCap.toLocaleString()}`
+        );
+        return;
+      }
+      
+      console.log('✅ Token passes market cap validation, proceeding to trading...');
+      
+      // Token passes validation, proceed to trading
+      setSelectedTokenAddress(tokenAddress);
+      setViewState('token-detail');
+      setCaInput('');
+      setCaValidationError(null);
+      
+    } catch (error: any) {
+      console.error('❌ Error validating token:', error);
+      setCaValidationError('Failed to validate token. Please check the contract address and try again.');
+    } finally {
+      setIsValidatingCA(false);
+    }
   };
 
   const handleBackFromTokenDetail = () => {
@@ -1009,6 +1052,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const handleTokenClick = (token: TrendingToken) => {
     setCaInput(token.address);
     setActiveTab('home');
+    setCaValidationError(null); // Clear any validation errors
   };
 
   const handleCloseSuccessModal = () => {
@@ -1645,32 +1689,73 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </span>
             </div>
             
-            {/* CA Input - Properly sized */}
+            {/* CA Input - With Market Cap Validation */}
             <form onSubmit={handleCASubmit}>
               <div className="relative">
                 <input
                   type="text"
                   value={caInput}
-                  onChange={(e) => setCaInput(e.target.value)}
+                  onChange={(e) => {
+                    setCaInput(e.target.value);
+                    setCaValidationError(null); // Clear error when typing
+                  }}
                   placeholder="Enter Contract Address (CA)"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 text-white text-base placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 transition-all pr-20"
+                  disabled={isValidatingCA}
+                  className={`w-full bg-gray-900 border rounded-lg px-4 py-4 text-white text-base placeholder-gray-500 focus:outline-none transition-all pr-20 ${
+                    caValidationError 
+                      ? 'border-red-500 focus:border-red-400' 
+                      : 'border-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-400'
+                  } ${isValidatingCA ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
                 <button
                   type="submit"
-                  disabled={!caInput.trim()}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!caInput.trim() || isValidatingCA}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                   style={{ 
-                    backgroundColor: !caInput.trim() ? '#374151' : '#1e7cfa',
-                    color: !caInput.trim() ? '#9ca3af' : 'black'
+                    backgroundColor: (!caInput.trim() || isValidatingCA) ? '#374151' : '#1e7cfa',
+                    color: (!caInput.trim() || isValidatingCA) ? '#9ca3af' : 'black'
                   }}
                 >
-                  Trade
+                  {isValidatingCA ? (
+                    <>
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                        <circle 
+                          className="opacity-25" 
+                          cx="12" 
+                          cy="12" 
+                          r="10" 
+                          stroke="currentColor" 
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path 
+                          className="opacity-75" 
+                          fill="currentColor" 
+                          d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      <span>Checking...</span>
+                    </>
+                  ) : (
+                    <span>Trade</span>
+                  )}
                 </button>
               </div>
+              
+              {/* Error Message */}
+              {caValidationError && (
+                <div className="mt-3 p-3 bg-red-900 border border-red-500 rounded-lg">
+                  <p className="text-red-300 text-sm font-medium">
+                    ⚠️ {caValidationError}
+                  </p>
+                </div>
+              )}
             </form>
             
             <p className="text-gray-500 text-sm text-center mt-4">
               Enter a Pump.fun token contract address to start trading
+              <br />
+              <span className="text-xs text-gray-600">Minimum market cap: $120,000</span>
             </p>
           </div>
         );
