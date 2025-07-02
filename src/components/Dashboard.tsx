@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, Sliders, Bell, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History } from 'lucide-react';
+import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken } from '../services/birdeyeApi';
@@ -8,8 +8,6 @@ import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/format
 import { userProfileService, WithdrawalRequest, supabase } from '../services/supabaseClient';
 import TokenDetail from './TokenDetail';
 import EditProfile from './EditProfile';
-import TradingSettings from './TradingSettings';
-import NotificationSettings from './NotificationSettings';
 import { positionService, TradingPosition } from '../services/positionService';
 import PositionModal from './PositionModal';
 import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
@@ -33,7 +31,7 @@ interface DashboardProps {
 
 type TabType = 'home' | 'rewards' | 'positions' | 'orders';
 type SwapMode = 'buy' | 'sell';
-type ViewState = 'dashboard' | 'token-detail' | 'edit-profile' | 'trading-settings' | 'notifications';
+type ViewState = 'dashboard' | 'token-detail' | 'edit-profile';
 
 interface SwapSuccessData {
   txid: string;
@@ -51,6 +49,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const { publicKey, signTransaction, disconnect } = useWallet();
   const [caInput, setCaInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -643,7 +642,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             }
           }
           
-          // Update last P&L values for sound comparison
+          // Update last P&L values for position tracking
           setLastPnLValues(prev => ({ ...prev, [position.id]: pnl_usd }));
           
           // Calculate margin ratio in SOL terms
@@ -1201,19 +1200,53 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setViewState('edit-profile');
   };
 
-  const handleTradingSettings = () => {
-    setShowSettings(false);
-    setViewState('trading-settings');
+  const handleDisconnectWallet = async () => {
+    try {
+      setShowSettings(false);
+      
+      // Force disconnect the wallet
+      await disconnect();
+      
+      // Clear wallet-related localStorage (common wallet adapter keys)
+      localStorage.removeItem('walletName');
+      localStorage.removeItem('wallet-adapter-autoconnect');
+      localStorage.removeItem('wallet-adapter-cached-wallet');
+      
+      // Clear any Phantom-specific storage
+      localStorage.removeItem('phantom-wallet');
+      localStorage.removeItem('solana-wallet');
+      
+      // Clear session storage
+      sessionStorage.clear();
+      
+      console.log('✅ Wallet disconnected successfully');
+      
+      // Force page reload to ensure complete disconnection
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+      
+    } catch (error) {
+      console.error('❌ Error disconnecting wallet:', error);
+      // Force reload even if disconnect fails
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
   };
 
-  const handleNotifications = () => {
-    setShowSettings(false);
-    setViewState('notifications');
-  };
-
-  const handleDisconnectWallet = () => {
-    setShowSettings(false);
-    disconnect();
+  const handleToggleSound = () => {
+    const newSoundEnabled = !soundEnabled;
+    setSoundEnabled(newSoundEnabled);
+    soundManager.setSoundEnabled(newSoundEnabled);
+    
+    // Play feedback sound if sounds are being enabled
+    if (newSoundEnabled) {
+      soundManager.playSuccessChime();
+      hapticFeedback.success();
+    }
+    
+    console.log(`🎵 Sound ${newSoundEnabled ? 'enabled' : 'disabled'}`);
   };
 
   const handleBackToDashboard = () => {
@@ -1257,7 +1290,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setIsClosingPosition(true);
     setClosingPositions(prev => new Set(prev).add(positionId));
     
-    // 🎵🎵🎵 EPIC POSITION CLOSING SOUND SEQUENCE! 🎵🎵🎵
+            // 🎵 Position closing sound
     soundManager.play('trade_confirm', 'epic'); // Epic confirmation for closing
     
     // Show closing trade loading modal
@@ -1506,6 +1539,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           onUpdateSOLBalance(newBalance);
         }}
         onShowTerms={onShowTerms}
+        onNavigateToPositions={() => {
+          setViewState('dashboard');
+          setActiveTab('positions');
+        }}
       />
     );
   }
@@ -1522,13 +1559,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     );
   }
 
-  if (viewState === 'trading-settings') {
-    return <TradingSettings onBack={handleBackToDashboard} />;
-  }
 
-  if (viewState === 'notifications') {
-    return <NotificationSettings onBack={handleBackToDashboard} />;
-  }
 
   // Use real trading positions data
   const activePositions = tradingPositions.filter(position => 
@@ -1702,7 +1733,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
-                    soundManager.playHover();
                     (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                   }}
                   onMouseLeave={(e) => {
@@ -1723,7 +1753,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       hapticFeedback.medium();
                     }}
                     onMouseEnter={() => {
-                      soundManager.playHover();
                     }}
                     className="btn-premium w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors"
                   >
@@ -1802,7 +1831,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
-                    soundManager.playHover();
                     (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                   }}
                   onMouseLeave={(e) => {
@@ -1824,7 +1852,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     hapticFeedback.light();
                   }}
                   onMouseEnter={(e) => {
-                    soundManager.playHover();
                     (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                   }}
                   onMouseLeave={(e) => {
@@ -1990,7 +2017,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                               hapticFeedback.light();
                             }}
                             onMouseEnter={() => {
-                              soundManager.playHover();
                             }}
                             className={`card-premium rounded-lg p-4 cursor-pointer transition-all min-h-[130px] ${
                               isInDanger ? 'position-danger bg-red-900 border-2 border-red-500' : 
@@ -2761,25 +2787,25 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 </button>
                 
                 <button
-                  onClick={() => {
-                    handleTradingSettings();
-                    setShowSettings(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
+                  onClick={handleToggleSound}
+                  className="w-full flex items-center justify-between px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
                 >
-                  <Sliders className="w-5 h-5" />
-                  <span className="text-sm">Trading Settings</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    handleNotifications();
-                    setShowSettings(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
-                >
-                  <Bell className="w-5 h-5" />
-                  <span className="text-sm">Notifications</span>
+                  <div className="flex items-center space-x-3">
+                    {soundEnabled ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M7.5 12H3a1 1 0 01-1-1V9a1 1 0 011-1h4.5l4.95-4.95a1 1 0 011.414 0 1 1 0 01.293.707V19.5a1 1 0 01-.293.707 1 1 0 01-1.414 0L7.5 15z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                      </svg>
+                    )}
+                    <span className="text-sm">Sounds</span>
+                  </div>
+                  <div className={`w-10 h-6 rounded-full p-1 transition-colors ${soundEnabled ? 'bg-blue-600' : 'bg-gray-600'}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                  </div>
                 </button>
                 
                 <div className="border-t border-gray-700 mt-2">
@@ -2867,7 +2893,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 }}
                 onMouseEnter={() => {
                   if (!isActive) {
-                    soundManager.playHover();
                   }
                 }}
                 className={`tab-enhanced ${isActive ? 'active' : ''} relative flex flex-col items-center space-y-1 px-4 py-3 rounded-xl transition-all duration-200 transform ${
@@ -2919,29 +2944,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         <div className="h-2 bg-transparent"></div>
       </div>
 
-      {/* Floating Action Button - Quick Trade */}
-      {activeTab !== 'home' && !caInput && (
-        <button
-          onClick={() => {
-            setActiveTab('home');
-            // 🎵 Enhanced Audio & Haptic Feedback for FAB
-            soundManager.playTradeSuccess();
-            hapticFeedback.success();
-          }}
-          onMouseEnter={() => {
-            soundManager.playHover();
-          }}
-          className="fab-enhanced fixed bottom-24 right-4 w-14 h-14 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 border-2 border-blue-400/30 z-30"
-          style={{
-            boxShadow: '0 8px 32px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.1)',
-          }}
-        >
-          <TrendingUp className="w-6 h-6" />
-          
-          {/* Pulse Animation */}
-          <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-20"></div>
-        </button>
-      )}
+
 
       {/* Deposit Modal - Styled like Connect Wallet */}
       {showDepositModal && (
@@ -3463,79 +3466,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         </div>
       )}
 
-      {/* Enhanced Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 z-50">
-          <div className="bg-gray-900 rounded-lg p-4 w-full max-w-xs">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Settings</h3>
-              <button 
-                onClick={() => setShowSettings(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-3">
-              <button 
-                onClick={handleEditProfile}
-                className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors flex items-center space-x-3"
-              >
-                <User className="w-5 h-5 text-blue-400" />
-                <div>
-                  <p className="text-white font-medium">Edit Profile</p>
-                  <p className="text-gray-400 text-sm">Update username and profile picture</p>
-                </div>
-              </button>
-              
-              <button 
-                onClick={handleTradingSettings}
-                className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors flex items-center space-x-3"
-              >
-                <Sliders className="w-5 h-5 text-green-400" />
-                <div>
-                  <p className="text-white font-medium">Trading Settings</p>
-                  <p className="text-gray-400 text-sm">Configure slippage, leverage, and fees</p>
-                </div>
-              </button>
-              
-              <button 
-                onClick={handleNotifications}
-                className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors flex items-center space-x-3"
-              >
-                <Bell className="w-5 h-5 text-yellow-400" />
-                <div>
-                  <p className="text-white font-medium">Notifications</p>
-                  <p className="text-gray-400 text-sm">Manage alerts and preferences</p>
-                </div>
-              </button>
-              
-              <button 
-                onClick={debugProfile}
-                className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors flex items-center space-x-3"
-              >
-                <Settings className="w-5 h-5 text-purple-400" />
-                <div>
-                  <p className="text-white font-medium">Debug Profile</p>
-                  <p className="text-gray-400 text-sm">Check database vs UI balance (dev tool)</p>
-                </div>
-              </button>
-              
-              <button 
-                onClick={handleDisconnectWallet}
-                className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-red-900 transition-colors flex items-center space-x-3 text-red-400 hover:text-red-300"
-              >
-                <LogOut className="w-5 h-5" />
-                <div>
-                  <p className="font-medium">Disconnect Wallet</p>
-                  <p className="text-gray-400 text-sm">Sign out of your account</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Position Management Modal */}
       {showPositionModal && selectedPosition && (

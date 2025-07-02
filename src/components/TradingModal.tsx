@@ -6,6 +6,7 @@ import { userProfileService } from '../services/supabaseClient';
 import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
 import unifiedPriceService from '../services/unifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
+import TradeSuccessModal from './TradeSuccessModal';
 import soundManager from '../services/soundManager';
 
 interface TradingModalProps {
@@ -16,12 +17,13 @@ interface TradingModalProps {
   walletAddress: string; // Add wallet address for position creation
   onUpdateSOLBalance?: (newBalance: number) => void; // Add callback for SOL balance updates
   onShowTerms: () => void;
+  onNavigateToPositions?: () => void; // Add callback to navigate to positions tab
 }
 
 type OrderType = 'Market Order' | 'Limit Order';
 type TradeDirection = 'Long' | 'Short';
 
-export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, userUSDBalance = 0, walletAddress, onUpdateSOLBalance, onShowTerms }: TradingModalProps) {
+export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, userUSDBalance = 0, walletAddress, onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TradingModalProps) {
   const [tradeDirection, setTradeDirection] = useState<TradeDirection>('Long');
   const [orderType, setOrderType] = useState<OrderType>('Market Order');
   const [price, setPrice] = useState(tokenData.price.toString());
@@ -48,6 +50,9 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     direction: 'Long' | 'Short';
     leverage: number;
   } | null>(null);
+  
+  // Trade success modal state
+  const [showTradeSuccess, setShowTradeSuccess] = useState(false);
   
   // CRITICAL: SOL price state for live trading - NO FALLBACK ALLOWED
   const [solPrice, setSolPrice] = useState<number | null>(null); // null = price not loaded yet
@@ -412,8 +417,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   const handleExecuteTrade = async () => {
     console.log('🚀🚀🚀 TRADE EXECUTION STARTED 🚀🚀🚀');
     
-    // 🎵🎵🎵 EPIC TRADE EXECUTION SOUND SEQUENCE! 🎵🎵🎵
-    soundManager.playTradeConfirm(); // EPIC confirmation sound
+    // Trade execution is now silent for better UX
     
     // 🚨 CRITICAL: Get FRESH price from Birdeye WebSocket for maximum accuracy
     console.log('⚡ GETTING FRESH PRICE FROM BIRDEYE WEBSOCKET FOR TRADE EXECUTION...');
@@ -586,8 +590,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       
       console.log('🎉🎉🎉 TRADE EXECUTION COMPLETED SUCCESSFULLY 🎉🎉🎉');
       
-      // 🎵🎵🎵 EPIC SUCCESS SOUND SEQUENCE! 🎵🎵🎵
-      soundManager.playTradingSequence('open'); // This plays the entire epic opening sequence!
+      // Trade execution success is now silent
       
       // Show loading modal for Market Orders (which start in 'opening' status)
       if (orderType === 'Market Order') {
@@ -599,17 +602,16 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         });
         setShowTradeLoading(true);
         
-        // Auto-close loading modal after 65 seconds (slightly longer than the 60-second delay)
+        // Auto-close loading modal after 65 seconds and show success modal
         setTimeout(() => {
           setShowTradeLoading(false);
           setLoadingTradeData(null);
-          onClose(); // Close the main trading modal
+          setShowTradeSuccess(true); // Show success modal instead of closing
         }, 65000);
       } else {
         // For limit orders, show success message and close normally
         setTradeSuccess(`Limit order placed successfully! Order ID: ${position.id}`);
-        // 🎵 Success chime for limit orders
-        soundManager.playSuccessChime();
+        // Limit order success is now silent
         
         // Close modal after 2 seconds
         setTimeout(() => {
@@ -623,8 +625,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       setTradeError(error.message || 'Failed to create position. Please try again.');
-      // 🎵 Error sound for failed trades
-      soundManager.playErrorGentle();
+      // Trade errors are now silent
     } finally {
       setIsExecutingTrade(false);
       console.log('🏁 TRADE EXECUTION PROCESS ENDED 🏁');
@@ -685,8 +686,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   const handleLeverageChange = (value: number) => {
     if (value !== leverage) {
       setLeverage(value);
-      // 🎵 EPIC sound for leverage adjustments!
-      soundManager.playLeverageAdjust();
+      // Leverage adjustment is now silent for better UX
     }
   };
 
@@ -753,9 +753,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     const maxAmount = getMaxPositionSize();
     if (maxAmount > 0) {
       setAmount(maxAmount.toFixed(6));
-      // 🎵 EPIC sound for max position click!
-      soundManager.playButtonPress();
-      soundManager.play('trade_prepare', 'epic'); // Epic anticipation sound
+      // MAX button is now silent for better UX
     }
   };
 
@@ -804,7 +802,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                 soundManager.playModalClose();
                 onClose();
               }}
-              onMouseEnter={() => soundManager.playHover()}
+              onMouseEnter={() => {}}
               className="p-2 text-gray-400 hover:text-white transition-colors"
             >
               <X className="w-7 h-7" />
@@ -820,7 +818,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                   setTradeDirection('Long');
                 }
               }}
-              onMouseEnter={() => soundManager.playHover()}
+              onMouseEnter={() => {}}
               className={`flex-1 py-4 px-4 text-lg font-bold rounded-xl transition-colors ${
                 tradeDirection === 'Long'
                   ? 'text-black bg-green-500'
@@ -839,7 +837,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                   setTradeDirection('Short');
                 }
               }}
-              onMouseEnter={() => soundManager.playHover()}
+              onMouseEnter={() => {}}
               className={`flex-1 py-4 px-4 text-lg font-bold rounded-xl transition-colors ${
                 tradeDirection === 'Short'
                   ? 'text-black bg-red-500'
@@ -862,7 +860,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                   soundManager.play('dropdown_open', 'ui');
                   setShowOrderTypeDropdown(!showOrderTypeDropdown);
                 }}
-                onMouseEnter={() => soundManager.playHover()}
+                onMouseEnter={() => {}}
                 className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-4 text-white text-lg text-left flex items-center justify-between hover:border-gray-600 transition-colors"
               >
                 <span>{orderType}</span>
@@ -879,7 +877,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                         setOrderType(type);
                         setShowOrderTypeDropdown(false);
                       }}
-                      onMouseEnter={() => soundManager.playHover()}
+                      onMouseEnter={() => {}}
                       className="w-full px-4 py-4 text-left text-lg text-white hover:bg-gray-800 transition-colors first:rounded-t-xl last:rounded-b-xl"
                     >
                       {type}
@@ -933,7 +931,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
               />
               <button
                 onClick={handleMaxClick}
-                onMouseEnter={() => soundManager.playHover()}
+                onMouseEnter={() => {}}
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg transition-colors font-bold"
               >
                 MAX
@@ -1189,8 +1187,6 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
               onMouseEnter={(e) => {
                 if (isFormValid()) {
                   (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
-                  // 🎵 Epic hover sound for THE MAIN TRADE BUTTON!
-                  soundManager.playHover();
                 }
               }}
               onMouseLeave={(e) => {
@@ -1274,6 +1270,26 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
           onClose(); // Also close the main trading modal
         }}
         canCancel={false} // Don't allow cancelling during anti-gaming delay
+      />
+
+      {/* Trade Success Modal - shown after successful trade execution */}
+      <TradeSuccessModal
+        isOpen={showTradeSuccess}
+        tokenSymbol={tokenData.symbol}
+        direction={tradeDirection}
+        leverage={leverage}
+        amount={amount}
+        onManagePosition={() => {
+          setShowTradeSuccess(false);
+          onClose(); // Close the trading modal
+          if (onNavigateToPositions) {
+            onNavigateToPositions(); // Navigate to positions tab
+          }
+        }}
+        onClose={() => {
+          setShowTradeSuccess(false);
+          onClose(); // Close the trading modal
+        }}
       />
     </div>
   );

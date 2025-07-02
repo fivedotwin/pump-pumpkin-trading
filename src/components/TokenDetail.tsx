@@ -18,6 +18,7 @@ interface TokenDetailProps {
   walletAddress?: string;
   onUpdateSOLBalance?: (newBalance: number) => void;
   onShowTerms: () => void;
+  onNavigateToPositions?: () => void;
 }
 
 
@@ -31,7 +32,7 @@ interface HoverData {
 
 type ChartPeriod = 'LIVE' | '4H' | '1D' | '1W' | '1M' | 'MAX';
 
-export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, userUSDBalance = 0, walletAddress = '', onUpdateSOLBalance, onShowTerms }: TokenDetailProps) {
+export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, userUSDBalance = 0, walletAddress = '', onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TokenDetailProps) {
   const { publicKey } = useWallet();
   const [tokenData, setTokenData] = useState<TokenDetailData | null>(null);
 
@@ -848,6 +849,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           walletAddress={walletAddress || publicKey?.toString() || ''}
           onUpdateSOLBalance={onUpdateSOLBalance}
           onShowTerms={onShowTerms}
+          onNavigateToPositions={onNavigateToPositions}
         />
       )}
     </div>

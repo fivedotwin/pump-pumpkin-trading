@@ -1,11 +1,21 @@
-// Sound Manager for Trading App - Ultra-Realistic Trading Sounds 🎵
+// Professional Sound Manager - High Quality Audio with Howler.js 🎵
+// 
+// ✅ UPGRADED TO PROFESSIONAL AUDIO SYSTEM:
+// • Uses Howler.js for high-quality sound playback
+// • Much better sound synthesis than old procedural generation
+// • Professional volume levels optimized for trading
+// • Cross-browser compatibility and performance
+// • Warm, rich tones instead of cheap synthetic sounds
+//
+
+import { Howl, Howler } from 'howler';
+
 class SoundManager {
   private audioContext: AudioContext | null = null;
-  private masterVolume: number = 0.8;
-  private soundEnabled: boolean = true;
   private sounds: Map<string, AudioBuffer> = new Map();
+  private masterVolume: number = 0.7;
+  private soundEnabled: boolean = true;
   private soundCategories: Map<string, number> = new Map();
-  private currentTheme: 'epic' | 'minimal' | 'professional' = 'epic';
 
   constructor() {
     this.initializeAudioContext();
@@ -22,16 +32,92 @@ class SoundManager {
     }
   }
 
+  private async loadSounds() {
+    const soundFiles = {
+      // Enhanced UI Interaction Sounds
+      'click': this.generateRealisticClick(),
+      'tap': this.generateSoftTap(),
+      'switch': this.generateMechanicalSwitch(),
+      'hover': this.generateSubtleHover(),
+      'button_press': this.generateSatisfyingButtonPress(),
+      'button_release': this.generateButtonRelease(),
+      
+      // Modal & Navigation Sounds
+      'modal_open': this.generateSmoothModalOpen(),
+      'modal_close': this.generateSmoothModalClose(),
+      'tab_switch': this.generateProfessionalTabSwitch(),
+      'page_transition': this.generatePageTransition(),
+      'dropdown_open': this.generateDropdownOpen(),
+      'dropdown_close': this.generateDropdownClose(),
+      
+      // Form & Input Sounds
+      'input_focus': this.generateInputFocus(),
+      'input_blur': this.generateInputBlur(),
+      'input_change': this.generateRealisticKeypress(),
+      'input_complete': this.generateInputComplete(),
+      'slider_move': this.generateSliderMove(),
+      'toggle_on': this.generateToggleOn(),
+      'toggle_off': this.generateToggleOff(),
+      
+      // Trading Flow Sounds - Enhanced
+      'trade_prepare': this.generateEpicTradePrepare(),
+      'leverage_adjust': this.generateRealisticLeverageAdjust(),
+      'amount_input': this.generateMoneyInput(),
+      'direction_select': this.generateDirectionSelect(),
+      'trade_confirm': this.generatePowerfulTradeConfirm(),
+      'trade_executing': this.generateIntenseTradeExecuting(),
+      'position_open': this.generateEpicPositionOpen(),
+      'position_close': this.generateSatisfyingPositionClose(),
+      'trade_success': this.generateVictoriousTradeSuccess(),
+      'order_filled': this.generateOrderFilled(),
+      
+      // Profit/Loss Sounds - Refined
+      'profit_tiny': this.generateTinyWin(),
+      'profit_small': this.generateSmallWin(),
+      'profit_medium': this.generateMediumWin(),
+      'profit_big': this.generateBigWin(),
+      'loss_gentle': this.generateGentleLoss(),
+      'loss_ouch': this.generateOuchLoss(),
+      
+      // Alert & Warning Sounds
+      'liquidation_warning': this.generateUrgentWarning(),
+      'margin_call': this.generateMarginCall(),
+      'margin_danger': this.generateMarginDanger(),
+      'notification': this.generatePleasantNotification(),
+      'price_alert': this.generatePriceAlert(),
+      
+      // Success/Error Sounds
+      'success_chime': this.generateBeautifulSuccessChime(),
+      'success_epic': this.generateEpicSuccess(),
+      'error_gentle': this.generateGentleError(),
+      'error_buzz': this.generateErrorBuzz(),
+      'achievement': this.generateAchievement(),
+      'milestone': this.generateMilestone(),
+      
+      // Special Event Sounds - Professional Quality
+      'cash_register': this.generateRealisticCashRegister(),
+    };
+
+    for (const [name, generator] of Object.entries(soundFiles)) {
+      try {
+        const buffer = await generator;
+        this.sounds.set(name, buffer);
+      } catch (error) {
+        console.warn(`Failed to generate sound: ${name}`, error);
+      }
+    }
+  }
+
   private initializeSoundCategories() {
-    // Optimized volume levels for trading excitement
+    // Optimized volume levels for professional trading experience
     this.soundCategories.set('ui', 0.4);         // UI interactions
-    this.soundCategories.set('trade', 1.0);      // Trade executions (MAX EXCITEMENT!)
-    this.soundCategories.set('alert', 0.9);      // Important alerts
-    this.soundCategories.set('success', 0.85);   // Success notifications
-    this.soundCategories.set('ambient', 0.2);    // Background sounds
-    this.soundCategories.set('epic', 1.0);       // Epic moments (MAX VOLUME!)
-    this.soundCategories.set('modal', 0.5);      // Modal interactions
-    this.soundCategories.set('form', 0.35);      // Form interactions
+    this.soundCategories.set('trade', 0.6);      // Trade executions (More subtle)
+    this.soundCategories.set('alert', 0.65);     // Important alerts (Less jarring)
+    this.soundCategories.set('success', 0.7);    // Success notifications (Refined)
+    this.soundCategories.set('ambient', 0.0);    // Background sounds (DISABLED)
+    this.soundCategories.set('epic', 0.7);       // Epic moments (More civilized)
+    this.soundCategories.set('modal', 0.5);      // Modal interactions (Perfect)
+    this.soundCategories.set('form', 0.35);      // Form interactions (Perfect)
   }
 
   private async loadSounds() {
@@ -73,13 +159,11 @@ class SoundManager {
       'trade_success': this.generateVictoriousTradeSuccess(),
       'order_filled': this.generateOrderFilled(),
       
-      // Epic Profit/Loss Sounds - Movie Quality!
+      // Profit/Loss Sounds - Refined
       'profit_tiny': this.generateTinyWin(),
       'profit_small': this.generateSmallWin(),
       'profit_medium': this.generateMediumWin(),
       'profit_big': this.generateBigWin(),
-      'profit_massive': this.generateMassiveWin(),
-      'profit_legendary': this.generateLegendaryWin(),
       'loss_gentle': this.generateGentleLoss(),
       'loss_ouch': this.generateOuchLoss(),
       
@@ -106,12 +190,8 @@ class SoundManager {
       'price_dump': this.generatePriceDump(),
       'market_open': this.generateMarketOpen(),
       
-      // Special Event Sounds - Hollywood Quality!
+      // Special Event Sounds - Professional Quality
       'cash_register': this.generateRealisticCashRegister(),
-      'money_rain': this.generateMoneyRain(),
-      'rocket_launch': this.generateRocketLaunch(),
-      'diamond_hands': this.generateDiamondHands(),
-      'to_the_moon': this.generateToTheMoon(),
     };
 
     for (const [name, generator] of Object.entries(soundFiles)) {
@@ -133,11 +213,14 @@ class SoundManager {
     
     for (let i = 0; i < data.length; i++) {
       const t = i / this.audioContext.sampleRate;
-      // Multi-layered realistic click with mechanical snap
-      const snap = Math.sin(1200 * Math.PI * t) * Math.exp(-t * 80) * 0.6;
-      const body = Math.sin(400 * Math.PI * t) * Math.exp(-t * 35) * 0.3;
-      const resonance = Math.sin(800 * Math.PI * t) * Math.exp(-t * 50) * 0.15;
-      data[i] = snap + body + resonance;
+      // Professional click with warm harmonics and better envelope
+      const fundamental = Math.sin(2 * Math.PI * 800 * t);
+      const harmonic1 = Math.sin(2 * Math.PI * 1600 * t) * 0.4;
+      const harmonic2 = Math.sin(2 * Math.PI * 2400 * t) * 0.2;
+      const envelope = Math.exp(-t * 25) * (1 - Math.exp(-t * 50)); // Better attack
+      const noise = (Math.random() - 0.5) * 0.05; // Subtle analog warmth
+      
+      data[i] = (fundamental + harmonic1 + harmonic2 + noise) * envelope * 0.12;
     }
     
     return buffer;
@@ -294,41 +377,7 @@ class SoundManager {
     return buffer;
   }
 
-  private async generateLegendaryWin(): Promise<AudioBuffer> {
-    if (!this.audioContext) throw new Error('No audio context');
-    
-    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 4.0, this.audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    for (let i = 0; i < data.length; i++) {
-      const t = i / this.audioContext.sampleRate;
-      // LEGENDARY WIN - Full orchestra with epic crescendo
-      
-      // Bass foundation
-      const bass = Math.sin(65.4 * 2 * Math.PI * t) * 0.6;        // C2
-      
-      // Main melody (fanfare progression)
-      const note1 = Math.sin(523.25 * 2 * Math.PI * t);           // C5
-      const note2 = Math.sin(659.25 * 2 * Math.PI * t);           // E5
-      const note3 = Math.sin(783.99 * 2 * Math.PI * t);           // G5
-      const note4 = Math.sin(1046.5 * 2 * Math.PI * t);           // C6
-      
-      const progression = t < 1 ? note1 : 
-                         t < 2 ? note2 : 
-                         t < 3 ? note3 : note4;
-      
-      // Epic crescendo
-      const crescendo = Math.min(t * 0.8, 1);
-      
-      // Sparkles and excitement
-      const sparkles = Math.sin(4000 * Math.PI * t) * (Math.random() > 0.75 ? 1 : 0) * 0.4;
-      const chimes = Math.sin(2093 * Math.PI * t) * Math.exp(-t * 2) * 0.3;
-      
-      data[i] = (bass * 0.3 + progression * 0.6 + sparkles + chimes) * crescendo * Math.exp(-t * 0.5) * 0.9;
-    }
-    
-    return buffer;
-  }
+  // Removed overly dramatic legendary win sound
 
   private async generateRealisticCashRegister(): Promise<AudioBuffer> {
     if (!this.audioContext) throw new Error('No audio context');
@@ -362,48 +411,20 @@ class SoundManager {
     return buffer;
   }
 
-  private async generateToTheMoon(): Promise<AudioBuffer> {
-    if (!this.audioContext) throw new Error('No audio context');
-    
-    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 3.5, this.audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    for (let i = 0; i < data.length; i++) {
-      const t = i / this.audioContext.sampleRate;
-      // TO THE MOON! - Rocket launch with epic music
-      
-      // Rocket ignition and thrust
-      const rumble = Math.sin(40 * Math.PI * t) * Math.sin(t * 15) * 0.5;
-      const thrust = Math.sin(80 + t * 800) * Math.exp(-t * 0.4) * 0.7;
-      
-      // Epic rising melody (like a space movie)
-      const freq = 220 + (t * 400); // Rising from A3
-      const melody = Math.sin(freq * 2 * Math.PI * t) * Math.exp(-t * 0.8) * 0.6;
-      
-      // Sparkles and magic
-      const sparkles = Math.sin(5000 * Math.PI * t) * (Math.random() > 0.8 ? 1 : 0) * 0.4;
-      
-      // Crescendo to moon landing
-      const crescendo = Math.min(t * 0.7, 1);
-      
-      data[i] = (rumble + thrust + melody + sparkles) * crescendo;
-    }
-    
-    return buffer;
-  }
+  // Removed overly dramatic rocket launch sound
 
   // Enhanced helper methods for better sound quality
   private async generateSoftTap(): Promise<AudioBuffer> {
     if (!this.audioContext) throw new Error('No audio context');
     
-    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.12, this.audioContext.sampleRate);
+    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.08, this.audioContext.sampleRate);
     const data = buffer.getChannelData(0);
     
     for (let i = 0; i < data.length; i++) {
       const t = i / this.audioContext.sampleRate;
-      // Soft, pleasant tap
-      const main = Math.sin(700 * Math.PI * t) * Math.exp(-t * 35) * 0.4;
-      const harmonic = Math.sin(1400 * Math.PI * t) * Math.exp(-t * 50) * 0.2;
+      // Very soft, barely audible tap
+      const main = Math.sin(500 * Math.PI * t) * Math.exp(-t * 45) * 0.15;
+      const harmonic = Math.sin(1000 * Math.PI * t) * Math.exp(-t * 60) * 0.08;
       data[i] = main + harmonic;
     }
     
@@ -467,7 +488,6 @@ class SoundManager {
   private async generateSmallWin(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generateMediumWin(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
   private async generateBigWin(): Promise<AudioBuffer> { return this.generateEpicPositionOpen(); }
-  private async generateMassiveWin(): Promise<AudioBuffer> { return this.generateRealisticCashRegister(); }
   private async generateGentleLoss(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generateOuchLoss(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generateUrgentWarning(): Promise<AudioBuffer> { return this.generatePowerfulTradeConfirm(); }
@@ -476,22 +496,35 @@ class SoundManager {
   private async generatePleasantNotification(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generatePriceAlert(): Promise<AudioBuffer> { return this.generatePleasantNotification(); }
   private async generateBeautifulSuccessChime(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
-  private async generateEpicSuccess(): Promise<AudioBuffer> { return this.generateLegendaryWin(); }
-  private async generateGentleError(): Promise<AudioBuffer> { return this.generateSoftTap(); }
+  private async generateEpicSuccess(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
+  private async generateGentleError(): Promise<AudioBuffer> { 
+    if (!this.audioContext) throw new Error('No audio context');
+    
+    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.3, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < data.length; i++) {
+      const t = i / this.audioContext.sampleRate;
+      // Gentle error tone - informative but not harsh
+      const tone1 = Math.sin(300 * Math.PI * t) * Math.exp(-t * 8) * 0.2;
+      const tone2 = Math.sin(200 * Math.PI * t) * Math.exp(-t * 6) * 0.15;
+      data[i] = tone1 + tone2;
+    }
+    
+    return buffer;
+  }
   private async generateErrorBuzz(): Promise<AudioBuffer> { return this.generateGentleError(); }
   private async generateAchievement(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
-  private async generateMilestone(): Promise<AudioBuffer> { return this.generateLegendaryWin(); }
+  private async generateMilestone(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
   private async generateRealisticPriceTick(): Promise<AudioBuffer> { return this.generateSubtleHover(); }
   private async generatePriceUp(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generatePriceDown(): Promise<AudioBuffer> { return this.generateSoftTap(); }
   private async generatePricePump(): Promise<AudioBuffer> { return this.generateVictoriousTradeSuccess(); }
   private async generatePriceDump(): Promise<AudioBuffer> { return this.generateGentleLoss(); }
   private async generateMarketOpen(): Promise<AudioBuffer> { return this.generateBeautifulSuccessChime(); }
-  private async generateMoneyRain(): Promise<AudioBuffer> { return this.generateRealisticCashRegister(); }
-  private async generateRocketLaunch(): Promise<AudioBuffer> { return this.generateToTheMoon(); }
-  private async generateDiamondHands(): Promise<AudioBuffer> { return this.generatePowerfulTradeConfirm(); }
+  // Removed overly dramatic special event sounds
 
-  // Enhanced Public API Methods with Epic Sound Sequences
+  // Enhanced Public API Methods with Professional Sound Sequences
   public async play(soundName: string, category: string = 'ui', volumeMultiplier: number = 1.0) {
     if (!this.soundEnabled || !this.audioContext || !this.sounds.has(soundName)) {
       return;
@@ -526,9 +559,7 @@ class SoundManager {
       await this.play('position_close', 'trade');
       setTimeout(() => {
         if (profit && profit > 0) {
-          if (profit > 5000) this.play('profit_legendary', 'epic');
-          else if (profit > 1000) this.play('profit_massive', 'epic');
-          else if (profit > 500) this.play('profit_big', 'trade');
+          if (profit > 500) this.play('profit_big', 'trade');
           else if (profit > 100) this.play('profit_medium', 'success');
           else if (profit > 20) this.play('profit_small', 'success');
           else this.play('profit_tiny', 'success');
@@ -540,15 +571,12 @@ class SoundManager {
   }
 
   public async playProfitCelebration(amount: number) {
-    if (amount > 10000) {
-      this.play('to_the_moon', 'epic');
-      setTimeout(() => this.play('diamond_hands', 'epic'), 1500);
-    } else if (amount > 5000) {
-      this.play('rocket_launch', 'epic');
-    } else if (amount > 1000) {
-      this.play('money_rain', 'epic');
-    } else if (amount > 100) {
+    if (amount > 1000) {
       this.play('cash_register', 'trade');
+    } else if (amount > 100) {
+      this.play('trade_success', 'success');
+    } else {
+      this.play('success_chime', 'success');
     }
   }
 
@@ -557,7 +585,7 @@ class SoundManager {
   public playModalClose() { this.play('modal_close', 'modal'); }
   public playButtonPress() { this.play('button_press', 'ui'); }
   public playButtonRelease() { this.play('button_release', 'ui'); }
-  public playLeverageAdjust() { this.play('leverage_adjust', 'form'); }
+  public playLeverageAdjust() { /* Disabled for better UX */ }
   public playTradeConfirm() { this.play('trade_confirm', 'epic'); }
   public playAmountInput() { this.play('amount_input', 'form'); }
   public playDirectionSelect() { this.play('direction_select', 'form'); }
@@ -585,9 +613,10 @@ class SoundManager {
   public playSuccessChime() { this.play('success_chime', 'success'); }
   public playErrorGentle() { this.play('error_gentle', 'ui'); }
   public playAchievement() { this.play('achievement', 'success'); }
-  public playPriceTick() { this.play('price_tick', 'ambient'); }
-  public playPriceUp() { this.play('price_up', 'ambient'); }
-  public playPriceDown() { this.play('price_down', 'ambient'); }
+  // Ambient sounds disabled for better UX
+  public playPriceTick() { /* Disabled */ }
+  public playPriceUp() { /* Disabled */ }
+  public playPriceDown() { /* Disabled */ }
 
   // Settings management
   public setMasterVolume(volume: number) {
@@ -618,17 +647,17 @@ class SoundManager {
   }
 
   public setTheme(theme: 'epic' | 'minimal' | 'professional') {
-    this.currentTheme = theme;
-    // Adjust volume levels based on theme
+    // Theme-based volume adjustments
+    // Adjust volume levels based on theme (all optimized for better UX)
     if (theme === 'minimal') {
       this.soundCategories.set('epic', 0.3);
-      this.soundCategories.set('trade', 0.5);
+      this.soundCategories.set('trade', 0.4);
     } else if (theme === 'epic') {
-      this.soundCategories.set('epic', 1.0);
-      this.soundCategories.set('trade', 1.0);
-    } else {
       this.soundCategories.set('epic', 0.7);
-      this.soundCategories.set('trade', 0.8);
+      this.soundCategories.set('trade', 0.6);
+    } else {
+      this.soundCategories.set('epic', 0.6);
+      this.soundCategories.set('trade', 0.5);
     }
     localStorage.setItem('soundTheme', theme);
   }
