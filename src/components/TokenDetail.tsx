@@ -8,6 +8,7 @@ import { subscribeToJupiterPrice, subscribeToJupiterChart, getJupiterOHLCV, isJu
 import TradingModal from './TradingModal';
 import unifiedPriceService from '../services/unifiedPriceService';
 import { userProfileService } from '../services/supabaseClient';
+import { hapticFeedback } from '../utils/animations';
 
 interface TokenDetailProps {
   tokenAddress: string;
@@ -21,8 +22,6 @@ interface TokenDetailProps {
   onNavigateToPositions?: () => void;
 }
 
-
-
 interface HoverData {
   price: number;
   time: number;
@@ -35,13 +34,23 @@ type ChartPeriod = 'LIVE' | '4H' | '1D' | '1W' | '1M' | 'MAX';
 export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, userUSDBalance = 0, walletAddress = '', onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TokenDetailProps) {
   const { publicKey } = useWallet();
   const [tokenData, setTokenData] = useState<TokenDetailData | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>('LIVE');
   const [priceHistory, setPriceHistory] = useState<Array<{ time: number; price: number }> | null>(null);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
+  
+  // Share notification state
+  const [shareNotification, setShareNotification] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error';
+  }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
   
   // WebSocket subscriptions - unified real-time data  
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback' | 'disconnected'>('connecting');
@@ -203,18 +212,82 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     }
   };
 
+  const showShareNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setShareNotification({ show: true, message, type });
+    setTimeout(() => {
+      setShareNotification({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
 
+  const handleShare = async () => {
+    if (!tokenData) return;
 
-  const handleShare = () => {
-    if (navigator.share && tokenData) {
-      navigator.share({
+    try {
+      const shareData = {
         title: `${tokenData.name} (${tokenData.symbol})`,
-        text: `Check out ${tokenData.name} on Pump Pumpkin`,
+        text: `Check out ${tokenData.name} trading on Pump Pumpkin - Live at ${formatPrice(tokenData.price)}`,
         url: window.location.href,
-      });
-    } else {
-      // Fallback to clipboard
-      navigator.clipboard.writeText(window.location.href);
+      };
+
+      // Method 1: Try native Web Share API (mobile browsers, PWAs)
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+          hapticFeedback.success();
+          showShareNotification('Shared successfully!');
+          return;
+        } catch (shareError: any) {
+          // User cancelled share dialog - don't show error
+          if (shareError.name === 'AbortError') {
+            return;
+          }
+          console.log('Native share failed, trying clipboard...');
+        }
+      }
+
+      // Method 2: Try modern clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          const shareText = `${shareData.title}\n${shareData.text}\n${shareData.url}`;
+          await navigator.clipboard.writeText(shareText);
+          hapticFeedback.success();
+          showShareNotification('Link copied to clipboard!');
+          return;
+        } catch (clipboardError) {
+          console.log('Clipboard API failed, trying fallback...');
+        }
+      }
+
+      // Method 3: Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      const shareText = `${shareData.title}\n${shareData.text}\n${shareData.url}`;
+      textArea.value = shareText;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          hapticFeedback.success();
+          showShareNotification('Link copied to clipboard!');
+        } else {
+          throw new Error('execCommand failed');
+        }
+      } catch (fallbackError) {
+        document.body.removeChild(textArea);
+        throw new Error('All copy methods failed');
+      }
+
+    } catch (error) {
+      console.error('Share failed:', error);
+      hapticFeedback.error();
+      showShareNotification('Share failed. Try again later.', 'error');
     }
   };
 
@@ -414,6 +487,17 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+      {/* Share Notification */}
+      {shareNotification.show && (
+        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-300 ${
+          shareNotification.type === 'success' 
+            ? 'bg-green-900 border-green-700 text-green-300' 
+            : 'bg-red-900 border-red-700 text-red-300'
+        }`}>
+          {shareNotification.message}
+        </div>
+      )}
+
       <div className="text-center max-w-sm w-full mx-auto">
         {/* Back Button - positioned absolutely - Properly sized */}
         <button 
