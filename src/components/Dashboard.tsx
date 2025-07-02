@@ -908,7 +908,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       }
       
       const marketCap = tokenData.marketCap || 0;
-      const minimumMarketCap = 120000; // $120k minimum
+      const minimumMarketCap = 80000; // $80k minimum
       
       console.log('💰 Token market cap:', `$${marketCap.toLocaleString()}`);
       console.log('📊 Minimum required:', `$${minimumMarketCap.toLocaleString()}`);
@@ -1755,7 +1755,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-500 text-sm text-center mt-4">
               Enter a Pump.fun token contract address to start trading
               <br />
-              <span className="text-xs text-gray-600">Minimum market cap: $120,000</span>
+              <span className="text-xs text-gray-600">Minimum market cap: $80,000</span>
             </p>
           </div>
         );
