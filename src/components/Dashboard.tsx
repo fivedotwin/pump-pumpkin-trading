@@ -1742,12 +1742,26 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 </button>
               </div>
               
-              {/* Error Message */}
+              {/* Error Message - Blue Theme */}
               {caValidationError && (
-                <div className="mt-3 p-3 bg-red-900 border border-red-500 rounded-lg">
-                  <p className="text-red-300 text-sm font-medium">
-                    ⚠️ {caValidationError}
-                  </p>
+                <div className="mt-4 p-4 bg-gray-900 border border-blue-500 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-white font-semibold text-sm mb-1">
+                        Market Cap Too Low
+                      </h4>
+                      <p className="text-gray-300 text-sm">
+                        This token has a market cap of <span className="font-medium text-blue-400">{caValidationError.match(/\$[\d,]+/)?.[0] || 'N/A'}</span>, which is below our minimum requirement of <span className="font-medium text-blue-400">$80,000</span>.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </form>
