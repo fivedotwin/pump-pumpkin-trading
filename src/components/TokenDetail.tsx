@@ -65,16 +65,16 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     loadTokenData();
   }, [tokenAddress]);
 
-  // Load historical data for non-LIVE periods (WebSocket now handled by unified service)
+  // Load historical data for ALL periods (including LIVE for initial display)
   useEffect(() => {
     if (!tokenData) return;
 
     console.log(`📊 Loading data for ${tokenData.symbol} (${selectedPeriod})`);
 
-    // Load historical data for non-LIVE periods
-    if (selectedPeriod !== 'LIVE') {
-      loadPriceHistory(selectedPeriod);
-    }
+    // FIXED: Load initial data for ALL periods including LIVE
+    // For LIVE period, load 4H data as initial fallback while WebSocket connects
+    const dataToLoad = selectedPeriod === 'LIVE' ? '4H' : selectedPeriod;
+    loadPriceHistory(dataToLoad);
 
     // Update connection status based on actual WebSocket state
     const status = getJupiterConnectionStatus();
@@ -276,7 +276,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
         if (successful) {
           hapticFeedback.success();
           showShareNotification('Link copied to clipboard!');
-        } else {
+    } else {
           throw new Error('execCommand failed');
         }
       } catch (fallbackError) {
@@ -324,10 +324,19 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   };
 
   const generateChartData = () => {
-    // Use WebSocket live data for LIVE period, REST API data for historical periods
-    if (selectedPeriod === 'LIVE' && liveChartData.length > 0) {
-      return liveChartData.map(point => point.price);
-    } else if (priceHistory && priceHistory.length > 0) {
+    // FIXED: For LIVE period, use WebSocket data if available, otherwise fallback to historical data
+    if (selectedPeriod === 'LIVE') {
+      // Prefer live WebSocket data if available
+      if (liveChartData.length > 0) {
+        return liveChartData.map(point => point.price);
+      }
+      // Fallback to historical data while WebSocket is connecting
+      else if (priceHistory && priceHistory.length > 0) {
+        return priceHistory.map(point => point.price);
+      }
+    } 
+    // For non-LIVE periods, use historical data
+    else if (priceHistory && priceHistory.length > 0) {
       return priceHistory.map(point => point.price);
     }
     
@@ -335,9 +344,16 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   };
 
   const getCurrentPriceHistory = () => {
-    // Return appropriate data source for current period
-    if (selectedPeriod === 'LIVE' && liveChartData.length > 0) {
-      return liveChartData;
+    // FIXED: Return appropriate data source for current period with fallback
+    if (selectedPeriod === 'LIVE') {
+      // Prefer live WebSocket data if available
+      if (liveChartData.length > 0) {
+        return liveChartData;
+      }
+      // Fallback to historical data while WebSocket is connecting
+      else if (priceHistory && priceHistory.length > 0) {
+        return priceHistory;
+      }
     }
     return priceHistory || [];
   };
@@ -394,15 +410,16 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     }
   };
 
-  const handleChartMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+  // MOBILE-OPTIMIZED: Universal chart interaction handler for both mouse and touch
+  const handleChartInteraction = (clientX: number) => {
     const currentData = getCurrentPriceHistory();
     if (!currentData || currentData.length === 0 || !chartRef.current) return;
 
     const rect = chartRef.current.getBoundingClientRect();
-    const x = event.clientX - rect.left;
+    const x = clientX - rect.left;
     const chartWidth = rect.width;
     
-    // Calculate which data point we're hovering over
+    // Calculate which data point we're hovering/touching
     const dataIndex = Math.round((x / chartWidth) * (currentData.length - 1));
     const clampedIndex = Math.max(0, Math.min(dataIndex, currentData.length - 1));
     
@@ -412,22 +429,51 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
       const maxPrice = Math.max(...chartData);
       const priceRange = maxPrice - minPrice;
       
-      // Calculate y position for the hover point
-      const y = priceRange > 0 ? 120 - ((currentData[clampedIndex].price - minPrice) / priceRange) * 100 : 60;
+      // Calculate y position for the interaction point (updated for 160px height)
+      const y = priceRange > 0 ? 160 - ((currentData[clampedIndex].price - minPrice) / priceRange) * 140 : 80;
       
       setHoverData({
         price: currentData[clampedIndex].price,
         time: currentData[clampedIndex].time,
-        x: (clampedIndex / (currentData.length - 1)) * 400, // SVG coordinate
-        y: y
+        x: (clampedIndex / (currentData.length - 1)) * 400, // SVG coordinate (400px width)
+        y: y // SVG coordinate (160px height)
       });
       setIsHovering(true);
     }
   };
 
+  // Mouse event handlers (desktop)
+  const handleChartMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+    handleChartInteraction(event.clientX);
+  };
+
   const handleChartMouseLeave = () => {
     setIsHovering(false);
     setHoverData(null);
+  };
+
+  // MOBILE-OPTIMIZED: Touch event handlers
+  const handleChartTouchStart = (event: React.TouchEvent<SVGSVGElement>) => {
+    event.preventDefault(); // Prevent scrolling
+    if (event.touches.length === 1) {
+      handleChartInteraction(event.touches[0].clientX);
+      hapticFeedback.light(); // Mobile haptic feedback
+    }
+  };
+
+  const handleChartTouchMove = (event: React.TouchEvent<SVGSVGElement>) => {
+    event.preventDefault(); // Prevent scrolling
+    if (event.touches.length === 1) {
+      handleChartInteraction(event.touches[0].clientX);
+    }
+  };
+
+  const handleChartTouchEnd = () => {
+    // Keep the tooltip visible for 2 seconds on mobile after touch ends
+    setTimeout(() => {
+      setIsHovering(false);
+      setHoverData(null);
+    }, 2000);
   };
 
   const chartData = generateChartData();
@@ -586,9 +632,9 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           </span>
         </div>
 
-        {/* Chart - Properly sized for mobile */}
+        {/* MOBILE-OPTIMIZED: Chart with better mobile sizing */}
         <div className="mb-6">
-          <div className="h-40 mb-4 relative bg-gray-900 rounded-lg p-4">
+          <div className="h-48 mb-6 relative bg-gray-900 rounded-lg p-4 overflow-hidden">
             {/* Chart Header with WebSocket Status and Live Indicator */}
             <div className="absolute top-2 right-2 z-10 flex items-center space-x-2">
               {selectedPeriod === 'LIVE' && (
@@ -634,10 +680,14 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                 <div className="relative">
                   <svg 
                     ref={chartRef}
-                    className="w-full h-32 cursor-crosshair" 
-                    viewBox="0 0 400 120"
+                    className="w-full h-40 cursor-crosshair touch-none" 
+                    viewBox="0 0 400 160"
                     onMouseMove={handleChartMouseMove}
                     onMouseLeave={handleChartMouseLeave}
+                    onTouchStart={handleChartTouchStart}
+                    onTouchMove={handleChartTouchMove}
+                    onTouchEnd={handleChartTouchEnd}
+                    style={{ touchAction: 'none' }}
                   >
                     <defs>
                       <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -658,7 +708,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                           const minPrice = Math.min(...chartData);
                           const maxPrice = Math.max(...chartData);
                           const priceRange = maxPrice - minPrice;
-                          const y = priceRange > 0 ? 120 - ((price - minPrice) / priceRange) * 100 : 60;
+                          const y = priceRange > 0 ? 160 - ((price - minPrice) / priceRange) * 140 : 80;
                           return `${x},${y}`;
                         }).join(' ');
                       })()}
@@ -672,14 +722,14 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                       fill="url(#chartGradient)"
                       points={(() => {
                         const chartData = generateChartData();
-                        return `0,120 ${chartData.map((price, index) => {
+                        return `0,160 ${chartData.map((price, index) => {
                           const x = (index / (chartData.length - 1)) * 400;
                           const minPrice = Math.min(...chartData);
                           const maxPrice = Math.max(...chartData);
                           const priceRange = maxPrice - minPrice;
-                          const y = priceRange > 0 ? 120 - ((price - minPrice) / priceRange) * 100 : 60;
+                          const y = priceRange > 0 ? 160 - ((price - minPrice) / priceRange) * 140 : 80;
                           return `${x},${y}`;
-                        }).join(' ')} 400,120`;
+                        }).join(' ')} 400,160`;
                       })()}
                       style={{
                         transition: selectedPeriod === 'LIVE' ? 'none' : 'all 0.3s ease-in-out'
@@ -694,7 +744,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                           x1={hoverData.x}
                           y1="0"
                           x2={hoverData.x}
-                          y2="120"
+                          y2="160"
                           stroke="#6b7280"
                           strokeWidth="1"
                           strokeDasharray="2,2"
@@ -713,36 +763,38 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                           opacity="0.7"
                         />
                         
-                        {/* Hover point circle */}
+                        {/* MOBILE-OPTIMIZED: Larger touch target circle */}
                         <circle
                           cx={hoverData.x}
                           cy={hoverData.y}
-                          r="4"
+                          r="6"
                           fill={tokenData.priceChange24h >= 0 ? "#10b981" : "#ef4444"}
                           stroke="#ffffff"
-                          strokeWidth="2"
+                          strokeWidth="3"
+                          style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}
                         />
                         
-                        {/* Price label background */}
+                        {/* MOBILE-OPTIMIZED: Larger price label background */}
                         <rect
-                          x={Math.max(5, Math.min(hoverData.x - 40, 320))}
-                          y={Math.max(5, hoverData.y - 25)}
-                          width="80"
-                          height="20"
+                          x={Math.max(5, Math.min(hoverData.x - 50, 300))}
+                          y={Math.max(5, hoverData.y - 30)}
+                          width="100"
+                          height="28"
                           fill="#1f2937"
                           stroke="#374151"
                           strokeWidth="1"
-                          rx="4"
+                          rx="6"
                           opacity="0.95"
+                          style={{ filter: 'drop-shadow(0px 2px 6px rgba(0,0,0,0.4))' }}
                         />
                         
-                        {/* Price label text */}
+                        {/* MOBILE-OPTIMIZED: Larger, more readable text */}
                         <text
-                          x={Math.max(45, Math.min(hoverData.x, 360))}
-                          y={Math.max(18, hoverData.y - 10)}
+                          x={Math.max(55, Math.min(hoverData.x, 350))}
+                          y={Math.max(20, hoverData.y - 10)}
                           textAnchor="middle"
                           fill="#ffffff"
-                          fontSize="10"
+                          fontSize="12"
                           fontWeight="bold"
                         >
                           {formatPrice(hoverData.price)}
@@ -750,24 +802,24 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                       </g>
                     )}
 
-                    {/* Invisible overlay for better mouse interaction */}
+                    {/* MOBILE-OPTIMIZED: Invisible overlay for better touch/mouse interaction */}
                     <rect
                       x="0"
                       y="0"
                       width="400"
-                      height="120"
+                      height="160"
                       fill="transparent"
                       style={{ pointerEvents: 'all' }}
                     />
                   </svg>
 
-                  {/* Hover tooltip positioned outside SVG */}
+                  {/* FIXED: Hover tooltip positioned to avoid overlap */}
                   {isHovering && hoverData && (
                     <div 
-                      className="absolute bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm pointer-events-none z-20"
+                      className="absolute bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm pointer-events-none z-30"
                       style={{
                         left: `${Math.min(Math.max((hoverData.x / 400) * 100, 10), 70)}%`,
-                        top: '-45px',
+                        top: hoverData.y < 80 ? '10px' : '-55px', // Smart positioning to avoid overlap
                         transform: 'translateX(-50%)'
                       }}
                     >
@@ -781,10 +833,12 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                   )}
                 </div>
 
-                {/* Price Range Info */}
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Low: {formatPrice(Math.min(...generateChartData()))}</span>
-                  <span>High: {formatPrice(Math.max(...generateChartData()))}</span>
+                {/* Price Range Info unified with chart */}
+                <div className="bg-gray-900 rounded-lg px-4 py-2 mt-2">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Low: {formatPrice(Math.min(...generateChartData()))}</span>
+                    <span>High: {formatPrice(Math.max(...generateChartData()))}</span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -802,14 +856,17 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
             )}
           </div>
 
-          {/* Chart Period Selector - Compact for mobile */}
-          <div className="flex items-center justify-center space-x-1 mb-6">
+          {/* MOBILE-OPTIMIZED: Period Selector with better touch targets */}
+          <div className="flex items-center justify-center space-x-2 mb-6 relative z-10">
             {periods.map((period) => (
               <button
                 key={period}
-                onClick={() => setSelectedPeriod(period)}
+                onClick={() => {
+                  setSelectedPeriod(period);
+                  hapticFeedback.light(); // Mobile haptic feedback
+                }}
                 disabled={isLoadingChart}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
                   selectedPeriod === period
                     ? 'text-black font-medium'
                     : 'bg-gray-800 text-gray-400 hover:text-white disabled:opacity-50'

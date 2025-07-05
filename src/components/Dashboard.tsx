@@ -925,8 +925,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       // Token passes validation, proceed to trading
       setSelectedTokenAddress(tokenAddress);
-      setViewState('token-detail');
-      setCaInput('');
+    setViewState('token-detail');
+    setCaInput('');
       setCaValidationError(null);
       
     } catch (error: any) {
@@ -1246,7 +1246,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleDisconnectWallet = async () => {
     try {
-      setShowSettings(false);
+    setShowSettings(false);
       
       // Force disconnect the wallet
       await disconnect();
@@ -1262,7 +1262,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       // Clear session storage
       sessionStorage.clear();
-      
+
       console.log('✅ Wallet disconnected successfully');
       
       // Force page reload to ensure complete disconnection
@@ -1956,8 +1956,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   onMouseLeave={(e) => {
                     (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
                   }}
-                  disabled={currentSOLBalance < 0.04}
-                  className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
                   style={{ 
                     backgroundColor: '#1e7cfa',
                     color: 'black'
@@ -3176,7 +3175,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-400 text-base mb-2">Request SOL Withdrawal</p>
             
             <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-6">Minimum withdrawal: 0.04 SOL</p>
+            <p className="text-gray-500 text-sm mb-2">Minimum withdrawal: 0.04 SOL</p>
+            
+            {/* Insufficient Balance Warning */}
+            {currentSOLBalance < 0.04 && (
+              <div className="bg-orange-900 border border-orange-700 rounded-lg p-3 mb-4">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-orange-200 text-sm">
+                      <strong>Insufficient Balance:</strong> You need at least 0.04 SOL to make a withdrawal. 
+                      You can still view your withdrawal history below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Error Message */}
             {withdrawError && (
