@@ -1607,7 +1607,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Use real trading positions data
   const activePositions = tradingPositions.filter(position => 
-    position.status === 'open' || position.status === 'pending'
+    position.status === 'open' || position.status === 'opening' || position.status === 'pending'
   );
 
   const tabs = [
@@ -2157,16 +2157,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                     {position.leverage}x {position.direction}
                                   </span>
                                 </div>
-                                {position.status === 'opening' && (
-                                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900 text-blue-400 font-bold animate-pulse">
-                                    OPENING...
-                                  </span>
-                                )}
-                                {position.status === 'closing' && (
-                                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900 text-yellow-400 font-bold animate-pulse">
-                                    CLOSING...
-                                  </span>
-                                )}
                               </div>
                             </div>
                             <div className="text-right">

@@ -297,31 +297,22 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     };
   };
 
-  // Calculate liquidation price
+  // Calculate liquidation price - FIXED to match backend formula
   const calculateLiquidationPrice = (): number | null => {
     if (!amount || !getReferencePrice()) return null;
 
     const entryPrice = getReferencePrice();
-    const collateral = calculateRequiredCollateral();
-    const tokenAmount = parseFloat(amount);
-
-    if (entryPrice === 0 || tokenAmount === 0) return null;
-
-    // Simplified liquidation calculation (assumes 100% of collateral lost)
-    // In reality, this would include fees and be more complex
-    const priceChangeForLiquidation = collateral / tokenAmount;
-
-    let liquidationPrice = 0;
+    
+    // Use same leverage-based formula as backend (positionService.ts)
+    // Liquidation occurs when losses reach 100% of collateral
+    // For Long: price drops by (1/leverage) of entry price
+    // For Short: price rises by (1/leverage) of entry price
     
     if (tradeDirection === 'Long') {
-      // Long liquidation: price drops by the collateral amount per token
-      liquidationPrice = entryPrice - priceChangeForLiquidation;
+      return entryPrice * (1 - (1 / leverage));
     } else {
-      // Short liquidation: price rises by the collateral amount per token
-      liquidationPrice = entryPrice + priceChangeForLiquidation;
+      return entryPrice * (1 + (1 / leverage));
     }
-
-    return Math.max(liquidationPrice, 0); // Ensure non-negative
   };
 
   // FIXED: Validate position size against SOL balance with hidden fees included

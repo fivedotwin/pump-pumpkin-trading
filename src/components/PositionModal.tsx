@@ -224,7 +224,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
             {isClosingPosition ? (
               <>
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Closing...</span>
+                <span>Close Position</span>
               </>
             ) : (
               <span>Close Position</span>
@@ -394,12 +394,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
           disabled={isClosingPosition || position.status === 'closing' || position.status === 'opening'}
           className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-medium py-2 px-3 rounded-lg text-sm transition-colors disabled:cursor-not-allowed mb-2"
         >
-          {position.status === 'opening' 
-            ? 'Opening...' 
-            : position.status === 'closing' 
-              ? 'Processing...' 
-              : 'Close Position'
-          }
+          Close Position
         </button>
         
         <button
