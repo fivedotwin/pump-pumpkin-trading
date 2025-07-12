@@ -1466,6 +1466,401 @@ export const formatMarketCap = (marketCap: number): string => {
   }
 };
 
+// Add token search interface
+export interface SearchResult {
+  address: string;
+  symbol: string;
+  name: string;
+  logoURI?: string;
+  price?: number;
+  type: 'token' | 'pair';
+  chain: string;
+}
+
+export interface TokenSecurityData {
+  isSecure: boolean;
+  flags: string[];
+  riskLevel: 'low' | 'medium' | 'high';
+  honeypotRisk: boolean;
+  rugPullRisk: boolean;
+}
+
+// Token security check function
+export const fetchTokenSecurity = async (tokenAddress: string): Promise<TokenSecurityData | null> => {
+  try {
+    const cleanAddress = cleanTokenAddress(tokenAddress);
+    console.log(`🔒 Fetching security data for: ${cleanAddress}`);
+    
+    const response = await birdeyeApi.get('/defi/token_security', {
+      params: {
+        address: cleanAddress,
+      },
+      timeout: 10000,
+    });
+
+    if (response.data?.success && response.data?.data) {
+      const data = response.data.data;
+      
+      // Analyze security flags
+      const flags: string[] = [];
+      let honeypotRisk = false;
+      let rugPullRisk = false;
+      
+      // Check for honeypot indicators
+      if (data.nonTransferable) {
+        flags.push('NON_TRANSFERABLE');
+        honeypotRisk = true;
+      }
+      if (data.freezeable) {
+        flags.push('FREEZEABLE');
+        honeypotRisk = true;
+      }
+      if (data.freezeAuthority) {
+        flags.push('FREEZE_AUTHORITY');
+        honeypotRisk = true;
+      }
+      
+      // Check for rug pull indicators
+      const creatorPercent = parseFloat(data.creatorPercentage || 0);
+      const top10Percent = parseFloat(data.top10HolderPercent || 0);
+      
+      if (creatorPercent > 0.1) { // Creator holds >10%
+        flags.push('HIGH_CREATOR_HOLDING');
+        rugPullRisk = true;
+      }
+      if (top10Percent > 0.8) { // Top 10 holders control >80%
+        flags.push('HIGH_CONCENTRATION');
+        rugPullRisk = true;
+      }
+      
+      // Check for other risks
+      if (data.transferFeeEnable) {
+        flags.push('TRANSFER_FEE');
+      }
+      if (data.mutableMetadata) {
+        flags.push('MUTABLE_METADATA');
+      }
+      
+      // Positive indicators
+      if (data.jupStrictList) {
+        flags.push('JUPITER_VERIFIED');
+      }
+      
+      // Determine risk level
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      if (honeypotRisk) {
+        riskLevel = 'high';
+      } else if (rugPullRisk || flags.length > 2) {
+        riskLevel = 'medium';
+      }
+      
+      const isSecure = riskLevel === 'low' && !honeypotRisk && !rugPullRisk;
+      
+      console.log(`✅ Security analysis complete for ${cleanAddress}:`, {
+        isSecure,
+        riskLevel,
+        flags: flags.length
+      });
+      
+      return {
+        isSecure,
+        flags,
+        riskLevel,
+        honeypotRisk,
+        rugPullRisk
+      };
+    }
+    
+    return null;
+  } catch (error: any) {
+    console.error('💥 Error fetching token security:', error.message);
+    return null;
+  }
+};
+
+// Add token search function - FIXED to use Birdeye /defi/v3/search properly
+export const searchTokens = async (query: string): Promise<SearchResult[]> => {
+  if (!query || query.length < 2) {
+    return [];
+  }
+
+  try {
+    console.log(`🔍 Searching tokens using Birdeye v3 search for: "${query}"`);
+    
+    // Use Birdeye's official /defi/v3/search endpoint
+    const response = await birdeyeApi.get('/defi/v3/search', {
+      params: {
+        keyword: query,
+        limit: 20, // Get more results to filter for best matches
+      },
+      timeout: 10000,
+    });
+
+    console.log('📡 Birdeye v3 search response:', {
+      status: response.status,
+      success: response.data?.success,
+      hasData: !!response.data?.data,
+      dataLength: response.data?.data?.length || 0
+    });
+
+    // Debug: Log the actual response structure to understand Birdeye's format
+    if (response.data?.data && response.data.data.length > 0) {
+      console.log('🔍 Sample search result structure:', Object.keys(response.data.data[0]));
+    }
+
+    if (response.data?.success && response.data?.data?.items && Array.isArray(response.data.data.items)) {
+      const items = response.data.data.items;
+      
+      // Extract all token results from the nested structure
+      const allTokens: any[] = [];
+      
+      for (const item of items) {
+        if (item.type === 'token' && Array.isArray(item.result)) {
+          allTokens.push(...item.result);
+        }
+      }
+      
+      console.log(`🔍 Found ${allTokens.length} token results in search response, applying quality filters...`);
+      
+      // Process and sort search results by relevance with quality filters
+      const filteredTokens = allTokens
+        .filter((token: any) => {
+          // Basic validation - must have required fields
+          if (!token || !token.address || (!token.symbol && !token.name)) {
+            return false;
+          }
+          
+          // QUALITY FILTERS - Filter out low-quality/scam tokens
+          const marketCap = parseFloat(token.market_cap || token.fdv || 0);
+          const liquidity = parseFloat(token.liquidity || 0);
+          const volume24h = parseFloat(token.volume_24h_usd || 0);
+          const uniqueWallets24h = parseInt(token.unique_wallet_24h || 0);
+          const trades24h = parseInt(token.trade_24h || 0);
+          
+          // Minimum quality thresholds
+          const MIN_MARKET_CAP = 50000; // $50k minimum market cap
+          const MIN_LIQUIDITY = 5000;   // $5k minimum liquidity
+          const MIN_VOLUME_24H = 1000;  // $1k minimum daily volume
+          const MIN_WALLETS_24H = 10;   // At least 10 active wallets
+          const MIN_TRADES_24H = 50;    // At least 50 trades per day
+          
+          // Apply quality filters
+          if (marketCap < MIN_MARKET_CAP) {
+            console.log(`🚫 Filtered out ${token.symbol}: Market cap too low ($${marketCap.toLocaleString()})`);
+            return false;
+          }
+          
+          if (liquidity < MIN_LIQUIDITY) {
+            console.log(`🚫 Filtered out ${token.symbol}: Liquidity too low ($${liquidity.toLocaleString()})`);
+            return false;
+          }
+          
+          if (volume24h < MIN_VOLUME_24H) {
+            console.log(`🚫 Filtered out ${token.symbol}: Volume too low ($${volume24h.toLocaleString()})`);
+            return false;
+          }
+          
+          if (uniqueWallets24h < MIN_WALLETS_24H) {
+            console.log(`🚫 Filtered out ${token.symbol}: Not enough active wallets (${uniqueWallets24h})`);
+            return false;
+          }
+          
+          if (trades24h < MIN_TRADES_24H) {
+            console.log(`🚫 Filtered out ${token.symbol}: Not enough trading activity (${trades24h} trades)`);
+            return false;
+          }
+          
+          // Additional safety checks
+          if (token.symbol && token.symbol.length > 10) {
+            console.log(`🚫 Filtered out ${token.symbol}: Symbol too long (potential spam)`);
+            return false;
+          }
+          
+          if (token.name && token.name.length > 50) {
+            console.log(`🚫 Filtered out ${token.symbol}: Name too long (potential spam)`);
+            return false;
+          }
+          
+          console.log(`✅ Quality token passed filters: ${token.symbol} - MC: $${marketCap.toLocaleString()}, Liq: $${liquidity.toLocaleString()}, Vol: $${volume24h.toLocaleString()}`);
+          return true;
+        })
+        .map((token: any) => {
+          // Map Birdeye response fields to our SearchResult interface
+          const result = {
+            address: token.address || '',
+            symbol: token.symbol || '',
+            name: token.name || token.symbol || '',
+            logoURI: undefined, // Will fetch separately
+            price: token.price ? parseFloat(token.price) : undefined,
+            type: 'token' as const,
+            chain: 'solana',
+            // Add relevance score for sorting
+            relevanceScore: 0
+          };
+          
+          // Calculate relevance score with quality boost (higher = more relevant)
+          const queryLower = query.toLowerCase();
+          const symbolLower = result.symbol.toLowerCase();
+          const nameLower = result.name.toLowerCase();
+          
+          // Base relevance score from text matching
+          let baseScore = 0;
+          if (symbolLower === queryLower) {
+            baseScore = 100; // Exact symbol match
+          } else if (symbolLower.startsWith(queryLower)) {
+            baseScore = 90; // Symbol starts with query
+          } else if (nameLower === queryLower) {
+            baseScore = 80; // Exact name match
+          } else if (nameLower.startsWith(queryLower)) {
+            baseScore = 70; // Name starts with query
+          } else if (symbolLower.includes(queryLower)) {
+            baseScore = 60; // Symbol contains query
+          } else if (nameLower.includes(queryLower)) {
+            baseScore = 50; // Name contains query
+          } else {
+            baseScore = 10; // Low relevance
+          }
+          
+          // Quality boost based on token metrics
+          const marketCap = parseFloat(token.market_cap || token.fdv || 0);
+          const liquidity = parseFloat(token.liquidity || 0);
+          const volume24h = parseFloat(token.volume_24h_usd || 0);
+          const isVerified = token.verified === true;
+          
+          let qualityBoost = 0;
+          
+          // Verified token boost
+          if (isVerified) {
+            qualityBoost += 15;
+          }
+          
+          // Market cap boost (logarithmic scale)
+          if (marketCap >= 10000000) { // $10M+
+            qualityBoost += 10;
+          } else if (marketCap >= 1000000) { // $1M+
+            qualityBoost += 7;
+          } else if (marketCap >= 100000) { // $100k+
+            qualityBoost += 5;
+          }
+          
+          // Liquidity boost
+          if (liquidity >= 100000) { // $100k+
+            qualityBoost += 8;
+          } else if (liquidity >= 50000) { // $50k+
+            qualityBoost += 5;
+          } else if (liquidity >= 10000) { // $10k+
+            qualityBoost += 3;
+          }
+          
+          // Volume boost
+          if (volume24h >= 1000000) { // $1M+
+            qualityBoost += 6;
+          } else if (volume24h >= 100000) { // $100k+
+            qualityBoost += 4;
+          } else if (volume24h >= 10000) { // $10k+
+            qualityBoost += 2;
+          }
+          
+          result.relevanceScore = Math.min(baseScore + qualityBoost, 150); // Cap at 150
+          
+          return result;
+        })
+        .filter((result: any) => {
+          // Final validation - must have address and either symbol or name
+          return result.address && (result.symbol || result.name);
+        })
+        .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore) // Sort by relevance
+        .slice(0, 3); // Limit to 3 most relevant results
+      
+      // Fetch token images and security data, filter out honeypots
+      const secureTokens: any[] = [];
+      
+      for (const result of filteredTokens) {
+        try {
+          // Check security first to block honeypots
+          const securityData = await fetchTokenSecurity(result.address);
+          
+          // BLOCK HONEYPOT TOKENS - Don't include in results
+          if (securityData?.honeypotRisk) {
+            console.log(`🚫 BLOCKED HONEYPOT: ${result.symbol} (${result.address.slice(0, 8)}...)`);
+            continue; // Skip this token completely
+          }
+          
+          // If not a honeypot, get token image and add to results
+          const tokenDetail = await fetchTokenDetailCached(result.address);
+          
+          secureTokens.push({
+            address: result.address,
+            symbol: result.symbol,
+            name: result.name,
+            logoURI: tokenDetail?.logoURI || undefined,
+            price: result.price,
+            type: result.type,
+            chain: result.chain
+          });
+          
+          // Stop once we have 3 safe tokens
+          if (secureTokens.length >= 3) {
+            break;
+          }
+          
+        } catch (error) {
+          console.error(`Error checking security for ${result.symbol}:`, error);
+          // If security check fails, be safe and skip the token
+          continue;
+        }
+      }
+      
+      const searchResults: SearchResult[] = secureTokens;
+
+      console.log(`✅ Security filtering complete: ${searchResults.length} safe tokens found (from ${allTokens.length} total results, honeypots blocked)`);
+      
+      // Log search results for debugging
+      if (searchResults.length > 0) {
+        console.log('📋 Safe tokens selected:', searchResults.map(result => ({
+          symbol: result.symbol,
+          name: result.name,
+          address: result.address.slice(0, 8) + '...',
+          hasImage: !!result.logoURI,
+          price: result.price ? `$${result.price}` : 'N/A'
+        })));
+      } else {
+        console.log('⚠️ No safe tokens found after filtering. All results may have been honeypots or had security issues.');
+      }
+
+      return searchResults;
+    }
+
+    console.warn('⚠️ No results found in Birdeye v3 search response');
+    return [];
+
+  } catch (error: any) {
+    console.error('💥 Birdeye v3 search failed:', error.message);
+    
+    // Log detailed error information for debugging
+    if (error.response) {
+      console.error('📡 Birdeye API Error Details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        endpoint: '/defi/v3/search',
+        query: query
+      });
+
+      // Handle specific error cases
+      if (error.response.status === 429) {
+        console.warn('🚫 Rate limited by Birdeye API');
+      } else if (error.response.status === 403) {
+        console.warn('🔒 API key may not have access to search endpoint');
+      } else if (error.response.status === 404) {
+        console.warn('❌ Search endpoint not found - may not be available');
+      }
+    }
+
+    // Return empty array on any error - no fallbacks
+    return [];
+  }
+};
+
 // Price-only cache for frequent updates
 const priceCache = new Map<string, {
   price: number;

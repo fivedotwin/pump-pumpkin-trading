@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Share, TrendingUp, TrendingDown, Users, Droplets, Clock, Coins, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Share, TrendingUp, TrendingDown, Users, Droplets, Clock, Coins, RefreshCw, Copy, ExternalLink } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { formatCurrency, formatNumber, formatTokenAmount, formatTimeAgo } from '../utils/formatters';
 import { formatTokenName, formatTokenSymbol, formatDescription, getSmartPriceTextClass } from '../utils/textHelpers';
@@ -328,7 +328,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     if (selectedPeriod === 'LIVE') {
       // Prefer live WebSocket data if available
       if (liveChartData.length > 0) {
-        return liveChartData.map(point => point.price);
+      return liveChartData.map(point => point.price);
       }
       // Fallback to historical data while WebSocket is connecting
       else if (priceHistory && priceHistory.length > 0) {
@@ -348,7 +348,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     if (selectedPeriod === 'LIVE') {
       // Prefer live WebSocket data if available
       if (liveChartData.length > 0) {
-        return liveChartData;
+      return liveChartData;
       }
       // Fallback to historical data while WebSocket is connecting
       else if (priceHistory && priceHistory.length > 0) {
@@ -836,8 +836,8 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                 {/* Price Range Info unified with chart */}
                 <div className="bg-gray-900 rounded-lg px-4 py-2 mt-2">
                   <div className="flex justify-between text-xs text-gray-500">
-                    <span>Low: {formatPrice(Math.min(...generateChartData()))}</span>
-                    <span>High: {formatPrice(Math.max(...generateChartData()))}</span>
+                  <span>Low: {formatPrice(Math.min(...generateChartData()))}</span>
+                  <span>High: {formatPrice(Math.max(...generateChartData()))}</span>
                   </div>
                 </div>
               </div>
@@ -962,6 +962,28 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
                     : tokenData.createdAt
                   }
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center space-x-3">
+                  <ExternalLink className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-300 text-sm">Contract Address</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-white font-medium text-sm break-all font-mono" title={tokenAddress}>
+                    {tokenAddress.slice(0, 6)}...{tokenAddress.slice(-6)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(tokenAddress);
+                      showShareNotification('Contract address copied!');
+                    }}
+                    className="p-1 text-gray-400 hover:text-white transition-colors"
+                    title="Copy contract address"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

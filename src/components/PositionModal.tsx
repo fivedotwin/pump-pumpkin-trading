@@ -6,6 +6,7 @@ import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWeb
 import unifiedPriceService from '../services/unifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
+import { soundManager } from '../services/soundManager';
 
 interface PositionModalProps {
   position: TradingPosition;

@@ -1,35 +1,20 @@
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { createJupiterApiClient, QuoteGetRequest, QuoteResponse, SwapPostRequest } from '@jup-ag/api';
+import { createJupiterApiClient, QuoteResponse } from '@jup-ag/api';
 
 // Configuration
 const JUPITER_API_KEY = '788ad1ee-4c79-43ed-99e4-d97d4065bde4';
 const PPA_TOKEN_ADDRESS = '51NRTtZ8GwG3J4MGmxTsGJAdLViwu9s5ggEQup35pump';
-const SOL_TOKEN_ADDRESS = 'So11111111111111111111111111111111111111112'; // Wrapped SOL
+const SOL_TOKEN_ADDRESS = 'So11111111111111111111111111111111111111112';
 
-// Fee configuration - 0.5% fee to your wallet
-const FEE_ACCOUNT = 'CTDZ5teoWajqVcAsWQyEmmvHQzaDiV1jrnvwRmcL1iWv';
-const FEE_BPS = 50; // 0.5% = 50 basis points
-
-// Create Jupiter API client according to official docs
+// Create Jupiter API client with Pro API key
 const jupiterQuoteApi = createJupiterApiClient({
-  basePath: 'https://quote-api.jup.ag/v6',
+  basePath: 'https://api.jup.ag',
+  headers: {
+    'Authorization': `Bearer ${JUPITER_API_KEY}`,
+  },
 });
 
-export interface SwapQuote {
-  inputAmount: string;
-  outputAmount: string;
-  priceImpactPct: string;
-  routePlan: any[];
-  swapMode: string;
-  inputMint: string;
-  outputMint: string;
-  otherAmountThreshold: string;
-  slippageBps: number;
-  platformFee?: {
-    amount: string;
-    feeBps: number;
-  };
-}
+// Use Jupiter's native QuoteResponse type
 
 export interface SwapResult {
   txid: string;
@@ -44,7 +29,6 @@ export class JupiterSwapService {
   private connection: Connection;
 
   constructor() {
-    // Use QuickNode Solana mainnet RPC endpoint
     this.connection = new Connection('https://dimensional-white-pine.solana-mainnet.quiknode.pro/e229761b955e887d87f412414b4024c993e7a91d/', {
       commitment: 'confirmed',
       confirmTransactionInitialTimeout: 60000,
@@ -52,29 +36,12 @@ export class JupiterSwapService {
   }
 
   /**
-   * Calculate platform fee amount
-   */
-  private calculatePlatformFee(inputAmount: number, inputMint: string): string {
-    let amountInSmallestUnit: number;
-    
-    if (inputMint === SOL_TOKEN_ADDRESS) {
-      amountInSmallestUnit = Math.floor(inputAmount * 1_000_000_000); // SOL has 9 decimals
-    } else {
-      amountInSmallestUnit = Math.floor(inputAmount * 1_000_000); // PPA has 6 decimals
-    }
-    
-    // Calculate 0.5% fee
-    const feeAmount = Math.floor((amountInSmallestUnit * FEE_BPS) / 10000);
-    return feeAmount.toString();
-  }
-
-  /**
-   * Get swap quote using Jupiter API v6 with platform fee
+   * Get swap quote using Jupiter API v6 - basic implementation
    */
   async getSwapQuoteWithDirection(
     inputAmount: number, 
     direction: SwapDirection
-  ): Promise<SwapQuote | null> {
+  ): Promise<QuoteResponse | null> {
     try {
       let inputMint: string;
       let outputMint: string;
@@ -98,25 +65,16 @@ export class JupiterSwapService {
 
       console.log(`🔄 Getting Jupiter quote for: ${inputAmount} ${direction}`);
       console.log(`📊 Amount in smallest unit: ${amountInSmallestUnit}`);
-      
-      // Calculate platform fee
-      const platformFeeAmount = this.calculatePlatformFee(inputAmount, inputMint);
-      
-      console.log(`💰 Platform fee: ${platformFeeAmount} (${FEE_BPS} bps = 0.5%)`);
 
-      // Create quote request according to Jupiter API v6 docs with platform fee
-      const quoteRequest: QuoteGetRequest = {
+      // Basic quote request - following Jupiter docs exactly
+      const quoteRequest = {
         inputMint,
         outputMint,
         amount: amountInSmallestUnit,
         slippageBps: 50, // 0.5% slippage
-        swapMode: 'ExactIn',
-        onlyDirectRoutes: false,
-        asLegacyTransaction: false,
-        platformFeeBps: FEE_BPS, // Add platform fee to quote request
       };
 
-      console.log('📋 Quote request with fee:', quoteRequest);
+      console.log('📋 Quote request:', quoteRequest);
 
       // Get quote from Jupiter API
       const quote = await jupiterQuoteApi.quoteGet(quoteRequest);
@@ -126,32 +84,13 @@ export class JupiterSwapService {
         return null;
       }
 
-      console.log('✅ Quote received with fee:', {
-        inputAmount: quote.inAmount,
-        outputAmount: quote.outAmount,
-        priceImpactPct: quote.priceImpactPct,
-        platformFee: quote.platformFee,
-        routePlan: quote.routePlan?.length || 0
-      });
+      console.log('✅ Quote received:', quote);
+      console.log('📊 Quote properties:', Object.keys(quote));
+      console.log('📊 inAmount:', quote.inAmount);
+      console.log('📊 outAmount:', quote.outAmount);
 
-      return {
-        inputAmount: quote.inAmount,
-        outputAmount: quote.outAmount,
-        priceImpactPct: quote.priceImpactPct || '0',
-        routePlan: quote.routePlan || [],
-        swapMode: quote.swapMode || 'ExactIn',
-        inputMint,
-        outputMint,
-        otherAmountThreshold: quote.otherAmountThreshold || quote.outAmount,
-        slippageBps: 50,
-        platformFee: quote.platformFee ? {
-          amount: quote.platformFee.amount,
-          feeBps: quote.platformFee.feeBps
-        } : {
-          amount: platformFeeAmount,
-          feeBps: FEE_BPS
-        }
-      };
+      // Return the quote in the format expected by the swap API
+      return quote;
 
     } catch (error) {
       console.error('💥 Error getting Jupiter quote:', error);
@@ -160,49 +99,24 @@ export class JupiterSwapService {
   }
 
   /**
-   * Execute swap using Jupiter API v6 with platform fee
+   * Execute swap using Jupiter API v6 - basic implementation following docs
    */
   async executeSwap(
-    quote: SwapQuote,
+    quote: QuoteResponse,
     userPublicKey: PublicKey,
     signTransaction: (transaction: VersionedTransaction) => Promise<VersionedTransaction>
   ): Promise<SwapResult | null> {
     try {
-      console.log('🚀 Executing swap with quote and fee:', quote);
+      console.log('🚀 Executing swap with quote:', quote);
 
-      // Create platform fee configuration
-      const platformFee = {
-        amount: quote.platformFee?.amount || '0',
-        feeBps: FEE_BPS
-      };
-
-      // Create swap request according to Jupiter API v6 docs with platform fee
-      const swapRequest: SwapPostRequest = {
-        quoteResponse: {
-          inputMint: quote.inputMint,
-          inAmount: quote.inputAmount,
-          outputMint: quote.outputMint,
-          outAmount: quote.outputAmount,
-          otherAmountThreshold: quote.otherAmountThreshold,
-          swapMode: quote.swapMode,
-          slippageBps: quote.slippageBps,
-          platformFee: platformFee,
-          priceImpactPct: quote.priceImpactPct,
-          routePlan: quote.routePlan,
-        },
+      // Basic swap request - following Jupiter docs exactly
+      const swapRequest = {
+        quoteResponse: quote,
         userPublicKey: userPublicKey.toString(),
         wrapAndUnwrapSol: true,
-        useSharedAccounts: true,
-        feeAccount: FEE_ACCOUNT, // Your wallet address for receiving fees
-        trackingAccount: undefined,
-        computeUnitPriceMicroLamports: undefined,
-        prioritizationFeeLamports: undefined,
-        asLegacyTransaction: false,
-        useTokenLedger: false,
-        destinationTokenAccount: undefined,
       };
 
-      console.log('📋 Swap request prepared with fee account:', FEE_ACCOUNT);
+      console.log('📋 Swap request prepared');
 
       // Get swap transaction from Jupiter API
       const swapResponse = await jupiterQuoteApi.swapPost({ swapRequest });
@@ -212,7 +126,7 @@ export class JupiterSwapService {
         return null;
       }
 
-      console.log('✅ Swap transaction received from Jupiter with platform fee');
+      console.log('✅ Swap transaction received from Jupiter');
 
       // Deserialize the transaction
       const swapTransactionBuf = Buffer.from(swapResponse.swapTransaction, 'base64');
@@ -239,37 +153,32 @@ export class JupiterSwapService {
       
       if (confirmation.value.err) {
         console.error('❌ Transaction failed:', confirmation.value.err);
-        throw new Error(`Transaction failed: ${confirmation.value.err}`);
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
 
-      console.log('✅ Transaction confirmed with platform fee:', txid);
+      console.log('✅ Transaction confirmed:', txid);
 
       // Calculate amounts for display
       let inputAmount: number;
       let outputAmount: number;
-      let feeAmount: number;
 
       if (quote.inputMint === SOL_TOKEN_ADDRESS) {
-        inputAmount = parseInt(quote.inputAmount) / 1_000_000_000; // SOL has 9 decimals
-        feeAmount = parseInt(quote.platformFee?.amount || '0') / 1_000_000_000;
+        inputAmount = parseInt(quote.inAmount) / 1_000_000_000; // SOL has 9 decimals
       } else {
-        inputAmount = parseInt(quote.inputAmount) / 1_000_000; // PPA has 6 decimals
-        feeAmount = parseInt(quote.platformFee?.amount || '0') / 1_000_000;
+        inputAmount = parseInt(quote.inAmount) / 1_000_000; // PPA has 6 decimals
       }
 
       if (quote.outputMint === SOL_TOKEN_ADDRESS) {
-        outputAmount = parseInt(quote.outputAmount) / 1_000_000_000; // SOL has 9 decimals
+        outputAmount = parseInt(quote.outAmount) / 1_000_000_000; // SOL has 9 decimals
       } else {
-        outputAmount = parseInt(quote.outputAmount) / 1_000_000; // PPA has 6 decimals
+        outputAmount = parseInt(quote.outAmount) / 1_000_000; // PPA has 6 decimals
       }
-
-      console.log(`💰 Swap completed - Fee: ${feeAmount} sent to ${FEE_ACCOUNT}`);
 
       return {
         txid,
         inputAmount,
         outputAmount,
-        feeAmount,
+        feeAmount: 0, // Basic implementation
       };
 
     } catch (error) {
@@ -279,7 +188,7 @@ export class JupiterSwapService {
   }
 
   /**
-   * Get PPA price in SOL (how many PPA per 1 SOL) - includes fee calculation
+   * Get PPA price in SOL (how many PPA per 1 SOL)
    */
   async getPPAPrice(): Promise<number | null> {
     try {
@@ -289,8 +198,8 @@ export class JupiterSwapService {
         return null;
       }
 
-      const inputAmount = parseInt(quote.inputAmount) / 1_000_000_000; // SOL
-      const outputAmount = parseInt(quote.outputAmount) / 1_000_000; // PPA
+      const inputAmount = parseInt(quote.inAmount) / 1_000_000_000; // SOL
+      const outputAmount = parseInt(quote.outAmount) / 1_000_000; // PPA
       
       return outputAmount / inputAmount;
 
@@ -301,45 +210,26 @@ export class JupiterSwapService {
   }
 
   /**
-   * Get SOL price in PPA (how many SOL per 1 PPA) - includes fee calculation
-   */
-  async getSOLPrice(): Promise<number | null> {
-    try {
-      const quote = await this.getSwapQuoteWithDirection(1, 'PPA_TO_SOL');
-      
-      if (!quote) {
-        return null;
-      }
-
-      const inputAmount = parseInt(quote.inputAmount) / 1_000_000; // PPA
-      const outputAmount = parseInt(quote.outputAmount) / 1_000_000_000; // SOL
-      
-      return outputAmount / inputAmount;
-
-    } catch (error) {
-      console.error('💥 Error getting SOL price:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get current exchange rate for display - FIXED CALCULATION
+   * Get current exchange rate for display
    */
   async getExchangeRate(direction: SwapDirection): Promise<string | null> {
     try {
       if (direction === 'SOL_TO_PPA') {
-        // For buying PPA: show how much PPA you get per SOL
         const quote = await this.getSwapQuoteWithDirection(1, 'SOL_TO_PPA');
         if (quote) {
-          const inputSOL = parseInt(quote.inputAmount) / 1_000_000_000;
-          const outputPPA = parseInt(quote.outputAmount) / 1_000_000;
+          const inputSOL = parseInt(quote.inAmount) / 1_000_000_000;
+          const outputPPA = parseInt(quote.outAmount) / 1_000_000;
           const rate = outputPPA / inputSOL;
           return `1 SOL ≈ ${rate.toLocaleString('en-US', { maximumFractionDigits: 0 })} PPA`;
         }
-      } else {
-        // For selling PPA: Use the ACTUAL quote amounts to calculate rate
-        // Don't use a separate rate calculation - use the actual quote being shown
-        return null; // We'll calculate this in the component using the actual quote
+      } else if (direction === 'PPA_TO_SOL') {
+        const quote = await this.getSwapQuoteWithDirection(1000, 'PPA_TO_SOL'); // Use 1000 PPA for better precision
+        if (quote) {
+          const inputPPA = parseInt(quote.inAmount) / 1_000_000;
+          const outputSOL = parseInt(quote.outAmount) / 1_000_000_000;
+          const rate = outputSOL / inputPPA;
+          return `1 PPA ≈ ${rate.toFixed(8)} SOL`;
+        }
       }
       return null;
     } catch (error) {
@@ -349,19 +239,65 @@ export class JupiterSwapService {
   }
 
   /**
+   * Validate SOL balance
+   */
+  async validateSOLBalance(
+    userPublicKey: PublicKey, 
+    requiredAmount: number
+  ): Promise<boolean> {
+    try {
+      const balance = await this.connection.getBalance(userPublicKey);
+      const solBalance = balance / 1_000_000_000;
+      console.log('💰 SOL Balance:', solBalance);
+      
+      const totalNeeded = requiredAmount + 0.01; // Include transaction fees
+      console.log(`💰 Required: ${requiredAmount}, Total needed: ${totalNeeded}`);
+      
+      return solBalance >= totalNeeded;
+
+    } catch (error) {
+      console.error('💥 Error checking SOL balance:', error);
+      return false;
+    }
+  }
+
+  /**
    * Format token amounts for display
    */
-  formatTokenAmount(amount: string, tokenMint?: string): string {
+  formatTokenAmount(amount: string | number | undefined, tokenMint?: string): string {
+    // Handle undefined, null, or invalid inputs
+    if (!amount || amount === '' || amount === 'undefined') {
+      return '0';
+    }
+
     let decimals = 6; // Default for PPA
     
-    if (tokenMint === SOL_TOKEN_ADDRESS) {
+    if (tokenMint === SOL_TOKEN_ADDRESS || tokenMint === 'SOL') {
       decimals = 9; // SOL has 9 decimals
     }
 
-    const num = parseInt(amount) / Math.pow(10, decimals);
+    // Convert to number safely
+    let amountNum: number;
+    if (typeof amount === 'string') {
+      amountNum = parseInt(amount);
+    } else {
+      amountNum = amount;
+    }
+
+    // Check for NaN after parsing
+    if (isNaN(amountNum) || !isFinite(amountNum)) {
+      return '0';
+    }
+
+    const num = amountNum / Math.pow(10, decimals);
+    
+    // Check for NaN after division
+    if (isNaN(num) || !isFinite(num)) {
+      return '0';
+    }
     
     // Better formatting based on token type
-    if (tokenMint === SOL_TOKEN_ADDRESS) {
+    if (tokenMint === SOL_TOKEN_ADDRESS || tokenMint === 'SOL') {
       // SOL formatting - show up to 4 decimal places
       return num.toLocaleString('en-US', { 
         minimumFractionDigits: 2, 
@@ -379,68 +315,6 @@ export class JupiterSwapService {
           maximumFractionDigits: 2 
         });
       }
-    }
-  }
-
-  /**
-   * Validate SOL balance (including fee)
-   */
-  async validateSOLBalance(
-    userPublicKey: PublicKey, 
-    requiredAmount: number
-  ): Promise<boolean> {
-    try {
-      const balance = await this.connection.getBalance(userPublicKey);
-      const solBalance = balance / 1_000_000_000;
-      console.log('💰 SOL Balance:', solBalance);
-      
-      // Calculate total needed including fee and transaction costs
-      const feeAmount = requiredAmount * 0.005; // 0.5% fee
-      const totalNeeded = requiredAmount + feeAmount + 0.01; // Include transaction fees
-      
-      console.log(`💰 Required: ${requiredAmount}, Fee: ${feeAmount}, Total needed: ${totalNeeded}`);
-      
-      return solBalance >= totalNeeded;
-
-    } catch (error) {
-      console.error('💥 Error checking SOL balance:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Validate PPA balance (including fee)
-   */
-  async validatePPABalance(
-    userPublicKey: PublicKey, 
-    requiredAmount: number
-  ): Promise<boolean> {
-    try {
-      const mint = new PublicKey(PPA_TOKEN_ADDRESS);
-      const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
-        userPublicKey,
-        { mint }
-      );
-
-      if (tokenAccounts.value.length === 0) {
-        console.warn('⚠️ No PPA token account found');
-        return false;
-      }
-
-      const balance = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
-      console.log('💰 PPA Balance:', balance);
-
-      // Calculate total needed including fee
-      const feeAmount = requiredAmount * 0.005; // 0.5% fee
-      const totalNeeded = requiredAmount + feeAmount;
-      
-      console.log(`💰 Required: ${requiredAmount}, Fee: ${feeAmount}, Total needed: ${totalNeeded}`);
-
-      return balance >= totalNeeded;
-
-    } catch (error) {
-      console.error('💥 Error checking PPA balance:', error);
-      return false;
     }
   }
 
@@ -469,7 +343,7 @@ export class JupiterSwapService {
           ppa = ppaAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount || 0;
         }
       } catch (error) {
-        console.warn('⚠️ Could not fetch PPA balance:', error.message);
+        console.warn('⚠️ Could not fetch PPA balance:', error);
         ppa = 0;
       }
 

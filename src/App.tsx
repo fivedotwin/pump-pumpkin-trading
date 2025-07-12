@@ -14,7 +14,7 @@ function AppContent() {
   const [walletAddress, setWalletAddress] = useState<string>('');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  
+
 
 
 
@@ -169,11 +169,11 @@ function AppContent() {
           {/* Simple Icon - matches connect wallet page */}
           <div className="mb-8">
             <div className="w-24 h-24 mx-auto relative">
-              <img 
-                src="https://i.imgur.com/fWVz5td.png" 
+            <img 
+              src="https://i.imgur.com/fWVz5td.png" 
                 alt="Pump Pumpkin Icon" 
                 className="w-full h-full object-cover rounded-xl relative z-10"
-              />
+            />
               {/* Pulsing borders from all sides */}
               <div className="absolute inset-0 border-4 border-blue-500 rounded-xl opacity-60 animate-pulse"></div>
               <div className="absolute inset-0 border-2 border-blue-400 rounded-xl opacity-40 animate-pulse" style={{ animationDelay: '0.5s' }}></div>

@@ -7,7 +7,7 @@ import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWeb
 import unifiedPriceService from '../services/unifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeSuccessModal from './TradeSuccessModal';
-import soundManager from '../services/soundManager';
+import { soundManager } from '../services/soundManager';
 
 interface TradingModalProps {
   tokenData: TokenDetailData;
@@ -88,7 +88,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         console.log('💰 SOL price loaded in TradingModal:', `$${price.toFixed(2)}`);
       } catch (error) {
         console.error('❌ CRITICAL: Failed to load SOL price in TradingModal:', error);
-        setPriceError('Failed to load SOL price. Trading disabled.');
+        setPriceError('Prices updating, try again in a moment');
         setSolPrice(null);
       } finally {
         setIsPriceLoading(false);
@@ -119,7 +119,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         console.log('💰 SOL price retry successful:', `$${price.toFixed(2)}`);
       } catch (error) {
         console.error('❌ SOL price retry failed:', error);
-        setPriceError('Failed to load SOL price. Trading disabled.');
+        setPriceError('Prices updating, try again in a moment');
         setSolPrice(null);
       } finally {
         setIsPriceLoading(false);
@@ -331,7 +331,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     if (totalRequiredSOL > userSOLBalance) {
       const shortfall = totalRequiredSOL - userSOLBalance;
       // User sees this as "collateral" requirement (fees are hidden)
-      return `Need ${totalRequiredSOL.toFixed(4)} SOL collateral (${shortfall.toFixed(4)} short)`;
+      return `Need ${shortfall.toFixed(3)} more SOL to place this trade`;
     }
     
     return null;
@@ -615,7 +615,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       console.error('Error details:', error);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
-      setTradeError(error.message || 'Failed to create position. Please try again.');
+      setTradeError('Trade failed, please check your details and try again');
       // Trade errors are now silent
     } finally {
       setIsExecutingTrade(false);

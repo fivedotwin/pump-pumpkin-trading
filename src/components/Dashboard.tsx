@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken } from '../services/birdeyeApi';
-import { jupiterSwapService, SwapQuote, SwapDirection } from '../services/jupiterApi';
+import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity } from '../services/birdeyeApi';
+import { jupiterSwapService, SwapDirection } from '../services/jupiterApi';
 import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
 import { userProfileService, WithdrawalRequest, supabase } from '../services/supabaseClient';
 import TokenDetail from './TokenDetail';
@@ -14,7 +14,7 @@ import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket
 import unifiedPriceService from '../services/unifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
-import soundManager from '../services/soundManager';
+import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
 
 interface DashboardProps {
@@ -99,6 +99,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [currentUsername, setCurrentUsername] = useState(username);
   const [currentProfilePicture, setCurrentProfilePicture] = useState(profilePicture);
   
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Add positions tab state
+  const [positionsSubTab, setPositionsSubTab] = useState<'active' | 'pending'>('active');
+  
   // Update local SOL balance when prop changes (tracks deposited amount)
   useEffect(() => {
     setCurrentSOLBalance(solBalance);
@@ -106,7 +115,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   }, [solBalance]);
   
   // Jupiter swap states
-  const [swapQuote, setSwapQuote] = useState<SwapQuote | null>(null);
+  const [swapQuote, setSwapQuote] = useState<any | null>(null);
   const [isGettingQuote, setIsGettingQuote] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
   const [ppaPrice, setPpaPrice] = useState<number | null>(null);
@@ -625,24 +634,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             pnl_usd = (entry_price - current_price) * amount * leverage;
           }
           
-          // 🎵 SOUND INTEGRATION: Play sound for P&L changes
+          // Track P&L changes for monitoring
           const lastPnL = lastPnLValues[position.id] || 0;
-          if (lastPnL !== 0 && Math.abs(pnl_usd - lastPnL) > 1) { // Only play if change > $1
-            if (pnl_usd > lastPnL) {
-              // Profit increase
-              if (pnl_usd - lastPnL > 10) {
-                soundManager.playProfitBig(); // Big profit gain
-                hapticFeedback.success();
-              } else {
-                soundManager.playProfitSmall(); // Small profit gain
-                hapticFeedback.light();
-              }
-            } else if (pnl_usd < lastPnL) {
-              // Loss or profit decrease
-              soundManager.playLossGentle(); // Never harsh
-              hapticFeedback.light();
-            }
-          }
           
           // Update last P&L values for position tracking
           setLastPnLValues(prev => ({ ...prev, [position.id]: pnl_usd }));
@@ -656,12 +649,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
           }
           
-          // 🎵 SOUND INTEGRATION: Liquidation warning sounds
+          // Check for liquidation risk
           if (margin_ratio >= 0.9) {
-            soundManager.playLiquidationWarning();
             hapticFeedback.error();
           } else if (margin_ratio >= 0.8) {
-            soundManager.playMarginCall();
             hapticFeedback.medium();
           }
           
@@ -855,15 +846,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       setSwapQuote(quote);
       
       if (quote) {
-        if (swapMode === 'buy') {
-          const rate = await jupiterSwapService.getExchangeRate(direction);
-          setExchangeRate(rate);
-        } else {
-          const inputPPA = parseInt(quote.inputAmount) / 1_000_000;
-          const outputSOL = parseInt(quote.outputAmount) / 1_000_000_000;
-          const ratePerPPA = outputSOL / inputPPA;
-          setExchangeRate(`1 PPA ≈ ${ratePerPPA.toFixed(8)} SOL`);
-        }
+        // Use the service method for both directions
+        const rate = await jupiterSwapService.getExchangeRate(direction);
+        setExchangeRate(rate);
       } else {
         setSwapError('Unable to get quote. Please try again.');
         setExchangeRate(null);
@@ -883,8 +868,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(walletAddress);
-    // 🎵 Copy action sound
-    soundManager.playClick();
   };
 
   const handleCASubmit = async (e: React.FormEvent) => {
@@ -897,9 +880,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setCaValidationError(null);
     
     try {
-      console.log('🔍 Validating token market cap for:', tokenAddress);
+      console.log('🔍 Validating token for honeypots and market cap:', tokenAddress);
       
-      // Fetch token data to check market cap
+      // STEP 1: Check for honeypots first (security check)
+      const securityData = await fetchTokenSecurity(tokenAddress);
+      
+      if (securityData?.honeypotRisk) {
+        console.log('🚫 BLOCKED HONEYPOT via CA input:', tokenAddress);
+        setCaValidationError(
+          'This token has been identified as a potential honeypot and cannot be traded. ' +
+          'Honeypots may prevent you from selling your tokens.'
+        );
+        return;
+      }
+      
+      console.log('✅ Token passed honeypot security check');
+      
+      // STEP 2: Fetch token data to check market cap
       const tokenData = await fetchTokenDetailCached(tokenAddress);
       
       if (!tokenData) {
@@ -921,9 +918,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return;
       }
       
-      console.log('✅ Token passes market cap validation, proceeding to trading...');
+      console.log('✅ Token passes all validation checks, proceeding to trading...');
       
-      // Token passes validation, proceed to trading
+      // Token passes all validation, proceed to trading
       setSelectedTokenAddress(tokenAddress);
     setViewState('token-detail');
     setCaInput('');
@@ -954,26 +951,34 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setSwapQuote(null);
     setSwapError(null);
     setExchangeRate(null);
-    // 🎵 Sound for opening buy modal
-    soundManager.playModalOpen();
     if (publicKey) {
       loadUserBalances();
     }
   };
 
-  const handleSellPPA = () => {
-    setShowSwapModal(true);
-    setSwapMode('sell');
+  const handleToggleSwapMode = () => {
+    // Clear current values when switching modes
     setPayAmount('');
     setSwapQuote(null);
-    setSwapError(null);
     setExchangeRate(null);
-    // 🎵 Sound for opening sell modal
-    soundManager.playModalOpen();
-    if (publicKey) {
-      loadUserBalances();
+    setSwapError(null);
+    
+    // Toggle between buy and sell
+    setSwapMode(swapMode === 'buy' ? 'sell' : 'buy');
+  };
+
+  const handleMaxAmount = () => {
+    if (swapMode === 'buy') {
+      // For buying, use available SOL (leave a small buffer for transaction fees)
+      const maxSOL = Math.max(0, userBalances.sol - 0.01);
+      setPayAmount(maxSOL.toFixed(4));
+    } else {
+      // For selling, use available PPA
+      setPayAmount(userBalances.ppa.toString());
     }
   };
+
+
 
   const handleSwap = async () => {
     if (!swapQuote || !publicKey || !signTransaction) {
@@ -985,24 +990,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setSwapError(null);
 
     try {
-      let hasBalance = false;
+      // Validate balance based on swap mode
       if (swapMode === 'buy') {
-        hasBalance = await jupiterSwapService.validateSOLBalance(publicKey, parseFloat(payAmount));
+        const hasBalance = await jupiterSwapService.validateSOLBalance(publicKey, parseFloat(payAmount));
         if (!hasBalance) {
-          setSwapError('Insufficient SOL balance (including 0.5% fee)');
+          setSwapError('Insufficient SOL balance');
           setIsSwapping(false);
           return;
         }
       } else {
-        hasBalance = await jupiterSwapService.validatePPABalance(publicKey, parseFloat(payAmount));
-        if (!hasBalance) {
-          setSwapError('Insufficient PPA balance (including 0.5% fee)');
+        // For selling PPA, check if user has enough PPA
+        if (userBalances.ppa < parseFloat(payAmount)) {
+          setSwapError('Insufficient PPA balance');
           setIsSwapping(false);
           return;
         }
       }
 
-      console.log('🚀 Starting swap transaction with 0.5% platform fee...');
+      console.log(`🚀 Starting ${swapMode} transaction with 0.5% platform fee...`);
       
       const result = await jupiterSwapService.executeSwap(
         swapQuote,
@@ -1034,16 +1039,42 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         
         loadUserBalances();
 
-        const balanceChange = swapMode === 'buy' ? -result.inputAmount : result.outputAmount;
-        const newBalance = balance + balanceChange;
-        onUpdateBalance(newBalance);
+        // Update balance based on swap mode
+        if (swapMode === 'buy') {
+          // Buying PPA with SOL - spending SOL
+          const balanceChange = -result.inputAmount;
+          const newBalance = balance + balanceChange;
+          onUpdateBalance(newBalance);
+        } else {
+          // Selling PPA for SOL - receiving SOL
+          const balanceChange = result.outputAmount;
+          const newBalance = balance + balanceChange;
+          onUpdateBalance(newBalance);
+        }
       } else {
         setSwapError('Swap failed. Please try again.');
       }
 
     } catch (error: any) {
-      console.error('💥 Swap error:', error);
-      setSwapError(error.message || 'Swap failed. Please try again.');
+      console.error('💥 DETAILED Swap error:', error);
+      console.error('💥 Error message:', error.message);
+      console.error('💥 Error type:', typeof error);
+      console.error('💥 Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      
+      let userFriendlyError = error.message || 'Swap failed. Please try again.';
+      
+      // Parse common Solana transaction errors
+      if (userFriendlyError.includes('InsufficientFunds')) {
+        userFriendlyError = swapMode === 'buy' ? 'Insufficient SOL balance for transaction fees' : 'Insufficient PPA balance';
+      } else if (userFriendlyError.includes('0x1')) {
+        userFriendlyError = 'Insufficient funds for this transaction';
+      } else if (userFriendlyError.includes('0x0')) {
+        userFriendlyError = 'Account not found - you may need to create a token account first';
+      } else if (userFriendlyError.includes('slippage')) {
+        userFriendlyError = 'Price moved too much during swap. Try again with higher slippage tolerance.';
+      }
+      
+      setSwapError(userFriendlyError);
     } finally {
       setIsSwapping(false);
     }
@@ -1284,12 +1315,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setSoundEnabled(newSoundEnabled);
     soundManager.setSoundEnabled(newSoundEnabled);
     
-    // Play feedback sound if sounds are being enabled
-    if (newSoundEnabled) {
-      soundManager.playSuccessChime();
-      hapticFeedback.success();
-    }
-    
     console.log(`🎵 Sound ${newSoundEnabled ? 'enabled' : 'disabled'}`);
   };
 
@@ -1307,8 +1332,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const handlePositionClick = (position: TradingPosition) => {
     setSelectedPosition(position);
     setShowPositionModal(true);
-    // 🎵 Sound for opening position modal
-    soundManager.playModalOpen();
   };
 
   const handleClosePositionModal = () => {
@@ -1333,9 +1356,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     
     setIsClosingPosition(true);
     setClosingPositions(prev => new Set(prev).add(positionId));
-    
-            // 🎵 Position closing sound
-    soundManager.play('trade_confirm', 'epic'); // Epic confirmation for closing
     
     // Show closing trade loading modal
     if (position) {
@@ -1607,7 +1627,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Use real trading positions data
   const activePositions = tradingPositions.filter(position => 
-    position.status === 'open' || position.status === 'opening' || position.status === 'pending'
+    position.status === 'open' || position.status === 'pending'
   );
 
   const tabs = [
@@ -1631,11 +1651,44 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     },
     { 
       id: 'orders' as TabType, 
-      label: 'Orders', 
-      icon: Activity,
-      badgeCount: pendingOrders.length 
+      label: 'History', 
+      icon: History,
+      badgeCount: 0 
     },
   ];
+
+  // Search tokens function
+  const handleTokenSearch = async (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setIsSearching(true);
+    setShowSearchResults(true);
+    
+    try {
+      const results = await searchTokens(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle search result selection
+  const handleSearchResultClick = (result: SearchResult) => {
+    setSelectedTokenAddress(result.address);
+    setViewState('token-detail');
+    setSearchQuery('');
+    setShowSearchResults(false);
+    setSearchResults([]);
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1689,6 +1742,66 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </span>
             </div>
             
+            {/* Token Search Bar */}
+            <div className="mb-4 relative">
+              <input
+                type="text"
+                placeholder="Search tokens by name or symbol..."
+                value={searchQuery}
+                onChange={(e) => handleTokenSearch(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400"
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-3">
+                  <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                </div>
+              )}
+
+              {/* Search Results */}
+              {showSearchResults && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-64 overflow-y-auto z-50">
+                  {searchResults.length > 0 ? (
+                    searchResults.map((result, index) => (
+                      <div
+                        key={result.address || index}
+                        onClick={() => handleSearchResultClick(result)}
+                        className="p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0 flex items-center space-x-3"
+                      >
+                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
+                          {result.logoURI ? (
+                            <img 
+                              src={result.logoURI} 
+                              alt={result.symbol}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xs font-bold text-white">{result.symbol.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white font-bold text-sm">{result.symbol}</p>
+                          <p className="text-gray-400 text-xs truncate">{result.name}</p>
+                        </div>
+                        {result.price && (
+                          <div className="text-right">
+                            <p className="text-white text-sm font-bold">{formatPrice(result.price)}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-gray-400 text-sm">
+                      {isSearching ? 'Searching...' : 'No tokens found'}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* CA Input - With Market Cap Validation */}
             <form onSubmit={handleCASubmit}>
               <div className="relative">
@@ -1827,8 +1940,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <button
                   onClick={() => {
                     handleBuyPPA();
-                    // 🎵 Sound for trading action
-                    soundManager.playPositionOpen();
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
@@ -1843,21 +1954,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   Buy PPA Tokens
                 </button>
                 
-                {userBalances.ppa > 0 && (
-                  <button
-                    onClick={() => {
-                      handleSellPPA();
-                      // 🎵 Sound for trading action
-                      soundManager.playPositionClose();
-                      hapticFeedback.medium();
-                    }}
-                    onMouseEnter={() => {
-                    }}
-                    className="btn-premium w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors"
-                  >
-                    Sell PPA Tokens
-                  </button>
-                )}
+
               </div>
             </div>
           </div>
@@ -1925,8 +2022,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <button
                   onClick={() => {
                     setShowDepositModal(true);
-                    // 🎵 Sound for deposit action
-                    soundManager.playSuccessChime();
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
@@ -1946,8 +2041,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   onClick={() => {
                     setShowWithdrawModal(true);
                     loadWithdrawalRequests();
-                    // 🎵 Sound for withdraw action
-                    soundManager.playClick();
                     hapticFeedback.light();
                   }}
                   onMouseEnter={(e) => {
@@ -1956,7 +2049,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   onMouseLeave={(e) => {
                     (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
                   }}
-                  className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
+                  disabled={currentSOLBalance < 0.04}
+                  className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ 
                     backgroundColor: '#1e7cfa',
                     color: 'black'
@@ -2110,8 +2204,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                           <div 
                             onClick={() => {
                               handlePositionClick(position);
-                              // 🎵 Sound for position interaction
-                              soundManager.playClick();
                               hapticFeedback.light();
                             }}
                             onMouseEnter={() => {
@@ -2157,6 +2249,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                     {position.leverage}x {position.direction}
                                   </span>
                                 </div>
+                                {position.status === 'opening' && (
+                                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900 text-blue-400 font-bold animate-pulse">
+                                    OPENING...
+                                  </span>
+                                )}
+                                {position.status === 'closing' && (
+                                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900 text-yellow-400 font-bold animate-pulse">
+                                    CLOSING...
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="text-right">
@@ -2355,202 +2457,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 )}
               </div>
               <h1 className="text-4xl font-normal mb-4">
-                Orders & <span style={{ color: '#1e7cfa' }}>History</span>
+                Trade <span style={{ color: '#1e7cfa' }}>History</span>
               </h1>
-              <p className="text-gray-400 text-xl mb-4">Manage Orders & View Trade History</p>
+              <p className="text-gray-400 text-xl mb-4">View Your Completed Trades</p>
               <p className="text-gray-500 text-lg">
-                {pendingOrders.length} pending • {tradeHistory.length} completed
+                {tradeHistory.length} completed trades
               </p>
             </div>
 
-            {/* Active Orders Section - Much larger */}
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-8 mb-10">
-              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
-                <ArrowUpDown className="w-7 h-7 mr-3" />
-                Pending Limit Orders
-              </h3>
-              
-              {isLoadingOrders ? (
-                <div className="space-y-3">
-                  {[...Array(3)].map((_, index) => (
-                    <div key={index} className="bg-gray-800 border border-gray-600 rounded-lg p-4 animate-pulse">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gray-700 rounded-full"></div>
-                          <div>
-                            <div className="w-16 h-4 bg-gray-700 rounded mb-1"></div>
-                            <div className="w-12 h-3 bg-gray-600 rounded"></div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="w-20 h-4 bg-gray-700 rounded mb-1"></div>
-                          <div className="w-16 h-3 bg-gray-600 rounded"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : pendingOrders.length > 0 ? (
-                <div className="space-y-3">
-                  {pendingOrders.map((order) => {
-                    const isEditing = isEditingOrder === order.id;
-                    const currentMarketPrice = order.current_price || 0;
-                    const targetPrice = order.target_price || order.entry_price;
-                    const priceDistance = Math.abs(currentMarketPrice - targetPrice);
-                    const priceDistancePercent = currentMarketPrice > 0 ? (priceDistance / currentMarketPrice) * 100 : 0;
-                    
-                    // Determine if order is close to triggering
-                    const isCloseToTrigger = priceDistancePercent < 5; // Within 5%
-                    
-                    return (
-                      <div 
-                        key={order.id} 
-                        className={`rounded-lg p-4 transition-all ${
-                          isCloseToTrigger ? 'bg-yellow-900 border-2 border-yellow-500' : 
-                          'bg-gray-800 border border-gray-600'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden bg-gray-700">
-                              {order.token_image ? (
-                                <img 
-                                  src={order.token_image}
-                                  alt={order.token_symbol}
-                                  className="w-full h-full object-cover rounded-full"
-                                  onError={(e) => {
-                                    const target = e.currentTarget as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const parent = target.parentElement as HTMLDivElement;
-                                    if (parent) {
-                                      parent.innerHTML = `<span class="text-white text-xs font-bold">${order.token_symbol.charAt(0)}</span>`;
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <span className="text-white text-xs font-bold">{order.token_symbol.charAt(0)}</span>
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-white font-medium">{order.token_symbol}</span>
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  order.direction === 'Long' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-                                }`}>
-                                  {order.leverage}x {order.direction}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-2 text-xs text-gray-400">
-                                <span>Target: {formatPrice(targetPrice)}</span>
-                                <span>•</span>
-                                <span>Market: {formatPrice(currentMarketPrice)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-white text-sm font-medium">
-                              {formatCurrency(order.position_value_usd)}
-                            </p>
-                            <p className="text-gray-400 text-xs">
-                              {priceDistancePercent.toFixed(1)}% away
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {/* Order Management Buttons */}
-                        {isEditing ? (
-                          <div className="space-y-2">
-                            <input
-                              type="number"
-                              value={newOrderPrice}
-                              onChange={(e) => setNewOrderPrice(e.target.value)}
-                              placeholder="New limit price"
-                              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-400 text-center"
-                              step="0.000001"
-                              autoFocus
-                            />
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handleEditOrderPrice(order.id)}
-                                disabled={!newOrderPrice || parseFloat(newOrderPrice) <= 0}
-                                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs px-3 py-2 rounded transition-colors"
-                              >
-                                Update
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setIsEditingOrder(null);
-                                  setNewOrderPrice('');
-                                }}
-                                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded transition-colors"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setIsEditingOrder(order.id);
-                                setNewOrderPrice(targetPrice.toString());
-                              }}
-                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded transition-colors"
-                            >
-                              Edit Price
-                            </button>
-                            <button
-                              onClick={() => handleCancelOrder(order.id)}
-                              className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded transition-colors"
-                            >
-                              Cancel Order
-                            </button>
-                          </div>
-                        )}
-                        
-                        {/* Close to trigger warning */}
-                        {isCloseToTrigger && (
-                          <div className="mt-2 text-xs text-yellow-300 font-bold">
-                            Warning: Order may trigger soon! Market price within {priceDistancePercent.toFixed(1)}% of target
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 text-center">
-                  <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <ArrowUpDown className="w-6 h-6 text-gray-500" />
-                  </div>
-                  <p className="text-gray-400 text-sm mb-2">No pending orders</p>
-                  <p className="text-gray-500 text-xs">Limit orders you place will appear here</p>
-                </div>
-              )}
-            </div>
 
-            {/* Order Management Tips */}
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-8">
-              <h4 className="text-white font-medium mb-2 text-sm">Order Management</h4>
-              <div className="space-y-2 text-xs text-gray-400">
-                <div className="flex items-start space-x-2">
-                  <span className="text-blue-400">•</span>
-                  <span>Edit prices anytime before execution</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="text-green-400">•</span>
-                  <span>Orders execute automatically when market price hits target</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="text-red-400">•</span>
-                  <span>Cancel orders to get collateral refunded instantly</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="text-yellow-400">•</span>
-                  <span>Yellow highlight means order is close to triggering</span>
-                </div>
-              </div>
-            </div>
 
             {/* Enhanced Trade History Section */}
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4">
@@ -2841,7 +2756,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           {/* Left Side - Settings with Quick Access */}
           <div className="relative">
             <button 
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => {
+                setShowSettings(!showSettings);
+              }}
               className={`p-3 bg-gray-800/50 rounded-xl text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50 ${
                 showSettings ? 'bg-blue-600/20 border-blue-500/30 text-blue-400' : ''
               }`}
@@ -2875,7 +2792,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 </button>
                 
                 <button
-                  onClick={handleToggleSound}
+                  onClick={() => {
+                    handleToggleSound();
+                  }}
                   className="w-full flex items-center justify-between px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
                 >
                   <div className="flex items-center space-x-3">
@@ -2938,7 +2857,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           
           {/* Right Side - Wallet Info */}
           <button 
-            onClick={handleCopyAddress}
+            onClick={() => {
+              handleCopyAddress();
+            }}
             className="flex items-center space-x-2 bg-gray-800/50 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50"
           >
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -2970,12 +2891,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  // 🎵 Enhanced Audio & Haptic Feedback
+                  // 🎵 Robinhood-style menu sounds
                   if (!isActive) {
-                    soundManager.playSwitch();
+                    soundManager.playTabSwitch();
                     hapticFeedback.medium();
                   } else {
-                    soundManager.playTap();
+                    soundManager.playTabSwitch();
                     hapticFeedback.light();
                   }
                 }}
@@ -3165,22 +3086,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-400 text-base mb-2">Request SOL Withdrawal</p>
             
             <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-2">Minimum withdrawal: 0.04 SOL</p>
-            
-            {/* Insufficient Balance Warning */}
-            {currentSOLBalance < 0.04 && (
-              <div className="bg-orange-900 border border-orange-700 rounded-lg p-3 mb-4">
-                <div className="flex items-start space-x-2">
-                  <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-orange-200 text-sm">
-                      <strong>Insufficient Balance:</strong> You need at least 0.04 SOL to make a withdrawal. 
-                      You can still view your withdrawal history below.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <p className="text-gray-500 text-sm mb-6">Minimum withdrawal: 0.04 SOL</p>
 
             {/* Error Message */}
             {withdrawError && (
@@ -3355,52 +3261,69 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </div>
             )}
             
-            {/* Pay Input */}
+            {/* Pay Input with Max Button */}
             <div className="mb-2">
-              <input
-                type="number"
-                value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
-                placeholder={`Enter ${swapMode === 'buy' ? 'SOL' : 'PPA'} Amount`}
-                min="0"
-                step={swapMode === 'buy' ? '0.001' : '0.01'}
-                disabled={isSwapping}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  placeholder={`Enter ${swapMode === 'buy' ? 'SOL' : 'PPA'} Amount`}
+                  min="0"
+                  step={swapMode === 'buy' ? '0.001' : '0.01'}
+                  disabled={isSwapping}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 pr-16 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
+                />
+                <button
+                  onClick={() => {
+                    handleMaxAmount();
+                  }}
+                  disabled={isSwapping || (swapMode === 'buy' ? userBalances.sol <= 0.01 : userBalances.ppa <= 0)}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Max
+                </button>
+              </div>
             </div>
 
-            {swapMode === 'buy' && (
-              <>
-                {/* Swap Arrow */}
-                <div className="flex justify-center mb-2">
-                  <div className="bg-gray-800 rounded-full p-1 border border-gray-600">
-                    {isGettingQuote ? (
-                      <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
-                    ) : (
-                      <ArrowUpDown className="w-3 h-3 text-gray-400" />
-                    )}
-                  </div>
-                </div>
+            {/* Swap Arrow - Always visible and clickable */}
+            <div className="flex justify-center mb-2">
+              <button
+                onClick={() => {
+                  handleToggleSwapMode();
+                }}
+                disabled={isSwapping || isGettingQuote}
+                className="bg-gray-800 hover:bg-gray-700 rounded-full p-1 border border-gray-600 hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGettingQuote ? (
+                  <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
+                ) : (
+                  <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                )}
+              </button>
+            </div>
 
-                {/* Receive Display - Only for buy mode */}
-                <div className="mb-3">
-                  <div className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-center">
-                    <span className="text-white text-sm">
-                      {swapQuote ? 
-                        `${jupiterSwapService.formatTokenAmount(swapQuote.outputAmount, 'PPA')} PPA` :
-                        '0 PPA'
-                      }
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Receive Display - For both buy and sell modes */}
+            <div className="mb-3">
+              <div className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-center">
+                <span className="text-white text-sm">
+                  {swapQuote ? 
+                    swapMode === 'buy' 
+                      ? `${jupiterSwapService.formatTokenAmount(swapQuote.outAmount, 'PPA')} PPA`
+                      : `${jupiterSwapService.formatTokenAmount(swapQuote.outAmount, 'SOL')} SOL`
+                    : swapMode === 'buy' 
+                      ? '0 PPA'
+                      : '0 SOL'
+                  }
+                </span>
+              </div>
+            </div>
 
             {/* Exchange Rate & Price Impact */}
             <div className="mb-4 text-center space-y-1">
-              {swapQuote && (
+              {swapQuote && swapQuote.priceImpactPct && (
                 <p className="text-gray-400 text-xs">
-                  Impact: {parseFloat(swapQuote.priceImpactPct).toFixed(2)}%
+                  Impact: {parseFloat(swapQuote.priceImpactPct || '0').toFixed(2)}%
                 </p>
               )}
               {exchangeRate && (
