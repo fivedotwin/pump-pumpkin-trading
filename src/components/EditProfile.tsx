@@ -67,7 +67,7 @@ export default function EditProfile({
     setError(null);
 
     try {
-      console.log('💾 Updating profile in database...');
+      console.log('Updating profile in database...');
       
       const updatedProfile = await userProfileService.updateProfile(walletAddress, {
         username: username.trim(),
@@ -75,7 +75,7 @@ export default function EditProfile({
       });
 
       if (updatedProfile) {
-        console.log('✅ Profile updated successfully');
+        console.log('Profile updated successfully');
         onSave({
           username: username.trim(),
           profilePicture: profilePicture || undefined,
@@ -84,7 +84,7 @@ export default function EditProfile({
         setError('Failed to update profile. Please try again.');
       }
     } catch (error) {
-      console.error('💥 Error updating profile:', error);
+              console.error('Error updating profile:', error);
       setError('Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);

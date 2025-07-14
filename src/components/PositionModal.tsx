@@ -3,7 +3,7 @@ import { X, TrendingUp, TrendingDown, AlertCircle, Loader2, ArrowLeft } from 'lu
 import { TradingPosition } from '../services/positionService';
 import { formatPrice } from '../services/birdeyeApi';
 import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import unifiedPriceService from '../services/unifiedPriceService';
+import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
 import { soundManager } from '../services/soundManager';
@@ -56,28 +56,26 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     totalReturn: number;
   } | null>(null);
 
-  // Subscribe to unified price service for ultra-fast updates
+  // Subscribe to simplified price service for price updates
   useEffect(() => {
-    console.log(`🚀 PositionModal: Subscribing to ULTRA-FAST unified price service for ${position.token_symbol}`);
+    console.log(`PositionModal: Subscribing to simplified price service for ${position.token_symbol}`);
     
-    // Track this token and subscribe to unified price updates
-    const unsubscribe = unifiedPriceService.subscribe(`position-modal-${position.token_address}`, (priceData: { solPrice: number; tokenPrices: Record<string, number>; lastUpdate: number }) => {
+    // Track this token and subscribe to price updates
+    const unsubscribe = simplifiedPriceService.subscribe(`position-modal-${position.token_address}`, (priceData) => {
       const newPrice = priceData.tokenPrices[position.token_address];
       if (newPrice) {
-        console.log(`⚡ PositionModal: ULTRA-FAST price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
+        console.log(`PositionModal: Price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
         setRealtimePrice(newPrice);
       }
     });
     
-    // Add to high-priority tokens for 500ms updates
-    unifiedPriceService.addHighPriorityToken(position.token_address);
-    unifiedPriceService.trackTokens([position.token_address]);
+    // Track this token for price updates
+    simplifiedPriceService.trackTokens([position.token_address]);
     
     return () => {
-      console.log(`🔌 PositionModal: Unsubscribing from unified price service for ${position.token_symbol}`);
+      console.log(`🔌 PositionModal: Unsubscribing from simplified price service for ${position.token_symbol}`);
       unsubscribe();
-      unifiedPriceService.removeHighPriorityToken(position.token_address);
-      unifiedPriceService.untrackTokens([position.token_address]);
+      simplifiedPriceService.untrackTokens([position.token_address]);
     };
   }, [position.token_address, position.token_symbol]);
 
@@ -107,7 +105,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
       
       if (position?.trade_results) {
         const tradeResults = JSON.parse(position.trade_results);
-        console.log('📊 PositionModal: Found trade results for position', positionId, ':', tradeResults);
+                  console.log('PositionModal: Found trade results for position', positionId, ':', tradeResults);
         
         setTradeResultsData(tradeResults);
         setShowTradeResults(true);
@@ -120,7 +118,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
           
         console.log('🧹 PositionModal: Cleared trade results from database for position', positionId);
       } else {
-        console.log('⚠️ PositionModal: No trade results found for position', positionId);
+                  console.log('PositionModal: No trade results found for position', positionId);
       }
     } catch (error) {
       console.error('PositionModal: Error checking for trade results:', error);

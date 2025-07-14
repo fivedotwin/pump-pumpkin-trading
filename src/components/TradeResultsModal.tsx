@@ -85,7 +85,7 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
     ctx.fillStyle = '#1e7cfa';
     ctx.font = 'bold 48px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('🎃 PUMP PUMPKIN', 80, 120);
+    ctx.fillText('PUMP PUMPKIN', 80, 120);
     
     ctx.fillStyle = '#ffffff';
     ctx.font = '24px Arial';
@@ -116,7 +116,7 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
     ctx.fillStyle = '#9ca3af';
     ctx.font = '28px Arial';
     ctx.textAlign = 'center';
-    const message = isProfit ? 'SICK GAINS! 🚀' : 'NEXT TIME! 💪';
+    const message = isProfit ? 'SICK GAINS!' : 'NEXT TIME!';
     ctx.fillText(message, 600, 440);
 
     // Call to action
@@ -138,8 +138,8 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
       const blob = await response.blob();
       
       const shareText = isProfit 
-        ? `Just made ${formatCurrency(tradeData.finalPnL)} (${tradeData.pnlPercentage.toFixed(1)}%) on ${tradeData.tokenSymbol}! Check out my sick gains 🚀💰\n\nStart your own trading journey:`
-        : `Took a hit on ${tradeData.tokenSymbol} but learning every day! 💪📈\n\nJoin the action:`;
+        ? `Just scored massive gains trading ${tradeData.tokenSymbol}! Check out my sick gains\n\nStart your own trading journey:`
+        : `Took a hit on ${tradeData.tokenSymbol} but learning every day!\n\nJoin the action:`;
       
       const shareUrl = 'https://pump-pumpkin.com';
 
@@ -175,11 +175,11 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
         link.href = imageDataUrl;
         link.click();
         
-        alert('Share text copied to clipboard and image downloaded! 📋⬇️');
+        alert('Share text copied to clipboard and image downloaded!');
       }
     } catch (error) {
       console.error('Error sharing:', error);
-      alert('Sharing failed, but your results look amazing! 🎉');
+      alert('Sharing failed, but your results look amazing!');
     }
   };
 
@@ -294,7 +294,7 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
         {/* Share section */}
         <div className="mb-4">
           <p className="text-gray-300 text-sm mb-3 text-center">
-            {isProfit ? 'Flex those gains! 💪' : 'Share your journey! 📈'}
+            {isProfit ? 'Flex those gains!' : 'Share your journey!'}
           </p>
           
           {/* Share button - styled like connect wallet */}
@@ -322,8 +322,8 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
           
           <p className="text-gray-500 text-xs text-center">
             {isProfit 
-              ? 'Show everyone your winning trade! 🚀'
-              : 'Every trader has ups and downs - share the journey! 💪'
+              ? 'Show everyone your winning trade!'
+              : 'Every trader has ups and downs - share the journey!'
             }
           </p>
         </div>

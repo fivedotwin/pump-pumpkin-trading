@@ -11,11 +11,13 @@ import EditProfile from './EditProfile';
 import { positionService, TradingPosition } from '../services/positionService';
 import PositionModal from './PositionModal';
 import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import unifiedPriceService from '../services/unifiedPriceService';
+import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
 import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
+
+import LivePrice from './LivePrice';
 
 interface DashboardProps {
   username: string;
@@ -62,6 +64,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
+  const [previousTokenPrices, setPreviousTokenPrices] = useState<Record<string, number>>({});
+  const [previousPortfolioValue, setPreviousPortfolioValue] = useState<number>(0);
   const [isLoadingTokens, setIsLoadingTokens] = useState(true);
   
   // Deposit transaction states
@@ -75,6 +79,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [isLoadingWithdrawals, setIsLoadingWithdrawals] = useState(false);
+  
+  // Swipe to refresh states
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [swipeStartY, setSwipeStartY] = useState(0);
+  const [swipeCurrentY, setSwipeCurrentY] = useState(0);
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  
   const [tradingPositions, setTradingPositions] = useState<TradingPosition[]>([]);
   const [isLoadingPositions, setIsLoadingPositions] = useState(false);
   
@@ -111,7 +123,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Update local SOL balance when prop changes (tracks deposited amount)
   useEffect(() => {
     setCurrentSOLBalance(solBalance);
-    console.log(`📊 Platform SOL balance loaded from database: ${solBalance.toFixed(4)} SOL`);
+          console.log(`Platform SOL balance loaded from database: ${solBalance.toFixed(4)} SOL`);
   }, [solBalance]);
   
   // Jupiter swap states
@@ -176,7 +188,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Initialize sound system on component mount
   useEffect(() => {
     soundManager.loadSettings();
-    console.log('🎵 Sound system initialized for trading app');
+          console.log('Sound system initialized for trading app');
   }, []);
 
   // Load trending tokens on component mount
@@ -189,43 +201,67 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-  // UNIFIED PRICE SERVICE - Single subscription replaces all competing intervals
+  // SIMPLIFIED PRICE SERVICE - Clean 3-second updates for everything
   useEffect(() => {
-    console.log('🚀 Starting unified price service - eliminates 30-second delays');
+          console.log('Starting simplified price service (3-second updates)');
     
-    const unsubscribe = unifiedPriceService.subscribe('dashboard', (priceData: { solPrice: number; tokenPrices: Record<string, number>; lastUpdate: number }) => {
+    const unsubscribe = simplifiedPriceService.subscribe('dashboard', (priceData) => {
       // Update SOL price
       setSolPrice(priceData.solPrice);
       
       // Update token prices for positions
       setTokenPrices(priceData.tokenPrices);
       
-      // Update P&L for all positions using new price data
-      updatePositionPnLFromData(priceData);
+      // Update trending tokens with live prices
+      setTrendingTokens(prevTokens => {
+        // Store previous prices for visual feedback
+        const newPreviousPrices: Record<string, number> = {};
+        prevTokens.forEach(token => {
+          newPreviousPrices[token.address] = token.price;
+        });
+        setPreviousTokenPrices(newPreviousPrices);
+        
+        // Update tokens with new prices
+        return prevTokens.map(token => ({
+          ...token,
+          price: priceData.tokenPrices[token.address] || token.price
+        }));
+      });
       
-      // Refresh SOL balance every 4th update (every ~20 seconds)
-      if (walletAddress && priceData.lastUpdate % (5000 * 4) < 5000) {
-        refreshSOLBalance();
+      // Update P&L for all positions using new price data (only if wallet connected)
+      if (walletAddress) {
+        updatePositionPnLFromData(priceData);
+        
+        // Track portfolio value change for visual feedback
+        const currentPortfolioData = calculateTotalPortfolioValue();
+        if (currentPortfolioData.totalValue !== previousPortfolioValue && currentPortfolioData.totalValue > 0) {
+          setPreviousPortfolioValue(currentPortfolioData.totalValue);
+        }
       }
+      
+      console.log('Simplified price updates active - SOL:', priceData.solPrice.toFixed(2), 'Tokens:', Object.keys(priceData.tokenPrices).length);
     });
+
+    // Track tokens for price updates (if we have positions)
+    if (walletAddress && tradingPositions.length > 0) {
+      const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
+      simplifiedPriceService.trackTokens(uniqueTokens);
+      console.log('Tracking tokens for price updates:', uniqueTokens.length);
+    }
     
     return unsubscribe;
-  }, [walletAddress]);
+  }, [walletAddress, tradingPositions.length]);
 
-  // Track tokens when positions change
+  // Periodic refreshes - SOL balance every 30 seconds
   useEffect(() => {
-    if (tradingPositions.length > 0) {
-      const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
-      unifiedPriceService.trackTokens(uniqueTokens);
-      
-      // Set these as high-priority tokens for 500ms updates
-      unifiedPriceService.setHighPriorityTokens(uniqueTokens);
-      console.log('⚡ Set high-priority 500ms updates for position tokens:', uniqueTokens.length);
-    } else {
-      // No positions, clear high-priority tokens
-      unifiedPriceService.setHighPriorityTokens([]);
-    }
-  }, [tradingPositions.length]);
+    if (!walletAddress) return;
+
+    const interval = setInterval(() => {
+      refreshSOLBalance();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [walletAddress]);
 
   // Get quote when amount changes
   useEffect(() => {
@@ -257,6 +293,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const tokens = await fetchTrendingTokens();
       setTrendingTokens(tokens);
+      
+      // Track trending tokens for live price updates
+      const trendingTokenAddresses = tokens.map(t => t.address);
+      simplifiedPriceService.trackTokens(trendingTokenAddresses);
+      console.log('Tracking trending tokens for live price updates:', trendingTokenAddresses.length);
     } catch (error) {
       console.error('Failed to load trending tokens:', error);
     } finally {
@@ -268,7 +309,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const price = await jupiterSwapService.getPPAPrice();
       setPpaPrice(price);
-      console.log('💰 PPA Price loaded:', price);
+      console.log('PPA Price loaded:', price);
     } catch (error) {
       console.error('Failed to load PPA price:', error);
     }
@@ -281,7 +322,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       const balances = await jupiterSwapService.getUserBalances(publicKey);
       setUserBalances(balances);
       
-      console.log('💰 User wallet balances loaded:', balances);
+      console.log('User wallet balances loaded:', balances);
       // Note: We don't update currentSOLBalance here as it tracks deposited amount, not wallet balance
     } catch (error) {
       console.error('Failed to load user balances:', error);
@@ -298,7 +339,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       if (profile) {
         const dbBalance = profile.sol_balance;
         if (Math.abs(dbBalance - currentSOLBalance) > 0.0001) { // Only update if difference is significant
-          console.log('💰 SOL balance updated from database:', {
+          console.log('SOL balance updated from database:', {
             ui_balance: currentSOLBalance,
             db_balance: dbBalance,
             difference: dbBalance - currentSOLBalance
@@ -316,7 +357,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const price = await fetchSOLPrice();
       setSolPrice(price);
-      console.log('💰 SOL price loaded:', `$${price.toFixed(2)}`);
+      console.log('SOL price loaded:', `$${price.toFixed(2)}`);
     } catch (error) {
       console.error('Failed to load SOL price:', error);
     }
@@ -327,7 +368,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (tradingPositions.length === 0) return;
     
     try {
-      console.log('📈 ULTRA-FAST updating real-time token prices using cache...');
+      console.log('ULTRA-FAST updating real-time token prices using cache...');
       const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
       const pricePromises = uniqueTokens.map(async (tokenAddress) => {
         try {
@@ -349,7 +390,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
       setTokenPrices(newPrices);
       setPriceUpdateCount(prev => prev + 1);
-      console.log(`✅ ULTRA-FAST updated prices for ${uniqueTokens.length} tokens using cache`, newPrices);
+              console.log(`ULTRA-FAST updated prices for ${uniqueTokens.length} tokens using cache`, newPrices);
     } catch (error) {
       console.error('Error updating token prices:', error);
     }
@@ -360,7 +401,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const requests = await userProfileService.getWithdrawalRequests(walletAddress);
       setWithdrawalRequests(requests);
-      console.log('📋 Withdrawal requests loaded:', requests.length);
+      console.log('Withdrawal requests loaded:', requests.length);
     } catch (error) {
       console.error('Failed to load withdrawal requests:', error);
     } finally {
@@ -373,7 +414,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     
     setIsLoadingPositions(true);
     try {
-      console.log('📊 Loading trading positions and checking for liquidations...');
+      console.log('Loading trading positions and checking for liquidations...');
       const positions = await positionService.getUserPositions(walletAddress);
       const openPositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
       
@@ -389,8 +430,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             
             // IMMEDIATE LIQUIDATION CHECK on load
             if (pnlData.margin_ratio >= 1.0) {
-              console.log(`🔥 LIQUIDATING POSITION ${position.id} ON LOAD: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
-              console.log(`💥 Position details:`, {
+              console.log(`LIQUIDATING POSITION ${position.id} ON LOAD: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
+                              console.log(`Position details:`, {
                 token: position.token_symbol,
                 direction: position.direction,
                 leverage: position.leverage,
@@ -427,10 +468,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       setTradingPositions(activePositions);
       
       if (liquidatedCount > 0) {
-        console.log(`🔥 ${liquidatedCount} position(s) liquidated on load and removed`);
+        console.log(`${liquidatedCount} position(s) liquidated on load and removed`);
       }
       
-      console.log(`✅ Loaded ${activePositions.length} active positions with real-time P&L and images`);
+              console.log(`Loaded ${activePositions.length} active positions with real-time P&L and images`);
     } catch (error) {
       console.error('Error loading positions:', error);
       setTradingPositions([]);
@@ -445,7 +486,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     
     setIsLoadingOrders(true);
     try {
-      console.log('📋 Loading pending limit orders...');
+              console.log('Loading pending limit orders...');
       const positions = await positionService.getUserPositions(walletAddress);
       const orders = positions.filter(p => p.status === 'pending');
       
@@ -467,7 +508,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       );
       
       setPendingOrders(ordersWithImages);
-      console.log(`✅ Loaded ${ordersWithImages.length} pending orders`);
+              console.log(`Loaded ${ordersWithImages.length} pending orders`);
     } catch (error) {
       console.error('Error loading pending orders:', error);
       setPendingOrders([]);
@@ -482,7 +523,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     
     setIsLoadingTradeHistory(true);
     try {
-      console.log('📋 Loading trade history...');
+              console.log('Loading trade history...');
       const positions = await positionService.getUserPositions(walletAddress);
       const history = positions.filter(p => p.status === 'closed' || p.status === 'liquidated' || p.status === 'cancelled');
       
@@ -510,7 +551,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       );
       
       setTradeHistory(historyWithImages);
-      console.log(`✅ Loaded ${historyWithImages.length} trade history records`);
+              console.log(`Loaded ${historyWithImages.length} trade history records`);
     } catch (error) {
       console.error('Error loading trade history:', error);
       setTradeHistory([]);
@@ -543,7 +584,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
     }
     
-    console.log(`📊 Position ${position.id} margin calculation:`, {
+          console.log(`Position ${position.id} margin calculation:`, {
       token: position.token_symbol,
       pnl_usd: pnl_usd.toFixed(6),
       pnl_sol: pnl_sol.toFixed(8),
@@ -572,7 +613,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           
           // Check for liquidation FIRST (margin ratio >= 100%)
           if (pnlData.margin_ratio >= 1.0) {
-            console.log(`🔥 LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
+            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
             // Mark for liquidation (will be handled by separate liquidation service)
             positionService.liquidatePosition(position.id, pnlData.current_price);
             
@@ -605,10 +646,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       const liquidatedCount = updatedPositions.length - activePositions.length;
       if (liquidatedCount > 0) {
-        console.log(`🔥 ${liquidatedCount} position(s) liquidated and removed from display`);
+        console.log(`${liquidatedCount} position(s) liquidated and removed from display`);
       }
       
-      console.log(`✅ Updated ${activePositions.length} positions using cached prices (Update #${priceUpdateCount})`);
+              console.log(`Updated ${activePositions.length} positions using cached prices (Update #${priceUpdateCount})`);
     } catch (error) {
       console.error('Error updating position P&L:', error);
     }
@@ -658,7 +699,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           
           // Check for liquidation
           if (margin_ratio >= 1.0) {
-            console.log(`🔥 LIQUIDATING POSITION ${position.id}: Margin ratio ${(margin_ratio * 100).toFixed(1)}%`);
+            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(margin_ratio * 100).toFixed(1)}%`);
             positionService.liquidatePosition(position.id, current_price);
             
             return {
@@ -707,7 +748,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Fallback to Birdeye REST API for any missing WebSocket prices
       const missingTokens = uniqueTokens.filter(token => !freshPrices[token]);
       if (missingTokens.length > 0) {
-        console.log(`⚠️ Missing Birdeye WebSocket prices for ${missingTokens.length} tokens, using REST API fallback`);
+        console.log(`Missing Birdeye WebSocket prices for ${missingTokens.length} tokens, using REST API fallback`);
         await Promise.all(
           missingTokens.map(async (tokenAddress) => {
             try {
@@ -751,7 +792,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
           // Update position P&L in database with fresh price
           if (isLiquidated && position.status === 'open') {
-            console.log(`🔴 LIVE Position ${position.id} liquidated! Fresh price: $${currentPrice.toFixed(6)}, Margin ratio: ${(margin_ratio * 100).toFixed(1)}%`);
+            console.log(`LIVE Position ${position.id} liquidated! Fresh price: $${currentPrice.toFixed(6)}, Margin ratio: ${(margin_ratio * 100).toFixed(1)}%`);
             positionService.liquidatePosition(position.id, currentPrice);
             
             return {
@@ -790,12 +831,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
       const liquidatedCount = updatedPositions.length - activePositions.length;
       if (liquidatedCount > 0) {
-        console.log(`⚠️ ${liquidatedCount} position(s) were liquidated with LIVE Birdeye prices`);
+        console.log(`${liquidatedCount} position(s) were liquidated with LIVE Birdeye prices`);
       }
 
       // Only log occasionally to avoid spam (every 5 seconds approximately)
       if (Date.now() % 5000 < 1000) {
-        console.log(`⚡ Updated ${activePositions.length} positions with LIVE Birdeye prices`);
+        console.log(`Updated ${activePositions.length} positions with LIVE Birdeye prices`);
       }
 
     } catch (error) {
@@ -894,7 +935,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return;
       }
       
-      console.log('✅ Token passed honeypot security check');
+              console.log('Token passed honeypot security check');
       
       // STEP 2: Fetch token data to check market cap
       const tokenData = await fetchTokenDetailCached(tokenAddress);
@@ -907,8 +948,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       const marketCap = tokenData.marketCap || 0;
       const minimumMarketCap = 80000; // $80k minimum
       
-      console.log('💰 Token market cap:', `$${marketCap.toLocaleString()}`);
-      console.log('📊 Minimum required:', `$${minimumMarketCap.toLocaleString()}`);
+              console.log('Token market cap:', `$${marketCap.toLocaleString()}`);
+              console.log('Minimum required:', `$${minimumMarketCap.toLocaleString()}`);
       
       if (marketCap < minimumMarketCap) {
         setCaValidationError(
@@ -918,7 +959,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return;
       }
       
-      console.log('✅ Token passes all validation checks, proceeding to trading...');
+              console.log('Token passes all validation checks, proceeding to trading...');
       
       // Token passes all validation, proceed to trading
       setSelectedTokenAddress(tokenAddress);
@@ -927,7 +968,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       setCaValidationError(null);
       
     } catch (error: any) {
-      console.error('❌ Error validating token:', error);
+              console.error('Error validating token:', error);
       setCaValidationError('Failed to validate token. Please check the contract address and try again.');
     } finally {
       setIsValidatingCA(false);
@@ -1007,7 +1048,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }
       }
 
-      console.log(`🚀 Starting ${swapMode} transaction...`);
+              console.log(`Starting ${swapMode} transaction...`);
       
       const result = await jupiterSwapService.executeSwap(
         swapQuote,
@@ -1016,7 +1057,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       );
 
       if (result) {
-        console.log('✅ Swap successful:', result);
+        console.log('Swap successful:', result);
         
         const inputToken = swapMode === 'buy' ? 'SOL' : 'PPA';
         const outputToken = swapMode === 'buy' ? 'PPA' : 'SOL';
@@ -1056,10 +1097,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       }
 
     } catch (error: any) {
-      console.error('💥 DETAILED Swap error:', error);
-      console.error('💥 Error message:', error.message);
-      console.error('💥 Error type:', typeof error);
-      console.error('💥 Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+              console.error('DETAILED Swap error:', error);
+              console.error('Error message:', error.message);
+              console.error('Error type:', typeof error);
+              console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       
       let userFriendlyError = error.message || 'Swap failed. Please try again.';
       
@@ -1081,9 +1122,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   };
 
   const handleTokenClick = (token: TrendingToken) => {
-    setCaInput(token.address);
-    setActiveTab('home');
-    setCaValidationError(null); // Clear any validation errors
+    // Go directly to token detail page
+    setSelectedTokenAddress(token.address);
+    setViewState('token-detail');
+    soundManager.playClick();
+    hapticFeedback.light();
   };
 
   const handleCloseSuccessModal = () => {
@@ -1122,7 +1165,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Sign transaction
       const signedTransaction = await signTransaction(transaction);
 
-      console.log('📡 Sending transaction to network...');
+              console.log('Sending transaction to network...');
 
       // Send transaction
       const txid = await connection.sendRawTransaction(signedTransaction.serialize(), {
@@ -1142,14 +1185,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         throw new Error(`Transaction failed: ${confirmation.value.err}`);
       }
 
-      console.log('✅ SOL transfer confirmed:', txid);
+              console.log('SOL transfer confirmed:', txid);
       
       // Hide verification loading screen
       setIsVerifyingTransaction(false);
       return txid;
 
     } catch (error: any) {
-      console.error('💥 SOL transfer error:', error);
+              console.error('SOL transfer error:', error);
       throw error;
     }
   };
@@ -1182,18 +1225,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return;
       }
 
-      console.log('🚀 Starting SOL deposit:', amount, 'SOL');
+              console.log('Starting SOL deposit:', amount, 'SOL');
 
       // Execute the SOL transfer
       const txid = await transferSOL(amount);
 
       if (txid) {
-        console.log('✅ SOL deposit successful:', txid);
+        console.log('SOL deposit successful:', txid);
         
         // Add the deposited amount to user's platform SOL balance
         const newPlatformSOLBalance = currentSOLBalance + amount;
         
-        console.log(`💰 Platform SOL balance: ${currentSOLBalance.toFixed(4)} + ${amount.toFixed(4)} = ${newPlatformSOLBalance.toFixed(4)} SOL`);
+        console.log(`Platform SOL balance: ${currentSOLBalance.toFixed(4)} + ${amount.toFixed(4)} = ${newPlatformSOLBalance.toFixed(4)} SOL`);
         
         // Update local state immediately for UI
         setCurrentSOLBalance(newPlatformSOLBalance);
@@ -1206,13 +1249,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         setShowDepositModal(false);
         
         // Show success notification
-        console.log(`✅ Deposited ${amount} SOL successfully! Transaction: ${txid}`);
-        console.log(`📊 Platform SOL balance updated to: ${newPlatformSOLBalance.toFixed(4)} SOL`);
-        console.log(`🎯 User now has ${newPlatformSOLBalance.toFixed(4)} SOL deposited on platform`);
+                  console.log(`Deposited ${amount} SOL successfully! Transaction: ${txid}`);
+                  console.log(`Platform SOL balance updated to: ${newPlatformSOLBalance.toFixed(4)} SOL`);
+                  console.log(`User now has ${newPlatformSOLBalance.toFixed(4)} SOL deposited on platform`);
       }
 
     } catch (error: any) {
-      console.error('💥 Deposit error:', error);
+              console.error('Deposit error:', error);
       setDepositError(error.message || 'Failed to deposit SOL. Please try again.');
     } finally {
       setIsDepositing(false);
@@ -1228,13 +1271,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setWithdrawSuccess(null);
 
     try {
-      console.log('💸 Starting SOL withdrawal request:', amount, 'SOL');
+              console.log('Starting SOL withdrawal request:', amount, 'SOL');
 
       // Create withdrawal request and deduct balance
       const withdrawalRequest = await userProfileService.createWithdrawalRequest(walletAddress, amount);
 
       if (withdrawalRequest) {
-        console.log('✅ Withdrawal request created successfully:', withdrawalRequest.id);
+        console.log('Withdrawal request created successfully:', withdrawalRequest.id);
         
         // Update local SOL balance immediately (it's already deducted in the database)
         const newSOLBalance = currentSOLBalance - amount;
@@ -1256,13 +1299,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           setWithdrawSuccess(null);
         }, 3000);
 
-        console.log(`✅ Withdrawal request submitted! New SOL balance: ${newSOLBalance.toFixed(4)} SOL`);
+                  console.log(`Withdrawal request submitted! New SOL balance: ${newSOLBalance.toFixed(4)} SOL`);
       } else {
         setWithdrawError('Failed to create withdrawal request. Please try again.');
       }
 
     } catch (error: any) {
-      console.error('💥 Withdrawal request error:', error);
+              console.error('Withdrawal request error:', error);
       setWithdrawError(error.message || 'Failed to create withdrawal request. Please try again.');
     } finally {
       setIsWithdrawing(false);
@@ -1294,7 +1337,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Clear session storage
       sessionStorage.clear();
 
-      console.log('✅ Wallet disconnected successfully');
+      console.log('Wallet disconnected successfully');
       
       // Force page reload to ensure complete disconnection
       setTimeout(() => {
@@ -1302,7 +1345,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       }, 500);
       
     } catch (error) {
-      console.error('❌ Error disconnecting wallet:', error);
+              console.error('Error disconnecting wallet:', error);
       // Force reload even if disconnect fails
       setTimeout(() => {
         window.location.reload();
@@ -1315,7 +1358,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setSoundEnabled(newSoundEnabled);
     soundManager.setSoundEnabled(newSoundEnabled);
     
-    console.log(`🎵 Sound ${newSoundEnabled ? 'enabled' : 'disabled'}`);
+          console.log(`Sound ${newSoundEnabled ? 'enabled' : 'disabled'}`);
   };
 
   const handleBackToDashboard = () => {
@@ -1344,13 +1387,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     // Check if position is already in closing status
     const position = tradingPositions.find(p => p.id === positionId);
     if (position?.status === 'closing') {
-      console.log(`⚠️ Position ${positionId} is already closing (1-minute delay in progress)`);
+              console.log(`Position ${positionId} is already closing (1-minute delay in progress)`);
       return;
     }
     
     // Prevent duplicate closing operations
     if (closingPositions.has(positionId)) {
-      console.log(`⚠️ Position ${positionId} is already being closed, skipping duplicate operation`);
+              console.log(`Position ${positionId} is already being closed, skipping duplicate operation`);
       return;
     }
     
@@ -1383,13 +1426,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // 🚨 CRITICAL: Get FRESH price right before closing for maximum accuracy
       const position = tradingPositions.find(p => p.id === positionId);
       if (position) {
-        console.log('⚡ GETTING FRESH PRICE FOR POSITION CLOSE...');
+        console.log('GETTING FRESH PRICE FOR POSITION CLOSE...');
         
         try {
           const freshTokenData = await fetchTokenDetailCached(position.token_address);
           if (freshTokenData) {
             const freshPrice = freshTokenData.price;
-            console.log('💰 FRESH PRICE FETCHED FOR CLOSE:', {
+            console.log('FRESH PRICE FETCHED FOR CLOSE:', {
               position_id: positionId,
               token: position.token_symbol,
               entry_price: position.entry_price,
@@ -1398,10 +1441,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               'FINAL_EXECUTION_PRICE': freshPrice
             });
           } else {
-            console.log('⚠️ Fresh price fetch failed for position close, using existing price');
+            console.log('Fresh price fetch failed for position close, using existing price');
           }
         } catch (error) {
-          console.log('⚠️ Error fetching fresh price for close, proceeding with existing price:', error);
+          console.log('Error fetching fresh price for close, proceeding with existing price:', error);
         }
       }
       
@@ -1410,9 +1453,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Reload positions to reflect the change
       await loadTradingPositions();
       
-      console.log('✅ Position closed successfully with fresh price');
+                console.log('Position closed successfully with fresh price');
     } catch (error) {
-      console.error('❌ Error closing position:', error);
+              console.error('Error closing position:', error);
     } finally {
       setIsClosingPosition(false);
       setClosingPositions(prev => {
@@ -1447,7 +1490,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         throw error;
       }
       
-      console.log(`✅ Order ${orderId} price updated successfully`);
+              console.log(`Order ${orderId} price updated successfully`);
       
       // Update UI immediately
       setPendingOrders(prev => prev.map(order => 
@@ -1498,11 +1541,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         if (updated && onUpdateSOLBalance) {
           onUpdateSOLBalance(newSOLBalance);
           setCurrentSOLBalance(newSOLBalance);
-          console.log(`💰 Refunded ${refundAmount.toFixed(4)} SOL collateral to user`);
+          console.log(`Refunded ${refundAmount.toFixed(4)} SOL collateral to user`);
         }
       }
       
-      console.log(`✅ Order ${orderId} cancelled successfully`);
+              console.log(`Order ${orderId} cancelled successfully`);
       
       // Remove order from UI
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
@@ -1531,7 +1574,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       if (position?.trade_results) {
         const tradeResults = JSON.parse(position.trade_results);
-        console.log('📊 Found trade results for position', positionId, ':', tradeResults);
+        console.log('Found trade results for position', positionId, ':', tradeResults);
         
         setTradeResultsData(tradeResults);
         setShowTradeResults(true);
@@ -1542,9 +1585,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           .update({ trade_results: null })
           .eq('id', positionId);
           
-        console.log('🧹 Cleared trade results from database for position', positionId);
+                  console.log('Cleared trade results from database for position', positionId);
       } else {
-        console.log('⚠️ No trade results found for position', positionId);
+        console.log('No trade results found for position', positionId);
       }
     } catch (error) {
       console.error('Error checking for trade results:', error);
@@ -1554,20 +1597,20 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Debug function to check profile status
   const debugProfile = async () => {
     if (!walletAddress) {
-      console.log('❌ No wallet connected');
+      console.log('No wallet connected');
       return;
     }
     
     try {
-      console.log('🔍 Debugging profile for wallet:', walletAddress);
+      console.log('Debugging profile for wallet:', walletAddress);
       const profile = await userProfileService.getProfile(walletAddress);
       
       if (!profile) {
-        console.log('❌ No profile found in database');
+        console.log('No profile found in database');
         return;
       }
       
-      console.log('✅ Profile found in database:', {
+              console.log('Profile found in database:', {
         wallet_address: profile.wallet_address,
         username: profile.username,
         usd_balance: profile.balance,
@@ -1576,7 +1619,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         updated_at: profile.updated_at
       });
       
-      console.log('📊 Current state comparison:', {
+              console.log('Current state comparison:', {
         db_sol_balance: profile.sol_balance,
         ui_sol_balance: currentSOLBalance,
         db_usd_balance: profile.balance,
@@ -1584,7 +1627,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       });
       
     } catch (error) {
-      console.error('💥 Error debugging profile:', error);
+              console.error('Error debugging profile:', error);
     }
   };
 
@@ -1688,6 +1731,94 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setSearchQuery('');
     setShowSearchResults(false);
     setSearchResults([]);
+  };
+
+  // Swipe to refresh functionality
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isRefreshing) return;
+    
+    const touch = e.touches[0];
+    setSwipeStartY(touch.clientY);
+    setSwipeCurrentY(touch.clientY);
+    setIsSwipeActive(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwipeActive || isRefreshing) return;
+    
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - swipeStartY;
+    
+    // Only allow pull-down (positive deltaY) and limit the distance
+    if (deltaY > 0 && deltaY <= 80) {
+      setSwipeCurrentY(touch.clientY);
+      setRefreshProgress(Math.min(deltaY / 80, 1)); // Progress from 0 to 1
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isSwipeActive || isRefreshing) return;
+    
+    const deltaY = swipeCurrentY - swipeStartY;
+    
+    // Trigger refresh if pulled down enough (40px threshold)
+    if (deltaY > 40) {
+      triggerRefresh();
+    }
+    
+    // Reset swipe state
+    setIsSwipeActive(false);
+    setSwipeStartY(0);
+    setSwipeCurrentY(0);
+    setRefreshProgress(0);
+  };
+
+  const triggerRefresh = async () => {
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
+    setRefreshProgress(1);
+
+    try {
+      // Refresh based on current tab
+      switch (activeTab) {
+        case 'home':
+          await Promise.all([
+            loadTrendingTokens(),
+            refreshSOLBalance(),
+            loadPPAPrice(),
+            loadUserBalances()
+          ]);
+          break;
+        case 'rewards':
+          await Promise.all([
+            loadPPAPrice(),
+            loadUserBalances(),
+            getSwapQuote()
+          ]);
+          break;
+        case 'positions':
+          await Promise.all([
+            loadTradingPositions(),
+            loadPendingOrders(),
+            loadWithdrawalRequests(),
+            refreshSOLBalance()
+          ]);
+          break;
+        case 'orders':
+          await loadTradeHistory();
+          break;
+      }
+      
+      // Show visual feedback for at least 800ms
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+      setRefreshProgress(0);
+    }
   };
 
   const renderTabContent = () => {
@@ -1983,10 +2114,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <h1 className="text-xl font-normal mb-2">
                 Your <span style={{ color: '#1e7cfa' }}>Portfolio</span>
               </h1>
-              <p className="text-gray-400 text-sm mb-2">Total Portfolio Value</p>
-              <p className="text-2xl font-bold text-white mb-4">
-                {formatCurrency(portfolioData.totalValue)}
-              </p>
+              <div className="text-center mb-4">
+                <p className="text-gray-400 text-sm mb-2 font-medium">
+                  Total Portfolio Value
+                </p>
+                <LivePrice 
+                  price={portfolioData.totalValue}
+                  previousPrice={previousPortfolioValue}
+                  className="text-3xl font-bold text-white"
+                  showChange={true}
+                />
+              </div>
               
               {/* Portfolio Breakdown - Mobile optimized */}
               {portfolioData.positionCount > 0 && (
@@ -2283,9 +2421,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             <div>
                               <span className="text-gray-400 flex items-center space-x-1">
                                 <span>Live Price:</span>
-                                {tokenPrices[position.token_address] && (
-                                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-                                )}
+
                               </span>
                               <p className="text-white font-medium">{formatPrice(tokenPrices[position.token_address] || position.entry_price)}</p>
                             </div>
@@ -2315,12 +2451,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             {/* Warning messages */}
                             {isInDanger && position.status === 'open' && (
                               <div className="mt-2 text-xs text-red-300 font-bold animate-pulse">
-                                ⚠️ LIQUIDATION IMMINENT - POSITION AT EXTREME RISK!
+                                LIQUIDATION IMMINENT - POSITION AT EXTREME RISK!
                               </div>
                             )}
                             {isNearLiquidation && !isInDanger && position.status === 'open' && (
                               <div className="mt-2 text-xs text-orange-300 font-bold">
-                                ⚠️ Margin call triggered - Add collateral or close position
+                                Margin call triggered - Add collateral or close position
                               </div>
                             )}
                           </div>
@@ -2405,9 +2541,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-white text-sm font-bold">
-                            {formatPrice(token.price)}
-                          </p>
+                          <LivePrice 
+                            price={token.price}
+                            previousPrice={previousTokenPrices[token.address]}
+                            className="text-white text-sm font-bold"
+                            showChange={true}
+                          />
                           <p className={`text-xs font-bold ${
                             token.priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'
                           }`}>
@@ -2550,7 +2689,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     const isProfit = (trade.current_pnl || 0) >= 0;
                     const wasLiquidated = trade.status === 'liquidated';
                     const wasCancelled = trade.status === 'cancelled';
-                    const pnlPercent = (trade.current_pnl || 0) / (trade.collateral_sol * solPrice) * 100;
                     
                     // Format date - more compact for mobile
                     const tradeDate = new Date(trade.closed_at || trade.updated_at);
@@ -2588,11 +2726,25 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     return (
                       <div 
                         key={trade.id} 
-                        className={`rounded-lg p-3 border transition-all relative overflow-hidden ${
-                          wasLiquidated ? 'bg-red-950/50 border-red-600/30' :
-                          wasCancelled ? 'bg-gray-800/50 border-gray-600/30' :
-                          isProfit ? 'bg-green-950/50 border-green-600/30' : 
-                          'bg-red-950/50 border-red-600/30'
+                        onClick={() => {
+                          // Navigate to token detail page when clicked
+                          handleTokenClick({
+                            address: trade.token_address,
+                            symbol: trade.token_symbol,
+                            name: trade.token_symbol,
+                            logoURI: trade.token_image || undefined,
+                            price: trade.close_price || trade.entry_price,
+                            priceChange24h: 0,
+                            volume24h: 0,
+                            marketCap: 0,
+                            liquidity: 0
+                          });
+                        }}
+                        className={`rounded-lg p-3 border transition-all relative overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-lg ${
+                          wasLiquidated ? 'bg-red-950/50 border-red-600/30 hover:border-red-500/50' :
+                          wasCancelled ? 'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50' :
+                          isProfit ? 'bg-green-950/50 border-green-600/30 hover:border-green-500/50' : 
+                          'bg-red-950/50 border-red-600/30 hover:border-red-500/50'
                         }`}
                       >
 
@@ -2641,13 +2793,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                      CANCELLED
                                    </span>
                                  )}
-                                 {!wasLiquidated && !wasCancelled && (
-                                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                                     isProfit ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-red-600/20 text-red-400 border border-red-500/30'
-                                   }`}>
-                                     {isProfit ? 'PROFIT' : 'LOSS'}
-                                   </span>
-                                 )}
+
                                </div>
                               
                                                              {/* Trade details */}
@@ -2672,12 +2818,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                   isProfit ? 'text-green-400' : 'text-red-400'
                                 }`}>
                                   {isProfit ? '+' : ''}{formatCurrency(trade.current_pnl || 0)}
-                                </p>
-                                <p className={`text-sm font-semibold ${
-                                  wasLiquidated ? 'text-red-300' :
-                                  isProfit ? 'text-green-300' : 'text-red-300'
-                                }`}>
-                                  {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%
                                 </p>
                               </>
                             ) : (
@@ -2704,22 +2844,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             )}
                           </div>
                         )}
-                        
-                        {/* Performance indicator bar */}
-                        {!wasCancelled && !wasLiquidated && (
-                          <div className="mt-2">
-                            <div className="w-full bg-gray-700 rounded-full h-1">
-                              <div 
-                                className={`h-1 rounded-full transition-all duration-300 ${
-                                  isProfit ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'
-                                }`}
-                                style={{ 
-                                  width: `${Math.min(Math.abs(pnlPercent) * 2, 100)}%` 
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                        )}
+
                       </div>
                     );
                   })}
@@ -2752,9 +2877,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Enhanced Mobile Header */}
       <div className="sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-md border-b border-gray-800/50">
-        <div className="flex items-center justify-between p-4">
-          {/* Left Side - Settings with Quick Access */}
-          <div className="relative">
+        <div className="flex items-center justify-center md:justify-between p-4">
+          {/* Left Side - Settings with Quick Access - Hidden on mobile, shown on desktop */}
+          <div className="relative hidden md:block">
             <button 
               onClick={() => {
                 setShowSettings(!showSettings);
@@ -2883,24 +3008,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           
           {/* Center - App Logo/Title */}
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8">
+            <div className="w-6 h-6 md:w-8 md:h-8">
               <img 
                 src="https://i.imgur.com/fWVz5td.png" 
                 alt="Pump Pumpkin" 
                 className="w-full h-full object-cover rounded-lg"
               />
             </div>
-            <span className="text-white font-bold text-lg">Pump Pumpkin</span>
+            <span className="text-white font-bold text-sm md:text-lg">Pump Pumpkin</span>
           </div>
           
-          {/* Right Side - Wallet Info */}
+          {/* Right Side - Wallet Info - Hidden on mobile, shown on desktop */}
           <button 
             onClick={() => {
               handleCopyAddress();
             }}
-            className="flex items-center space-x-2 bg-gray-800/50 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50"
+            className="hidden md:flex items-center space-x-2 bg-gray-800/50 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50"
           >
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             <span className="text-sm font-medium">
               {formatWalletAddress(walletAddress)}
             </span>
@@ -2909,8 +3034,44 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         </div>
       </div>
 
-      {/* Enhanced Main Content with better scrolling */}
-      <div className="flex-1 flex items-center justify-center p-4 pb-32 overflow-y-auto">
+      {/* Enhanced Main Content with better scrolling and swipe-to-refresh */}
+      <div 
+        className="flex-1 flex items-center justify-center p-4 pb-32 overflow-y-auto relative"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: isSwipeActive ? `translateY(${Math.min(swipeCurrentY - swipeStartY, 80)}px)` : 'none',
+          transition: isSwipeActive ? 'none' : 'transform 0.3s ease-out'
+        }}
+      >
+        {/* Refresh Indicator */}
+        {(isSwipeActive || isRefreshing) && (
+          <div 
+            className="absolute top-2 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center"
+            style={{
+              opacity: isRefreshing ? 1 : refreshProgress,
+              transform: `translateX(-50%) scale(${0.8 + (refreshProgress * 0.2)})`
+            }}
+          >
+            <div className={`w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center ${
+              isRefreshing ? 'animate-spin' : ''
+            }`}>
+              {isRefreshing ? (
+                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+              ) : (
+                <div 
+                  className="w-3 h-3 bg-blue-500 rounded-full"
+                  style={{ opacity: refreshProgress }}
+                />
+              )}
+            </div>
+            <div className="text-blue-400 text-xs mt-1 font-medium">
+              {isRefreshing ? 'Refreshing...' : refreshProgress > 0.5 ? 'Release to refresh' : 'Pull to refresh'}
+            </div>
+          </div>
+        )}
+        
         <div className="w-full max-w-lg mx-auto">
           {renderTabContent()}
         </div>
@@ -2929,7 +3090,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  // 🎵 Robinhood-style menu sounds
+                  // Robinhood-style menu sounds
                   if (!isActive) {
                     soundManager.playTabSwitch();
                     hapticFeedback.medium();
@@ -3566,6 +3727,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }}
         tradeData={tradeResultsData}
       />
+
     </div>
   );
 }

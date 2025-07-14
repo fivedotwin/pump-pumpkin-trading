@@ -1,5 +1,5 @@
 // Unified Price Service - Consolidates all price updates to prevent delays and rate limiting
-// Replaces multiple competing intervals with single smart service
+// Uses fast REST API polling for live price updates
 
 import { fetchSOLPrice, fetchTokenPriceCached } from './birdeyeApi';
 
@@ -26,16 +26,16 @@ class UnifiedPriceService {
   private updateInterval: NodeJS.Timeout | null = null;
   private trackedTokens: Set<string> = new Set();
   
-  // High-priority tokens (currently viewing + active positions) - 500ms updates
+  // High-priority tokens (currently viewing + active positions) - 1 second updates
   private highPriorityTokens: Set<string> = new Set();
   private fastUpdateInterval: NodeJS.Timeout | null = null;
   
-  // Regular update interval for SOL price and low-priority tokens
-  private readonly REGULAR_UPDATE_INTERVAL = 3000; // 3 seconds for SOL price (user requested faster updates)
-  private readonly FAST_UPDATE_INTERVAL = 500; // 500ms for actively viewed tokens and positions
+  // Update intervals
+  private readonly REGULAR_UPDATE_INTERVAL = 5000; // 5 seconds for SOL price
+  private readonly FAST_UPDATE_INTERVAL = 1000; // 1 second for actively viewed tokens and positions
   
   constructor() {
-    console.log('🚀 Unified Price Service initialized - eliminates competing intervals');
+    console.log('🚀 Unified Price Service initialized - fast REST API updates');
   }
 
   // Start the unified price service
@@ -43,14 +43,14 @@ class UnifiedPriceService {
     if (this.isRunning) return;
     
     this.isRunning = true;
-    console.log('⚡ Starting unified price service with smart priority updates');
+    console.log('⚡ Starting unified price service with fast REST API updates');
     
     // Initial price load
-    this.updateRegularPrices();
+    this.updateAllPrices();
     
-    // Regular updates for SOL price
+    // Regular updates for SOL price and all tracked tokens
     this.updateInterval = setInterval(() => {
-      this.updateRegularPrices();
+      this.updateAllPrices();
     }, this.REGULAR_UPDATE_INTERVAL);
     
     // Start fast updates if needed
@@ -127,7 +127,7 @@ class UnifiedPriceService {
     }
     
     if (this.highPriorityTokens.size > 0) {
-      console.log(`🚀 Starting 500ms fast updates for ${this.highPriorityTokens.size} high-priority tokens`);
+      console.log(`🚀 Starting 1-second fast updates for ${this.highPriorityTokens.size} high-priority tokens`);
       this.updateHighPriorityTokens();
       this.fastUpdateInterval = setInterval(() => {
         this.updateHighPriorityTokens();
@@ -182,17 +182,20 @@ class UnifiedPriceService {
     return { ...this.currentData };
   }
 
-  // Regular price updates (SOL price only, every 5 seconds)
-  private async updateRegularPrices(): Promise<void> {
+  // Update all prices (SOL + all tracked tokens)
+  private async updateAllPrices(): Promise<void> {
     try {
       const startTime = Date.now();
       
-      // Only update SOL price in regular updates
-      const solPriceResult = await fetchSOLPrice();
+      // Fetch SOL price and all tracked token prices in parallel
+      const [solPrice, tokenPrices] = await Promise.all([
+        fetchSOLPrice(),
+        this.fetchAllTokenPrices()
+      ]);
 
       const updateData: PriceData = {
-        solPrice: solPriceResult,
-        tokenPrices: this.currentData.tokenPrices, // Keep existing token prices
+        solPrice,
+        tokenPrices,
         lastUpdate: Date.now()
       };
 
@@ -203,14 +206,14 @@ class UnifiedPriceService {
       this.notifySubscribers(updateData);
 
       const updateTime = Date.now() - startTime;
-      console.log(`💰 Regular price update completed in ${updateTime}ms - SOL: $${updateData.solPrice.toFixed(2)}`);
+      console.log(`💰 All prices updated in ${updateTime}ms - SOL: $${solPrice.toFixed(2)}, ${Object.keys(tokenPrices).length} tokens`);
 
     } catch (error) {
-      console.error('❌ Regular price update failed:', error);
+      console.error('❌ Price update failed:', error);
     }
   }
 
-  // Fast updates for high-priority tokens (every 500ms)
+  // Fast updates for high-priority tokens (every 1 second)
   private async updateHighPriorityTokens(): Promise<void> {
     if (this.highPriorityTokens.size === 0) return;
     
@@ -233,16 +236,11 @@ class UnifiedPriceService {
       this.notifySubscribers(updateData);
 
       const updateTime = Date.now() - startTime;
-      console.log(`⚡ Fast update completed in ${updateTime}ms - ${this.highPriorityTokens.size} priority tokens`);
+      console.log(`⚡ Fast token update completed in ${updateTime}ms - ${this.highPriorityTokens.size} priority tokens`);
 
     } catch (error) {
       console.error('❌ Fast token update failed:', error);
     }
-  }
-
-  // Legacy method for compatibility - now calls regular updates
-  private async updatePrices(): Promise<void> {
-    await this.updateRegularPrices();
   }
 
   // Fetch all tracked token prices in parallel

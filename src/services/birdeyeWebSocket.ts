@@ -99,10 +99,10 @@ class BirdeyeWebSocketService {
     // Try WebSocket longer before falling back for better real-time performance
     setTimeout(() => {
       if (!this.hasWebSocketAccess) {
-        console.log('🔧 Starting REST API fallback after 3 seconds - WebSocket unavailable');
+        console.log('🔧 Starting REST API fallback after 15 seconds - WebSocket unavailable');
         this.startRestApiFallback();
       }
-    }, 3000);
+    }, 15000);
   }
 
   private connect(): void {
@@ -113,15 +113,15 @@ class BirdeyeWebSocketService {
     this.isConnecting = true;
     console.log('🔗 Connecting to Birdeye WebSocket...');
 
-    // Set connection timeout - if no connection in 1 second, fallback to REST API for MAXIMUM SPEED
+    // Set connection timeout - if no connection in 10 seconds, fallback to REST API
     this.connectionTimeout = setTimeout(() => {
       if (this.isConnecting) {
-        console.log('⏰ WebSocket connection timeout - falling back to REST API polling for MAXIMUM SPEED');
+        console.log('⏰ WebSocket connection timeout after 10 seconds - falling back to REST API polling');
         this.isConnecting = false;
         this.hasWebSocketAccess = false;
         this.startRestApiFallback();
       }
-    }, 1000); // ULTRA FAST: 1 second timeout for instant fallback
+    }, 10000); // 10 second timeout allows proper WebSocket connection
 
     try {
       const wsUrlWithKey = `${this.WS_URL}?x-api-key=${this.apiKey}`;

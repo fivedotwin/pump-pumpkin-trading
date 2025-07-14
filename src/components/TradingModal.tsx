@@ -4,7 +4,7 @@ import { formatPrice, fetchSOLPrice, fetchTokenDetailCached, TokenDetailData } f
 import { positionService, CreatePositionData } from '../services/positionService';
 import { userProfileService } from '../services/supabaseClient';
 import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import unifiedPriceService from '../services/unifiedPriceService';
+import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeSuccessModal from './TradeSuccessModal';
 import { soundManager } from '../services/soundManager';
@@ -62,18 +62,16 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   
 
   
-  // Subscribe to unified price service for ultra-fast token price updates
+  // Subscribe to simplified price service for token price updates
   useEffect(() => {
-    console.log(`🚀 TradingModal: Subscribing to ULTRA-FAST unified price service for ${tokenData.symbol}`);
+    console.log(`TradingModal: Subscribing to simplified price service for ${tokenData.symbol}`);
     
-    // Add to high-priority tokens for 500ms updates since user is actively trading
-    unifiedPriceService.addHighPriorityToken(tokenData.address);
-    unifiedPriceService.trackTokens([tokenData.address]);
+    // Track this token for price updates
+    simplifiedPriceService.trackTokens([tokenData.address]);
     
     return () => {
-      console.log(`🔌 TradingModal: Removing ${tokenData.symbol} from high-priority trading tokens`);
-      unifiedPriceService.removeHighPriorityToken(tokenData.address);
-      unifiedPriceService.untrackTokens([tokenData.address]);
+      console.log(`🔌 TradingModal: Removing ${tokenData.symbol} from tracked tokens`);
+      simplifiedPriceService.untrackTokens([tokenData.address]);
     };
   }, [tokenData.address, tokenData.symbol]);
 
@@ -86,9 +84,9 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       try {
         const price = await fetchSOLPrice();
         setSolPrice(price);
-        console.log('💰 SOL price loaded in TradingModal:', `$${price.toFixed(2)}`);
+        console.log('SOL price loaded in TradingModal:', `$${price.toFixed(2)}`);
       } catch (error) {
-        console.error('❌ CRITICAL: Failed to load SOL price in TradingModal:', error);
+        console.error('CRITICAL: Failed to load SOL price in TradingModal:', error);
         setPriceError('Prices updating, try again in a moment');
         setSolPrice(null);
       } finally {
@@ -117,9 +115,9 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       try {
         const price = await fetchSOLPrice();
         setSolPrice(price);
-        console.log('💰 SOL price retry successful:', `$${price.toFixed(2)}`);
+                    console.log('SOL price retry successful:', `$${price.toFixed(2)}`);
       } catch (error) {
-        console.error('❌ SOL price retry failed:', error);
+                  console.error('SOL price retry failed:', error);
         setPriceError('Prices updating, try again in a moment');
         setSolPrice(null);
       } finally {
@@ -304,7 +302,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     
     if (totalRequiredSOL === 0) return null;
     
-    console.log('✅ FIXED Validation - Total SOL Requirement (Hidden Fee):', {
+          console.log('FIXED Validation - Total SOL Requirement (Hidden Fee):', {
       userSOLBalance,
       totalRequiredSOL, // Includes collateral + hidden fees
       validationPassed: userSOLBalance >= totalRequiredSOL,
@@ -389,19 +387,19 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   }, [tradeDirection, orderType, price, amount, leverage, stopLoss, takeProfit, tpSl, userSOLBalance]);
 
   const handleExecuteTrade = async () => {
-    console.log('🚀🚀🚀 TRADE EXECUTION STARTED 🚀🚀🚀');
+            console.log('TRADE EXECUTION STARTED');
     
     // Trade execution is now silent for better UX
     
     // 🚨 CRITICAL: Get FRESH price from Birdeye WebSocket for maximum accuracy
-    console.log('⚡ GETTING FRESH PRICE FROM BIRDEYE WEBSOCKET FOR TRADE EXECUTION...');
+            console.log('GETTING FRESH PRICE FROM BIRDEYE WEBSOCKET FOR TRADE EXECUTION...');
     let freshPrice = tokenData.price; // Fallback to cached price
     
     // Try Birdeye WebSocket first (lightning fast)
     const birdeyePrice = getJupiterPrice(tokenData.address);
     if (birdeyePrice) {
       freshPrice = birdeyePrice;
-      console.log('💰 BIRDEYE WEBSOCKET PRICE USED FOR TRADE:', {
+              console.log('BIRDEYE WEBSOCKET PRICE USED FOR TRADE:', {
         cached_price: tokenData.price,
         birdeye_fresh_price: freshPrice,
         price_difference: freshPrice - tokenData.price,
@@ -410,12 +408,12 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       });
     } else {
       // Fallback to Birdeye REST API if WebSocket price not available
-      console.log('⚠️ Birdeye WebSocket price not available, falling back to REST API...');
+              console.log('Birdeye WebSocket price not available, falling back to REST API...');
       try {
         const freshTokenData = await fetchTokenDetailCached(tokenData.address);
         if (freshTokenData) {
           freshPrice = freshTokenData.price;
-          console.log('💰 BIRDEYE REST API PRICE USED FOR TRADE:', {
+          console.log('BIRDEYE REST API PRICE USED FOR TRADE:', {
             cached_price: tokenData.price,
             birdeye_rest_price: freshPrice,
             price_difference: freshPrice - tokenData.price,
@@ -423,14 +421,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
             source: 'Birdeye REST API'
           });
         } else {
-          console.log('⚠️ Both Birdeye WebSocket and REST API failed, using cached price:', tokenData.price);
+          console.log('Both Birdeye WebSocket and REST API failed, using cached price:', tokenData.price);
         }
       } catch (error) {
-        console.log('⚠️ Error fetching REST API price, using cached price:', error);
+        console.log('Error fetching REST API price, using cached price:', error);
       }
     }
     
-    console.log('📋 Initial Trade Parameters:', {
+          console.log('Initial Trade Parameters:', {
       wallet_address: walletAddress,
       token_symbol: tokenData.symbol,
       token_address: tokenData.address,
@@ -447,13 +445,13 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     });
 
     if (!isFormValid()) {
-      console.log('❌ Form validation failed');
+              console.log('Form validation failed');
       return;
     }
     
     // Final validation before execution
     if (!validateTpSl()) {
-      console.log('❌ TP/SL validation failed');
+              console.log('TP/SL validation failed');
       return;
     }
     
@@ -463,7 +461,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     
     try {
       // Step 1: Calculate all required values
-      console.log('📊 STEP 1: CALCULATING ALL VALUES');
+      console.log('STEP 1: CALCULATING ALL VALUES');
       
       const solCalculation = calculatePositionInSOL();
       const requiredCollateral = calculateRequiredCollateral();
@@ -490,7 +488,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       });
       
       // Step 2: Build position data for database
-      console.log('📊 STEP 2: BUILDING POSITION DATA FOR DATABASE');
+              console.log('STEP 2: BUILDING POSITION DATA FOR DATABASE');
       
       const positionData: CreatePositionData = {
         wallet_address: walletAddress,
@@ -524,18 +522,18 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       });
       
       // Step 3: Send to backend
-      console.log('📊 STEP 3: SENDING TO BACKEND (positionService.createPosition)');
+              console.log('STEP 3: SENDING TO BACKEND (positionService.createPosition)');
       
       const position = await positionService.createPosition(positionData);
       
-      console.log('✅ BACKEND RESPONSE:', {
+              console.log('BACKEND RESPONSE:', {
         'POSITION_CREATED': position,
         'POSITION_ID': position.id,
         'ALL_FIELDS': position
       });
       
       // Step 4: Check balance update
-      console.log('📊 STEP 4: CHECKING BALANCE UPDATES');
+              console.log('STEP 4: CHECKING BALANCE UPDATES');
       
       // Get the updated user profile to get the actual new SOL balance after collateral deduction
       const updatedProfile = await userProfileService.getProfile(walletAddress);
@@ -543,7 +541,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         const actualDeduction = userSOLBalance - updatedProfile.sol_balance;
         const calculationMatch = Math.abs(actualDeduction - requiredCollateral) < 0.001;
         
-        console.log('💰 BALANCE UPDATE ANALYSIS:', {
+        console.log('BALANCE UPDATE ANALYSIS:', {
           'BEFORE_TRADE': {
             ui_balance: userSOLBalance,
             ui_predicted_requirement: requiredCollateral
@@ -562,7 +560,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         onUpdateSOLBalance(updatedProfile.sol_balance);
       }
       
-      console.log('🎉🎉🎉 TRADE EXECUTION COMPLETED SUCCESSFULLY 🎉🎉🎉');
+              console.log('TRADE EXECUTION COMPLETED SUCCESSFULLY');
       
       // Trade execution success is now silent
       
@@ -594,7 +592,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       }
       
     } catch (error: any) {
-      console.error('💥💥💥 TRADE EXECUTION ERROR 💥💥💥');
+              console.error('TRADE EXECUTION ERROR');
       console.error('Error details:', error);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
@@ -627,7 +625,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
 
   const handleStopLossChange = (value: string) => {
     setStopLoss(value);
-    // 🎵 Sound for TP/SL adjustments
+    // Sound for TP/SL adjustments
     if (value.length > 0) {
       soundManager.playInputChange();
     }
@@ -635,7 +633,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
 
   const handleTakeProfitChange = (value: string) => {
     setTakeProfit(value);
-    // 🎵 Sound for TP/SL adjustments
+    // Sound for TP/SL adjustments
     if (value.length > 0) {
       soundManager.playInputChange();
     }
@@ -643,7 +641,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
 
   const handlePriceChange = (value: string) => {
     setPrice(value);
-    // 🎵 Sound for price adjustments
+    // Sound for price adjustments
     if (value.length > 0) {
       soundManager.playInputChange();
     }
@@ -1035,7 +1033,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                     onChange={(e) => {
                       const isChecked = e.target.checked;
                       setTpSl(isChecked);
-                      // 🎵 Epic toggle sound!
+                      // Epic toggle sound!
                       if (isChecked) {
                         soundManager.playToggleOn();
                       } else {

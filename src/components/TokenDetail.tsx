@@ -6,7 +6,8 @@ import { formatTokenName, formatTokenSymbol, formatDescription, getSmartPriceTex
 import { fetchTokenDetailCached, fetchTokenPriceHistory, TokenDetailData, formatPrice } from '../services/birdeyeApi';
 import { subscribeToJupiterPrice, subscribeToJupiterChart, getJupiterOHLCV, isJupiterWebSocketConnected, isJupiterUsingFallback, getJupiterConnectionStatus, type BirdeyeOHLCV, type ChartUpdateCallback } from '../services/birdeyeWebSocket';
 import TradingModal from './TradingModal';
-import unifiedPriceService from '../services/unifiedPriceService';
+import LivePrice from './LivePrice';
+import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import { userProfileService } from '../services/supabaseClient';
 import { hapticFeedback } from '../utils/animations';
 
@@ -40,6 +41,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
+  const [previousPrice, setPreviousPrice] = useState<number>(0);
   
   // Share notification state
   const [shareNotification, setShareNotification] = useState<{
@@ -69,7 +71,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   useEffect(() => {
     if (!tokenData) return;
 
-    console.log(`📊 Loading data for ${tokenData.symbol} (${selectedPeriod})`);
+    console.log(`Loading data for ${tokenData.symbol} (${selectedPeriod})`);
 
     // FIXED: Load initial data for ALL periods including LIVE
     // For LIVE period, load 4H data as initial fallback while WebSocket connects
@@ -99,20 +101,24 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     };
   }, []);
 
-  // Subscribe to unified price service for efficient price updates
+  // Subscribe to simplified price service for price updates
   useEffect(() => {
     if (!tokenData) return;
     
-    console.log(`📡 TokenDetail subscribing to unified price service for ${tokenData.symbol}`);
+    console.log(`TokenDetail subscribing to simplified price service for ${tokenData.symbol}`);
     
-    // Track this token in the unified service
-    unifiedPriceService.trackTokens([tokenAddress]);
+    // Track this token for price updates
+    simplifiedPriceService.trackTokens([tokenAddress]);
     
     // Subscribe to price updates
-    const unsubscribe = unifiedPriceService.subscribe(`token-detail-${tokenAddress}`, (priceData) => {
+    const unsubscribe = simplifiedPriceService.subscribe(`token-detail-${tokenAddress}`, (priceData) => {
       const newPrice = priceData.tokenPrices[tokenAddress];
       if (newPrice && newPrice !== tokenData.price) {
-        console.log(`🚀 ULTRA-FAST unified price update for ${tokenData.symbol}: ${newPrice}`);
+        console.log(`Simplified price update for ${tokenData.symbol}: ${newPrice}`);
+        
+        // Store previous price for visual feedback
+        setPreviousPrice(tokenData.price);
+        
         setTokenData(prev => prev ? {
           ...prev,
           price: newPrice
@@ -132,35 +138,19 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           });
         }
 
-        // Update connection status to show fast updates
+        // Update connection status to show live updates
         setConnectionStatus('connected');
       }
     });
     
     return () => {
-      console.log(`🔌 TokenDetail unsubscribing from unified price service for ${tokenData.symbol}`);
+      console.log(`TokenDetail unsubscribing from simplified price service for ${tokenData.symbol}`);
       unsubscribe();
-      unifiedPriceService.untrackTokens([tokenAddress]);
+      simplifiedPriceService.untrackTokens([tokenAddress]);
     };
   }, [tokenAddress, tokenData?.symbol, selectedPeriod]);
 
-  // Set currently viewed token as high-priority for 500ms updates
-  useEffect(() => {
-    if (!tokenData) return;
-    
-    console.log(`⚡ Adding ${tokenData.symbol} as high-priority token for 500ms updates`);
-    
-    // Add this token to high-priority list (doesn't affect position tokens)
-    unifiedPriceService.addHighPriorityToken(tokenAddress);
-    
-    return () => {
-      console.log(`🔇 Removing ${tokenData.symbol} from high-priority tokens`);
-      // Remove this token from high-priority list
-      unifiedPriceService.removeHighPriorityToken(tokenAddress);
-    };
-  }, [tokenAddress, tokenData?.symbol]);
-
-  // Note: Price updates now handled by unified service - no separate API calls
+  // Note: Price updates now handled by simplified price service - no separate API calls
 
   const loadTokenData = async () => {
     setIsLoading(true);
@@ -172,13 +162,13 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
       
       if (data) {
         setTokenData(data);
-        console.log('✅ Token data loaded successfully:', data.symbol);
+        console.log('Token data loaded successfully:', data.symbol);
       } else {
         setError('Token not found or invalid contract address');
-        console.error('❌ Failed to load token data');
+                  console.error('Failed to load token data');
       }
     } catch (error) {
-      console.error('💥 Error loading token data:', error);
+              console.error('Error loading token data:', error);
       setError('Failed to load token data. Please check the contract address.');
     } finally {
       setIsLoading(false);
@@ -195,15 +185,15 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     
     try {
       if (showLoading) {
-        console.log(`📈 Loading price history for ${timeframe}`);
+        console.log(`Loading price history for ${timeframe}`);
       }
       const history = await fetchTokenPriceHistory(tokenAddress, timeframe);
       setPriceHistory(history);
       if (showLoading) {
-        console.log(`✅ Price history loaded: ${history?.length || 0} points`);
+        console.log(`Price history loaded: ${history?.length || 0} points`);
       }
     } catch (error) {
-      console.error('💥 Error loading price history:', error);
+              console.error('Error loading price history:', error);
       setPriceHistory(null);
     } finally {
       if (showLoading) {
@@ -305,7 +295,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
         console.log('🔄 Refreshing SOL balance before opening trading modal...');
         const profile = await userProfileService.getProfile(walletAddress);
         if (profile) {
-          console.log('💰 Pre-trade SOL balance refresh:', {
+          console.log('Pre-trade SOL balance refresh:', {
             current_ui_balance: userSOLBalance,
             fresh_db_balance: profile.sol_balance
           });
@@ -599,15 +589,18 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
         {/* Price - Smart responsive sizing with live indicator */}
         <div className="flex flex-col items-center space-y-2 mb-4 px-4">
           <div className="flex items-center space-x-2">
-            <p className={`font-bold text-white break-all text-center ${
-              getSmartPriceTextClass(
-                isHovering && hoverData 
-                  ? formatPrice(hoverData.price) 
-                  : formatPrice(tokenData.price)
-              )
-            }`}>
-              {isHovering && hoverData ? formatPrice(hoverData.price) : formatPrice(tokenData.price)}
-            </p>
+            <LivePrice 
+              price={isHovering && hoverData ? hoverData.price : tokenData.price}
+              previousPrice={previousPrice}
+              className={`font-bold text-white break-all text-center ${
+                getSmartPriceTextClass(
+                  isHovering && hoverData 
+                    ? formatPrice(hoverData.price) 
+                    : formatPrice(tokenData.price)
+                )
+              }`}
+              showChange={true}
+            />
             <div className="flex items-center space-x-1">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-green-400 text-xs font-medium">LIVE</span>
