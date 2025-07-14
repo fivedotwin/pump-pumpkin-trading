@@ -178,7 +178,7 @@ export class JupiterSwapService {
         txid,
         inputAmount,
         outputAmount,
-        feeAmount: 0, // Basic implementation
+        feeAmount: 0, // No platform fees on swaps
       };
 
     } catch (error) {

@@ -1007,7 +1007,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }
       }
 
-      console.log(`🚀 Starting ${swapMode} transaction with 0.5% platform fee...`);
+      console.log(`🚀 Starting ${swapMode} transaction...`);
       
       const result = await jupiterSwapService.executeSwap(
         swapQuote,
@@ -1016,7 +1016,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       );
 
       if (result) {
-        console.log('✅ Swap successful with fee:', result);
+        console.log('✅ Swap successful:', result);
         
         const inputToken = swapMode === 'buy' ? 'SOL' : 'PPA';
         const outputToken = swapMode === 'buy' ? 'PPA' : 'SOL';
@@ -1488,17 +1488,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         throw cancelError;
       }
       
-      // Refund collateral + trading fee to user
+      // Refund collateral to user (no trading fees to refund)
       const profile = await userProfileService.getProfile(walletAddress);
       if (profile) {
-        const refundAmount = order.collateral_sol + (order.trading_fee_sol || 0);
+        const refundAmount = order.collateral_sol;
         const newSOLBalance = profile.sol_balance + refundAmount;
         
         const updated = await userProfileService.updateSOLBalance(walletAddress, newSOLBalance);
         if (updated && onUpdateSOLBalance) {
           onUpdateSOLBalance(newSOLBalance);
           setCurrentSOLBalance(newSOLBalance);
-          console.log(`💰 Refunded ${refundAmount.toFixed(4)} SOL to user`);
+          console.log(`💰 Refunded ${refundAmount.toFixed(4)} SOL collateral to user`);
         }
       }
       
@@ -1914,7 +1914,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-bold text-white mb-3">Buy PPA And Get Cash When Ever Someone Trades Using The Platform</h3>
               <p className="text-gray-400 text-xs mb-3">
-                Purchase PPA tokens to earn passive income from all platform trading activity. 0.5% fee on all swaps.
+                Purchase PPA tokens to earn passive income from all platform trading activity. No fees on swaps.
               </p>
               
               {/* PPA Stats - Compact */}
@@ -3447,12 +3447,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-xs">Platform Fee (0.5%):</span>
-                  <span className="text-orange-400 text-sm font-medium">
-                    {swapSuccessData.feeAmount.toFixed(6)} {swapSuccessData.inputToken}
-                  </span>
-                </div>
+                {/* Platform fees removed - no longer charged on swaps */}
                 
                 <div className="border-t border-gray-700 pt-3">
                   <div className="flex justify-between items-center">

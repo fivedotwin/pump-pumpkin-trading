@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BIRDEYE_API_KEY = 'd43c3786090f4ed997afb84acc4d84c4';
+const BIRDEYE_API_KEY = '9a5835740ef1448bafe50f8fbdc519ec';
 const BIRDEYE_BASE_URL = 'https://public-api.birdeye.so';
 
 const birdeyeApi = axios.create({
@@ -1588,20 +1588,20 @@ export const searchTokens = async (query: string): Promise<SearchResult[]> => {
     console.log(`🔍 Searching tokens using Birdeye v3 search for: "${query}"`);
     
     // Use Birdeye's official /defi/v3/search endpoint
-    const response = await birdeyeApi.get('/defi/v3/search', {
-      params: {
-        keyword: query,
+      const response = await birdeyeApi.get('/defi/v3/search', {
+        params: {
+          keyword: query,
         limit: 20, // Get more results to filter for best matches
-      },
+        },
       timeout: 10000,
-    });
+      });
 
     console.log('📡 Birdeye v3 search response:', {
-      status: response.status,
-      success: response.data?.success,
-      hasData: !!response.data?.data,
-      dataLength: response.data?.data?.length || 0
-    });
+        status: response.status,
+        success: response.data?.success,
+        hasData: !!response.data?.data,
+        dataLength: response.data?.data?.length || 0
+      });
 
     // Debug: Log the actual response structure to understand Birdeye's format
     if (response.data?.data && response.data.data.length > 0) {

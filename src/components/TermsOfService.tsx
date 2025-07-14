@@ -49,13 +49,13 @@ export default function TermsOfService({ onBack }: TermsOfServiceProps) {
             <section>
               <h2 className="text-2xl font-semibold text-white mb-5">3. FEES AND CHARGES</h2>
               <p>
-                The Company charges a flat fee of zero point three percent (0.3%) on all trades executed through the platform. This fee is calculated based on the total trade value and is automatically deducted from your account at the time of trade execution. The fee applies to both opening and closing positions, regardless of trade size, leverage multiplier, or asset type. Additional fees may apply for specific services including but not limited to: overnight funding charges, liquidation fees, withdrawal fees, and premium feature access fees.
+                The Company charges a single flat fee of twenty percent (20%) on ANY amount returned to users when closing trading positions. This fee applies to ALL position closures that return money to your account, whether the position is profitable or results in a loss. The fee is calculated on the total return amount (remaining collateral plus any profits or minus any losses) and is automatically deducted before crediting funds to your account. No fees are charged when opening positions - users only pay the required collateral amount.
               </p>
               <p>
-                All fees are clearly disclosed on the platform interface prior to trade execution. Fee structures may be modified at the Company's sole discretion with thirty (30) days written notice to users. Users are responsible for understanding all applicable fees before executing trades. The Company reserves the right to implement additional fee categories or modify existing fee structures to reflect changes in operational costs, regulatory requirements, or market conditions.
+                Examples: (1) Profitable trade: You deposit 1 SOL, make 0.5 SOL profit, total return is 1.5 SOL, platform fee is 0.3 SOL (20%), you receive 1.2 SOL. (2) Losing trade: You deposit 1 SOL, lose 0.4 SOL, total return is 0.6 SOL, platform fee is 0.12 SOL (20%), you receive 0.48 SOL. (3) Complete liquidation: You lose 100% of collateral, no return amount, no fee charged. This fee structure applies universally to all position closures.
               </p>
               <p>
-                Fees are non-refundable except in cases of documented system errors or technical malfunctions directly attributable to the Company's platform. Users acknowledge that fees are separate from any gains or losses on trading positions and that fee payments do not guarantee trading success or platform performance. The Company may offer fee discounts or rebates at its discretion based on trading volume, account tenure, or promotional programs, but such benefits may be modified or terminated without prior notice.
+                All fees are clearly disclosed on the platform interface prior to trade execution. Fee structures may be modified at the Company's sole discretion with thirty (30) days written notice to users. Users are responsible for understanding all applicable fees before executing trades. Fees are non-refundable except in cases of documented system errors or technical malfunctions directly attributable to the Company's platform.
               </p>
             </section>
 

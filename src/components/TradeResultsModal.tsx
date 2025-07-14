@@ -13,7 +13,7 @@ interface TradeResultsModalProps {
     positionSize: number;
     collateralAmount: number;
     grossPnL?: number;    // Gross P&L before fees (optional for backward compatibility)
-    profitFee?: number;   // 20% profit fee (optional for backward compatibility)
+    platformFee?: number; // 20% platform fee on total return (optional for backward compatibility)
     finalPnL: number;     // Net P&L after fees
     pnlPercentage: number;
     totalReturn: number;  // Collateral + Net P&L returned to user
@@ -251,16 +251,16 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
             <span className="text-white">{tradeData.positionSize.toFixed(3)} {tradeData.tokenSymbol}</span>
           </div>
           
-          {/* Profit Fee Breakdown - Only show if there's a fee */}
-          {tradeData.profitFee && tradeData.profitFee > 0 && (
+          {/* Platform Fee Breakdown - Only show if there's a fee */}
+          {tradeData.platformFee && tradeData.platformFee > 0 && (
             <div className="border-t border-gray-700 pt-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Gross Profit:</span>
                 <span className="text-green-400">+{formatCurrency(tradeData.grossPnL || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-orange-400">Profit Fee (20%):</span>
-                <span className="text-orange-400">-{formatCurrency(tradeData.profitFee)}</span>
+                <span className="text-orange-400">Platform Fee (20%):</span>
+                <span className="text-orange-400">-{formatCurrency(tradeData.platformFee)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium border-t border-gray-700 pt-1 mt-1">
                 <span className="text-gray-300">Net Profit:</span>

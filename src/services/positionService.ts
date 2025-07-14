@@ -113,33 +113,8 @@ class PositionService {
     return position_value_usd <= maxSize;
   }
 
-  // HIDDEN: Calculate trading fee based on leverage (not disclosed to users)
-  private calculateTradingFee(leverage: number, position_value_usd: number, sol_price: number): {
-    fee_percentage: number;
-    fee_usd: number;
-    fee_sol: number;
-  } {
-    let fee_percentage: number;
-    
-    // Hidden fee structure based on leverage
-    if (leverage < 10) {
-      fee_percentage = 0.003; // 0.3%
-    } else if (leverage >= 10 && leverage <= 30) {
-      fee_percentage = 0.002; // 0.2%
-    } else {
-      fee_percentage = 0.003; // 0.3%
-    }
-    
-    // Fee calculated on base position value
-    const fee_usd = position_value_usd * fee_percentage;
-    const fee_sol = fee_usd / sol_price;
-    
-    return {
-      fee_percentage,
-      fee_usd,
-      fee_sol
-    };
-  }
+  // REMOVED: Hidden trading fee calculation - no longer needed
+  // All fees are now consolidated into a single 20% fee on total return when closing positions
 
   // Calculate P&L for a position
   async calculatePositionPnL(position: TradingPosition): Promise<{
@@ -278,26 +253,26 @@ class PositionService {
         'FORMULA_2': 'collateral_usd ÷ sol_price = collateral_sol'
       });
 
-      // HIDDEN: Calculate trading fee on base position value (matches frontend)
-      console.log('📊 BACKEND STEP 6: CALCULATING HIDDEN TRADING FEES');
-      const tradingFee = this.calculateTradingFee(data.leverage, position_value_usd, sol_price);
-      console.log('💰 HIDDEN TRADING FEE CALCULATION:', {
-        leverage: data.leverage,
-        position_value_usd: position_value_usd,
-        fee_percentage: `${(tradingFee.fee_percentage * 100).toFixed(1)}%`,
-        fee_usd: tradingFee.fee_usd,
-        fee_sol: tradingFee.fee_sol,
-        'NOTE': 'FEE CALCULATED ON BASE POSITION VALUE AND HIDDEN FROM USERS'
-      });
+      // REMOVED: Calculate trading fee on base position value (matches frontend)
+      // console.log('📊 BACKEND STEP 6: CALCULATING HIDDEN TRADING FEES');
+      // const tradingFee = this.calculateTradingFee(data.leverage, position_value_usd, sol_price);
+      // console.log('💰 HIDDEN TRADING FEE CALCULATION:', {
+      //   leverage: data.leverage,
+      //   position_value_usd: position_value_usd,
+      //   fee_percentage: `${(tradingFee.fee_percentage * 100).toFixed(1)}%`,
+      //   fee_usd: tradingFee.fee_usd,
+      //   fee_sol: tradingFee.fee_sol,
+      //   'NOTE': 'FEE CALCULATED ON BASE POSITION VALUE AND HIDDEN FROM USERS'
+      // });
       
       // Total SOL requirement = Collateral + Trading Fee (hidden from user)
-      const total_required_sol = collateral_sol + tradingFee.fee_sol;
-      console.log('🔢 TOTAL SOL REQUIREMENT CALCULATION:', {
-        collateral_sol: collateral_sol,
-        trading_fee_sol: tradingFee.fee_sol,
-        total_required_sol: total_required_sol,
-        'FORMULA': 'collateral_sol + trading_fee_sol = total_required_sol'
-      });
+      // const total_required_sol = collateral_sol + tradingFee.fee_sol;
+      // console.log('🔢 TOTAL SOL REQUIREMENT CALCULATION:', {
+      //   collateral_sol: collateral_sol,
+      //   trading_fee_sol: tradingFee.fee_sol,
+      //   total_required_sol: total_required_sol,
+      //   'FORMULA': 'collateral_sol + trading_fee_sol = total_required_sol'
+      // });
 
       // STEP 2: Check if user has sufficient SOL balance for collateral + fee
       console.log('📊 BACKEND STEP 7: VALIDATING SOL BALANCE');
@@ -308,18 +283,18 @@ class PositionService {
         leveraged_exposure_usd: leveraged_exposure,
         db_sol_balance: userProfile.sol_balance,
         collateral_sol: collateral_sol,
-        trading_fee_sol: tradingFee.fee_sol, // Hidden from UI
-        total_required_sol: total_required_sol,
-        validation_will_pass: userProfile.sol_balance >= total_required_sol,
-        shortfall: Math.max(0, total_required_sol - userProfile.sol_balance),
+        // trading_fee_sol: tradingFee.fee_sol, // Hidden from UI
+        // total_required_sol: total_required_sol,
+        validation_will_pass: userProfile.sol_balance >= collateral_sol, // Only collateral is required
+        shortfall: Math.max(0, collateral_sol - userProfile.sol_balance),
         sol_price: sol_price
       });
       
-      if (userProfile.sol_balance < total_required_sol) {
-        const shortfall = total_required_sol - userProfile.sol_balance;
+      if (userProfile.sol_balance < collateral_sol) {
+        const shortfall = collateral_sol - userProfile.sol_balance;
         console.log('❌ VALIDATION FAILED - INSUFFICIENT SOL BALANCE');
         // User sees this as "insufficient collateral" without knowing about fees
-        throw new Error(`Insufficient SOL balance. Need ${total_required_sol.toFixed(4)} SOL collateral, but only have ${userProfile.sol_balance.toFixed(4)} SOL. Shortfall: ${shortfall.toFixed(4)} SOL`);
+        throw new Error(`Insufficient SOL balance. Need ${collateral_sol.toFixed(4)} SOL collateral, but only have ${userProfile.sol_balance.toFixed(4)} SOL. Shortfall: ${shortfall.toFixed(4)} SOL`);
       }
       console.log('✅ VALIDATION PASSED - SUFFICIENT SOL BALANCE');
       
@@ -350,10 +325,10 @@ class PositionService {
         leverage: data.leverage,
         collateral_sol,
         position_value_usd,
-        // HIDDEN: Store trading fee information (not exposed to users)
-        trading_fee_usd: tradingFee.fee_usd,
-        trading_fee_sol: tradingFee.fee_sol,
-        trading_fee_percentage: tradingFee.fee_percentage,
+        // REMOVED: Store trading fee information (not exposed to users)
+        // trading_fee_usd: tradingFee.fee_usd,
+        // trading_fee_sol: tradingFee.fee_sol,
+        // trading_fee_percentage: tradingFee.fee_percentage,
         stop_loss: data.stop_loss,
         take_profit: data.take_profit,
         status: data.order_type === 'Market Order' ? 'opening' : 'pending',
@@ -381,11 +356,11 @@ class PositionService {
 
       // STEP 4: Deduct collateral from user's SOL balance
       console.log('📊 BACKEND STEP 10: UPDATING USER SOL BALANCE');
-      const newSOLBalance = userProfile.sol_balance - total_required_sol;
+      const newSOLBalance = userProfile.sol_balance - collateral_sol;
       
       console.log('💰 SOL BALANCE UPDATE CALCULATION:', {
         previous_balance: userProfile.sol_balance,
-        total_deduction: total_required_sol,
+        total_deduction: collateral_sol,
         new_balance: newSOLBalance,
         'FORMULA': 'previous_balance - total_deduction = new_balance'
       });
@@ -420,8 +395,8 @@ class PositionService {
         entry_price: entry_price,
         position_value_usd: position_value_usd,
         collateral_sol: collateral_sol,
-        trading_fee_sol: tradingFee.fee_sol,
-        total_deducted_sol: total_required_sol,
+        // trading_fee_sol: tradingFee.fee_sol,
+        total_deducted_sol: collateral_sol,
         new_sol_balance: newSOLBalance,
         status: position.status
       });
@@ -813,56 +788,67 @@ class PositionService {
       const finalPnL = this.calculatePositionPnLWithPrice(position, close_price);
       const sol_price = await fetchSOLPrice();
       
-      // Calculate 20% profit fee (only on positive profits)
-      let profitFeeUSD = 0;
-      let profitFeeSOL = 0;
-      let netPnL = finalPnL.pnl;
+      // Calculate total return amount (collateral + P&L)
+      const pnl_in_sol = finalPnL.pnl / sol_price;
+      const totalReturnAmount = position.collateral_sol + pnl_in_sol;
       
-      if (finalPnL.pnl > 0) {
-        // Charge 20% fee on profits only
-        profitFeeUSD = finalPnL.pnl * 0.20;
-        profitFeeSOL = profitFeeUSD / sol_price;
-        netPnL = finalPnL.pnl - profitFeeUSD; // Net P&L after fee
+      // NEW FEE STRUCTURE: 20% fee on ALL returns (profit OR loss)
+      let platformFeeSOL = 0;
+      let actualReturnAmount = 0;
+      
+      if (totalReturnAmount > 0) {
+        // Always charge 20% fee on any positive return amount
+        platformFeeSOL = totalReturnAmount * 0.20;
+        actualReturnAmount = totalReturnAmount - platformFeeSOL;
         
-        console.log('💰 PROFIT FEE CALCULATION:', {
-          gross_profit_usd: finalPnL.pnl.toFixed(2),
-          profit_fee_usd: profitFeeUSD.toFixed(2),
-          profit_fee_sol: profitFeeSOL.toFixed(4),
-          net_profit_usd: netPnL.toFixed(2),
-          fee_percentage: '20%'
+        console.log('💰 PLATFORM FEE CALCULATION (20% on all returns):', {
+          collateral_sol: position.collateral_sol.toFixed(4),
+          pnl_sol: pnl_in_sol.toFixed(4),
+          total_return_sol: totalReturnAmount.toFixed(4),
+          platform_fee_sol: platformFeeSOL.toFixed(4),
+          user_receives_sol: actualReturnAmount.toFixed(4),
+          fee_percentage: '20% on ALL returns (profit or loss)'
+        });
+      } else {
+        // If total return is zero or negative, user gets nothing
+        actualReturnAmount = 0;
+        platformFeeSOL = 0;
+        
+        console.log('💰 TOTAL LIQUIDATION - NO RETURN:', {
+          collateral_sol: position.collateral_sol.toFixed(4),
+          pnl_sol: pnl_in_sol.toFixed(4),
+          total_return_sol: totalReturnAmount.toFixed(4),
+          user_receives_sol: '0.0000',
+          platform_fee_sol: '0.0000',
+          note: 'Complete loss - liquidated'
         });
       }
       
-      // Calculate total amount to return to user (collateral + net profit after fees)
-      const pnl_in_sol = netPnL / sol_price;
-      const totalReturnAmount = position.collateral_sol + pnl_in_sol;
-      const actualReturnAmount = Math.max(0, totalReturnAmount); // Can't return negative amount
+      // Calculate percentage return for display
+      const pnlPercentage = (finalPnL.pnl / (position.collateral_sol * sol_price)) * 100;
       
-      // Calculate percentage return (based on net P&L after fees)
-      const pnlPercentage = (netPnL / (position.collateral_sol * sol_price)) * 100;
-      
-      console.log('🎯 DELAYED CLOSE EXECUTION with worst price:', {
+      console.log('🎯 DELAYED CLOSE EXECUTION with new fee structure:', {
         position_id,
         token: position.token_symbol,
         close_reason: position.close_reason,
         original_collateral: `${position.collateral_sol.toFixed(4)} SOL`,
-        gross_pnl_usd: `$${finalPnL.pnl.toFixed(2)}`,
-        profit_fee_usd: profitFeeUSD > 0 ? `$${profitFeeUSD.toFixed(2)}` : '$0.00',
-        net_pnl_usd: `$${netPnL.toFixed(2)}`,
-        pnl_sol: `${pnl_in_sol.toFixed(4)} SOL`,
-        total_return: `${actualReturnAmount.toFixed(4)} SOL`,
+        pnl_usd: `$${finalPnL.pnl.toFixed(2)}`,
+        total_return: `${totalReturnAmount.toFixed(4)} SOL`,
+        platform_fee: `${platformFeeSOL.toFixed(4)} SOL`,
+        user_receives: `${actualReturnAmount.toFixed(4)} SOL`,
         close_price: close_price,
+        fee_note: '20% charged on ALL returns (profit or loss)',
         worst_price_protection: 'ACTIVE'
       });
 
-      // Return collateral + P&L to user's SOL balance
+      // Return amount to user's SOL balance
       if (actualReturnAmount > 0) {
         const userProfile = await userProfileService.getProfile(position.wallet_address);
         if (userProfile) {
           const newSOLBalance = userProfile.sol_balance + actualReturnAmount;
           await userProfileService.updateSOLBalance(position.wallet_address, newSOLBalance);
           
-          console.log(`💰 Collateral returned: ${userProfile.sol_balance.toFixed(4)} + ${actualReturnAmount.toFixed(4)} = ${newSOLBalance.toFixed(4)} SOL`);
+          console.log(`💰 Amount returned: ${userProfile.sol_balance.toFixed(4)} + ${actualReturnAmount.toFixed(4)} = ${newSOLBalance.toFixed(4)} SOL`);
         }
       }
 
@@ -873,7 +859,7 @@ class PositionService {
           status: 'closed',
           closed_at: new Date().toISOString(),
           close_price: close_price,
-          current_pnl: netPnL // Store net P&L after profit fees
+          current_pnl: finalPnL.pnl // Store gross P&L before fees
         })
         .eq('id', position_id);
       
@@ -891,9 +877,9 @@ class PositionService {
         exitPrice: close_price,
         positionSize: position.amount,
         collateralAmount: position.collateral_sol,
-        grossPnL: finalPnL.pnl,       // Gross P&L before fees
-        profitFee: profitFeeUSD,      // 20% profit fee (0 if loss)
-        finalPnL: netPnL,             // Net P&L after fees
+        grossPnL: finalPnL.pnl,           // Gross P&L before fees
+        platformFee: platformFeeSOL * sol_price, // Platform fee in USD for display
+        finalPnL: (actualReturnAmount * sol_price) - (position.collateral_sol * sol_price), // Net P&L after fees
         pnlPercentage: pnlPercentage,
         totalReturn: actualReturnAmount
       };
@@ -910,7 +896,7 @@ class PositionService {
         console.error('Error storing trade results:', resultsError);
       }
       
-      console.log(`✅ Position ${position_id} closed with 1-minute delay - Anti-gaming protection successful`);
+      console.log(`✅ Position ${position_id} closed with new fee structure - 20% on ALL returns`);
       console.log('📊 Trade Results saved for frontend:', tradeResults);
       
     } catch (error) {

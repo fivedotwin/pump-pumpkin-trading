@@ -33,6 +33,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
   const [showOrderTypeDropdown, setShowOrderTypeDropdown] = useState(false);
+  const [isMaxUsed, setIsMaxUsed] = useState(false); // Track if MAX has been used
   const [validationErrors, setValidationErrors] = useState<{
     stopLoss?: string;
     takeProfit?: string;
@@ -143,12 +144,11 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     }
   };
 
-  // FIXED: Calculate position value and collateral directly in SOL (no USD conversion)
+  // SIMPLIFIED: Calculate position value and collateral directly in SOL (no fees when opening)
   const calculatePositionInSOL = (): {
     tokenPriceInSOL: number;
     positionValueSOL: number;
     collateralSOL: number;
-    tradingFeeSOL: number;
     totalRequiredSOL: number;
   } => {
     if (!amount || !getReferencePrice() || !solPrice) {
@@ -156,7 +156,6 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
         tokenPriceInSOL: 0,
         positionValueSOL: 0,
         collateralSOL: 0,
-        tradingFeeSOL: 0,
         totalRequiredSOL: 0
       };
     }
@@ -173,29 +172,13 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     // Collateral needed in SOL = Position Value / Leverage
     const collateralSOL = positionValueSOL / leverage;
     
-    // HIDDEN: Calculate trading fee in SOL
-    let feePercentage: number;
-    if (leverage < 10) {
-      feePercentage = 0.003; // 0.3%
-    } else if (leverage >= 10 && leverage <= 30) {
-      feePercentage = 0.002; // 0.2%
-    } else {
-      feePercentage = 0.003; // 0.3%
-    }
-    
-    // Fee calculated on base position value (not leveraged)
-    const tradingFeeSOL = positionValueSOL * feePercentage;
-    
-    // Total requirement = Collateral + Fee
-    const totalRequiredSOL = collateralSOL + tradingFeeSOL;
-    
-    // Fee calculated on base position value, leverage applied only to trade size display
+    // NO TRADING FEES - Only collateral required
+    const totalRequiredSOL = collateralSOL;
     
     return {
       tokenPriceInSOL,
       positionValueSOL,
       collateralSOL,
-      tradingFeeSOL,
       totalRequiredSOL
     };
   };
@@ -664,13 +647,30 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     if (value.length > 0) {
       soundManager.playInputChange();
     }
+    
+    // If MAX has been used and this is a limit order, recalculate max amount for new price
+    if (isMaxUsed && orderType === 'Limit Order') {
+      const newPrice = parseFloat(value);
+      if (newPrice > 0 && solPrice && userSOLBalance > 0) {
+        const tokenPriceInSOL = newPrice / solPrice;
+        const availableSOL = userSOLBalance * 0.95;
+        const positionCostFactor = (1 / leverage);
+        const maxPositionValueSOL = availableSOL / positionCostFactor;
+        const newMaxAmount = maxPositionValueSOL / tokenPriceInSOL;
+        
+        if (newMaxAmount > 0) {
+          setAmount(newMaxAmount.toFixed(6));
+        }
+      }
+    }
   };
 
   const handleAmountChange = (value: string) => {
     setAmount(value);
-    // 🎵 Sound for amount input - this is important!
-    if (value.length > 0) {
-      soundManager.playAmountInput();
+    setIsMaxUsed(false); // Reset MAX when user manually changes amount
+    // Clear position validation error when amount changes
+    if (validationErrors.position) {
+      setValidationErrors(prev => ({ ...prev, position: undefined }));
     }
   };
 
@@ -678,10 +678,28 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     if (value !== leverage) {
       setLeverage(value);
       // Leverage adjustment is now silent for better UX
+      
+      // If MAX has been used, recalculate max amount for new leverage
+      if (isMaxUsed) {
+        // We need to use the new leverage value for calculation
+        // Create a temporary calculation with the new leverage
+        const refPrice = getReferencePrice();
+        if (refPrice > 0 && solPrice && userSOLBalance > 0) {
+          const tokenPriceInSOL = refPrice / solPrice;
+          const availableSOL = userSOLBalance * 0.95;
+          const positionCostFactor = (1 / value); // Use new leverage value
+          const maxPositionValueSOL = availableSOL / positionCostFactor;
+          const newMaxAmount = maxPositionValueSOL / tokenPriceInSOL;
+          
+          if (newMaxAmount > 0) {
+            setAmount(newMaxAmount.toFixed(6));
+          }
+        }
+      }
     }
   };
 
-  // FIXED: Calculate max position size based on SOL balance directly
+  // SIMPLIFIED: Calculate max position size based on SOL balance directly (no fees when opening)
   const getMaxPositionSize = (): number => {
     if (userSOLBalance === 0 || !solPrice) return 0; // CRITICAL: No trading without SOL price
     
@@ -694,20 +712,9 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     // Use 95% of balance to leave room for calculations
     const availableSOL = userSOLBalance * 0.95;
     
-    // Account for hidden trading fee in max position calculation
-    let feePercentage: number;
-    if (leverage < 10) {
-      feePercentage = 0.003; // 0.3%
-    } else if (leverage >= 10 && leverage <= 30) {
-      feePercentage = 0.002; // 0.2%
-    } else {
-      feePercentage = 0.003; // 0.3%
-    }
-    
-    // Calculate max position considering collateral + fee requirement in SOL
-    // Available SOL = (Position Value SOL / Leverage) + (Position Value SOL * Fee)
-    // Available SOL = Position Value SOL * (1/Leverage + Fee)
-    const positionCostFactor = (1 / leverage) + feePercentage;
+    // NO TRADING FEES - Only collateral requirement
+    // Available SOL = Position Value SOL / Leverage
+    const positionCostFactor = (1 / leverage);
     const maxPositionValueSOL = availableSOL / positionCostFactor;
     
     // Calculate max token amount
@@ -718,23 +725,16 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     const expectedLeveragedSizeUSD = expectedPositionValueUSD * leverage;
     const expectedLeveragedSizeSOL = expectedLeveragedSizeUSD / solPrice;
     
-    console.log('🚨 MAX CALCULATION DEBUG - FINDING THE BUG:', {
-      userSOLBalance,
-      availableSOL,
-      leverage,
-      tokenPriceUSD: refPrice,
-      solPrice,
-      tokenPriceInSOL,
-      feePercentage: `${(feePercentage * 100).toFixed(1)}%`,
-      positionCostFactor,
-      maxPositionValueSOL,
-      maxTokenAmount,
-      'EXPECTED_RESULTS': {
-        positionValueUSD: expectedPositionValueUSD,
-        leveragedSizeUSD: expectedLeveragedSizeUSD,
-        leveragedSizeSOL: expectedLeveragedSizeSOL,
-        'SHOULD_BE_AROUND_1300_SOL': expectedLeveragedSizeSOL
-      }
+    console.log('🔢 MAX POSITION CALCULATION (NO FEES):', {
+      userSOLBalance: userSOLBalance.toFixed(4),
+      availableSOL: availableSOL.toFixed(4),
+      leverage: leverage,
+      positionCostFactor: positionCostFactor.toFixed(4),
+      maxPositionValueSOL: maxPositionValueSOL.toFixed(4),
+      maxTokenAmount: maxTokenAmount.toFixed(6),
+      expectedLeveragedSizeUSD: expectedLeveragedSizeUSD.toFixed(2),
+      expectedLeveragedSizeSOL: expectedLeveragedSizeSOL.toFixed(4),
+      'NOTE': 'NO TRADING FEES - Only collateral required'
     });
     
     return Math.max(0, maxTokenAmount);
@@ -744,7 +744,25 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     const maxAmount = getMaxPositionSize();
     if (maxAmount > 0) {
       setAmount(maxAmount.toFixed(6));
-      // MAX button is now silent for better UX
+      setIsMaxUsed(true); // Mark MAX as used
+      // Clear position validation error when amount changes
+      if (validationErrors.position) {
+        setValidationErrors(prev => ({ ...prev, position: undefined }));
+      }
+    }
+  };
+
+  const handleOrderTypeChange = (newOrderType: OrderType) => {
+    soundManager.playSwitch();
+    setOrderType(newOrderType);
+    setShowOrderTypeDropdown(false);
+    
+    // If MAX has been used, recalculate max amount for new order type
+    if (isMaxUsed) {
+      const maxAmount = getMaxPositionSize();
+      if (maxAmount > 0) {
+        setAmount(maxAmount.toFixed(6));
+      }
     }
   };
 
@@ -863,11 +881,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
                   {orderTypes.map((type) => (
                     <button
                       key={type}
-                      onClick={() => {
-                        soundManager.playSwitch();
-                        setOrderType(type);
-                        setShowOrderTypeDropdown(false);
-                      }}
+                      onClick={() => handleOrderTypeChange(type)}
                       onMouseEnter={() => {}}
                       className="w-full px-4 py-4 text-left text-lg text-white hover:bg-gray-800 transition-colors first:rounded-t-xl last:rounded-b-xl"
                     >
@@ -923,11 +937,17 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
               <button
                 onClick={handleMaxClick}
                 onMouseEnter={() => {}}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg transition-colors font-bold"
+                className={`absolute right-2 top-1/2 transform -translate-y-1/2 text-white text-sm px-3 py-2 rounded-lg transition-colors font-bold ${
+                  isMaxUsed 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                MAX
+                {isMaxUsed ? 'MAX ON' : 'MAX'}
               </button>
             </div>
+            
+
 
             {/* Leverage Slider - Much larger */}
             <div>

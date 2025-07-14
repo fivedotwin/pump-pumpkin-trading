@@ -12,10 +12,10 @@ CREATE TABLE IF NOT EXISTS trading_positions (
   leverage INTEGER NOT NULL CHECK (leverage >= 2 AND leverage <= 100),
   collateral_sol DECIMAL(20, 10) NOT NULL,
   position_value_usd DECIMAL(20, 2) NOT NULL,
-  -- HIDDEN: Trading fee tracking (not exposed to users)
-  trading_fee_usd DECIMAL(20, 2),
-  trading_fee_sol DECIMAL(20, 10),
-  trading_fee_percentage DECIMAL(10, 6),
+  -- REMOVED: Trading fee fields no longer needed
+  -- trading_fee_usd DECIMAL(20, 2),
+  -- trading_fee_sol DECIMAL(20, 10),
+  -- trading_fee_percentage DECIMAL(10, 6),
   stop_loss DECIMAL(20, 10),
   take_profit DECIMAL(20, 10),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'open', 'closed', 'liquidated', 'cancelled')),
@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS trading_positions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   closed_at TIMESTAMP WITH TIME ZONE,
   close_price DECIMAL(20, 10),
-  close_reason TEXT
+  close_reason TEXT,
+  trade_results TEXT -- JSON string containing detailed trade results for frontend
 );
 
 -- Create indexes for better performance
