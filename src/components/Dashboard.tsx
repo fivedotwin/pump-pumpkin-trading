@@ -2140,7 +2140,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="flex justify-between">
                     <span>Position P&L:</span>
                     <span className={`${portfolioData.positionPnL >= 0 ? 'text-green-400' : 'text-red-400'} font-bold`}>
-                      {portfolioData.positionPnL >= 0 ? '+' : ''}{formatCurrency(portfolioData.positionPnL)}
+                      {''}{formatCurrency(portfolioData.positionPnL)}
                     </span>
                   </div>
                   {portfolioData.tradingBalance > 0 && (

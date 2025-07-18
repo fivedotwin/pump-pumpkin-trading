@@ -68,11 +68,6 @@ export default function LivePrice({
     >
       {typeof price === 'string' ? price : formatPrice(numericPrice)}
       {symbol && ` ${symbol}`}
-      {showChange && previousPrice && (
-        <span className={`ml-1 text-xs ${priceDirection === 'up' ? 'text-green-400' : priceDirection === 'down' ? 'text-red-400' : 'text-gray-400'}`}>
-          {priceDirection === 'up' ? '+' : priceDirection === 'down' ? '-' : ''}
-        </span>
-      )}
     </span>
   );
 } 
