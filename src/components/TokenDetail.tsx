@@ -5,11 +5,12 @@ import { fetchTokenDetailCached, TokenDetailData, formatPrice, initializeBusines
 import businessPlanPriceService from '../services/businessPlanPriceService';
 import TradingModal from './TradingModal';
 import LivePrice from './LivePrice';
-import EnhancedTokenChart from './EnhancedTokenChart';
+import LiveLineChart from './LiveLineChart';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { formatCurrency, formatNumber, formatTokenAmount, formatTimeAgo } from '../utils/formatters';
 import { userProfileService } from '../services/supabaseClient';
 import { hapticFeedback } from '../utils/animations';
+import { positionService, TradingPosition } from '../services/positionService';
 
 interface TokenDetailProps {
   tokenAddress: string;
@@ -48,6 +49,12 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     type: 'success'
   });
   
+  // Position management state
+  const [tokenPositions, setTokenPositions] = useState<TradingPosition[]>([]);
+  const [isLoadingPositions, setIsLoadingPositions] = useState(false);
+  const [isClosingPosition, setIsClosingPosition] = useState(false);
+  const [closingPositionId, setClosingPositionId] = useState<number | null>(null);
+  
   // Initialize business plan optimizations on component mount
   useEffect(() => {
     initializeBusinessPlanOptimizations();
@@ -56,6 +63,13 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   useEffect(() => {
     loadTokenData();
   }, [tokenAddress]);
+
+  // Load positions when component mounts or token/wallet changes
+  useEffect(() => {
+    if (walletAddress && tokenAddress) {
+      loadTokenPositions();
+    }
+  }, [walletAddress, tokenAddress]);
 
   // 🎯 PERFECT PRICE UPDATES: This is exactly what the user wanted - ultra-fast 20Hz business plan updates
   // ✅ CONFIRMED WORKING PERFECTLY: Real-time price movements like professional trading platforms  
@@ -117,7 +131,58 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
     }
   };
 
+  // Load positions for the current token
+  const loadTokenPositions = async () => {
+    if (!walletAddress || !tokenAddress) return;
+    
+    setIsLoadingPositions(true);
+    try {
+      console.log(`🔍 Loading positions for token: ${tokenAddress.slice(0, 8)}...`);
+      
+      // Get all user positions and filter for current token
+      const allPositions = await positionService.getUserPositions(walletAddress);
+      const currentTokenPositions = allPositions.filter(position => 
+        position.token_address === tokenAddress && 
+        (position.status === 'open' || position.status === 'opening')
+      );
+      
+      console.log(`📊 Found ${currentTokenPositions.length} positions for current token`);
+      setTokenPositions(currentTokenPositions);
+    } catch (error) {
+      console.error('❌ Error loading token positions:', error);
+      setTokenPositions([]);
+    } finally {
+      setIsLoadingPositions(false);
+    }
+  };
 
+  // Close position function
+  const handleClosePosition = async (positionId: number) => {
+    if (!positionId) return;
+    
+    setIsClosingPosition(true);
+    setClosingPositionId(positionId);
+    
+    try {
+      console.log(`🔄 Closing position ${positionId}...`);
+      await positionService.closePosition(positionId, 'manual');
+      
+      // Reload positions after closing
+      await loadTokenPositions();
+      
+      // Navigate to positions tab to see results
+      if (onNavigateToPositions) {
+        onNavigateToPositions();
+      }
+      
+      console.log('✅ Position closed successfully');
+    } catch (error) {
+      console.error('❌ Error closing position:', error);
+    } finally {
+      setIsClosingPosition(false);
+      setClosingPositionId(null);
+    }
+  };
 
   const showShareNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setShareNotification({ show: true, message, type });
@@ -385,34 +450,157 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           </span>
         </div>
 
-        {/* Enhanced Real-Time Chart with Professional Trading Price Feed */}
+        {/* Live Line Chart with 20Hz Real-Time Price Updates */}
         <div className="mb-6">
-          <EnhancedTokenChart
-            key={`chart-${tokenAddress}`} // Stable key - no refresh on price changes
+          <LiveLineChart
             tokenAddress={tokenAddress}
             tokenSymbol={tokenData.symbol}
-            priceChangePercent={tokenData.priceChange24h}
-            height={300}
-            className="transition-all duration-200 ease-in-out" // Smooth dynamic updates
-            // Chart handles its own OHLCV data - TokenDetail handles price updates separately with business plan service
+            height={200}
+            className="transition-all duration-200 ease-in-out"
+            // Chart uses same 20Hz business plan service for ultra-fast live updates
           />
 
         </div>
 
+        {/* Token Positions Section - Show user's positions for this token */}
+        {walletAddress && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-normal text-white">Your Positions</h3>
+              {isLoadingPositions && (
+                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+              )}
+            </div>
+            
+            {tokenPositions.length > 0 ? (
+              <div className="space-y-3">
+                {tokenPositions.map((position) => (
+                  <div key={position.id} className="bg-gray-900 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          position.direction === 'Long' 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {position.direction}
+                        </span>
+                        <span className="text-gray-400 text-sm">{position.leverage}x</span>
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        (position.current_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {(position.current_pnl || 0) >= 0 ? '+' : ''}${(position.current_pnl || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                      <div>
+                        <span className="text-gray-400">Entry Price:</span>
+                        <div className="text-white">${position.entry_price.toFixed(6)}</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Current Price:</span>
+                        <div className="text-white">${(position.current_price || position.entry_price).toFixed(6)}</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Position Size:</span>
+                        <div className="text-white">${position.position_value_usd.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Collateral:</span>
+                        <div className="text-white">{position.collateral_sol.toFixed(4)} SOL</div>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => handleClosePosition(position.id)}
+                      disabled={isClosingPosition && closingPositionId === position.id}
+                      className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
+                    >
+                      {isClosingPosition && closingPositionId === position.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Closing...</span>
+                        </>
+                      ) : (
+                        <span>Close Position</span>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-900 rounded-lg p-4 text-center">
+                <div className="text-gray-400 text-sm mb-2">No active positions for this token</div>
+                <div className="text-gray-500 text-xs">Open a position below to start trading</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SOL Deposit Warning - Show when user has no SOL balance */}
+        {userSOLBalance === 0 && (
+          <div className="mb-6 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-lg p-4">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-black" />
+              </div>
+              <div>
+                <h4 className="text-yellow-400 font-medium">Deposit Required</h4>
+                <p className="text-yellow-300 text-sm">You need SOL to start trading</p>
+              </div>
+            </div>
+            
+            <div className="bg-black/20 rounded-lg p-3 mb-3">
+              <p className="text-gray-200 text-sm leading-relaxed">
+                To trade on this platform, you need to deposit SOL first. Your SOL is used as collateral for leveraged positions and covers trading fees.
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
+                <span>Current Balance:</span>
+                <span className="font-mono text-yellow-400">0.0000 SOL</span>
+              </div>
+              <button 
+                onClick={() => {
+                  // Navigate to home/deposit section
+                  onBack(); // This will take them back to dashboard where they can deposit
+                }}
+                className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+              >
+                Deposit SOL
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Trade Button - Properly sized for mobile */}
         <button
-          onClick={handleOpenTradingModal}
-          className="w-full text-black font-bold py-4 px-6 rounded-lg text-lg transition-colors flex items-center justify-center space-x-2 mb-6 min-h-[56px]"
-          style={{ backgroundColor: '#1e7cfa' }}
+          onClick={userSOLBalance > 0 ? handleOpenTradingModal : () => {
+            // Show deposit reminder if no SOL
+            onBack(); // Take them back to dashboard to deposit
+          }}
+          className={`w-full font-bold py-4 px-6 rounded-lg text-lg transition-colors flex items-center justify-center space-x-2 mb-6 min-h-[56px] ${
+            userSOLBalance > 0 
+              ? 'text-black hover:opacity-90' 
+              : 'text-yellow-900 bg-yellow-500/30 border border-yellow-500/50 cursor-pointer hover:bg-yellow-500/40'
+          }`}
+          style={userSOLBalance > 0 ? { backgroundColor: '#1e7cfa' } : {}}
           onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+            if (userSOLBalance > 0) {
+              (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+            }
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+            if (userSOLBalance > 0) {
+              (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+            }
           }}
         >
-          <span className="text-lg">$</span>
-          <span>Trade</span>
+          <span className="text-lg">{userSOLBalance > 0 ? '$' : '⚠️'}</span>
+          <span>{userSOLBalance > 0 ? 'Trade' : 'Deposit SOL to Trade'}</span>
         </button>
 
 
