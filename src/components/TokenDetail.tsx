@@ -34,8 +34,6 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   const [error, setError] = useState<string | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [previousPrice, setPreviousPrice] = useState<number>(0);
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
-  const [updateCount, setUpdateCount] = useState<number>(0);
   
   // Share notification state
   const [shareNotification, setShareNotification] = useState<{
@@ -69,10 +67,6 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           const timestamp = Date.now();
           console.log(`⚡ INSTANT: ${tokenData.symbol} price: $${newPrice.toFixed(8)} at ${timestamp}`);
           
-          // Track update frequency
-          setLastUpdateTime(timestamp);
-          setUpdateCount(prev => prev + 1);
-          
           // Store previous price for smooth visual transitions
           setTokenData(prev => {
             if (prev) {
@@ -96,10 +90,6 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           if (latestPrice && latestPrice !== tokenData.price) {
             const timestamp = Date.now();
             console.log(`📊 OHLCV price update: ${tokenData.symbol} = $${latestPrice.toFixed(8)} at ${timestamp}`);
-            
-            // Track update frequency
-            setLastUpdateTime(timestamp);
-            setUpdateCount(prev => prev + 1);
             
             setTokenData(prev => {
               if (prev) {
@@ -391,7 +381,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           {formatTokenSymbol(tokenData.symbol)}
         </p>
 
-        {/* Price - Smart responsive sizing with live indicator */}
+        {/* Price - Smart responsive sizing */}
         <div className="flex flex-col items-center space-y-2 mb-4 px-4">
           <div className="flex items-center space-x-2">
             <LivePrice 
@@ -402,30 +392,8 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
               }`}
               showChange={true}
             />
-            <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-400 text-xs font-medium">WEBSOCKET</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
-              <span className="text-blue-400 text-xs">PUSH ONLY</span>
-            </div>
           </div>
-          
-          {/* Update Frequency Indicator */}
-          {updateCount > 0 && (
-            <div className="text-center">
-              <span className="text-gray-500 text-xs">
-                {updateCount} updates • Last: {lastUpdateTime > 0 ? 
-                  new Date(lastUpdateTime).toLocaleTimeString('en-US', { 
-                    hour12: false, 
-                    hour: '2-digit', 
-                    minute: '2-digit', 
-                    second: '2-digit' 
-                  }) : 'Never'}
-              </span>
-            </div>
-          )}
+
         </div>
 
         {/* Price Change - Responsive formatting */}
