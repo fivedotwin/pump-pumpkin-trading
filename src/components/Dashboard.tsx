@@ -3212,9 +3212,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Enhanced Mobile Header */}
       <div className="sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-md border-b border-gray-800/50">
-        <div className="flex items-center justify-center md:justify-between p-4">
+        <div className="relative flex items-center justify-between p-4">
           {/* Left Side - Settings with Quick Access - Hidden on mobile, shown on desktop */}
-          <div className="relative hidden md:block">
+          <div className="relative">
+            {/* Invisible spacer for mobile to maintain layout */}
+            <div className="md:hidden w-8 h-8"></div>
+            {/* Settings button for desktop */}
+            <div className="hidden md:block">
             <button 
               onClick={() => {
                 setShowSettings(!showSettings);
@@ -3339,10 +3343,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </div>
                </>
              )}
+            </div>
           </div>
           
-          {/* Center - App Logo/Title */}
-          <div className="flex items-center space-x-2">
+          {/* Center - App Logo/Title - Absolutely centered */}
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center space-x-2">
             <div className="w-6 h-6 md:w-8 md:h-8">
               <img 
                 src="https://i.imgur.com/fWVz5td.png" 
@@ -3354,18 +3359,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           </div>
           
           {/* Right Side - Wallet Info - Hidden on mobile, shown on desktop */}
-          <button 
-            onClick={() => {
-              handleCopyAddress();
-            }}
-            className="hidden md:flex items-center space-x-2 bg-gray-800/50 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50"
-          >
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium">
-              {formatWalletAddress(walletAddress)}
-            </span>
-            <Copy className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            {/* Invisible spacer for mobile to maintain layout balance */}
+            <div className="md:hidden w-8 h-8"></div>
+            {/* Wallet button for desktop */}
+            <button 
+              onClick={() => {
+                handleCopyAddress();
+              }}
+              className="hidden md:flex items-center space-x-2 bg-gray-800/50 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50"
+            >
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm font-medium">
+                {formatWalletAddress(walletAddress)}
+              </span>
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
