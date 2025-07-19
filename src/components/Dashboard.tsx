@@ -171,6 +171,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [showUnlockTooltip, setShowUnlockTooltip] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
+  // State to trigger re-render for withdrawal time updates
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
   // Track positions being closed to prevent duplicates
   const [closingPositions, setClosingPositions] = useState<Set<number>>(new Set());
   
@@ -326,6 +329,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const interval = setInterval(updateCountdown, 60000); // Update every minute
     return () => clearInterval(interval);
   }, [activePPALocks]);
+
+  // Update current time every minute for withdrawal time calculations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
   const loadTrendingTokens = async () => {
     setIsLoadingTokens(true);
@@ -490,6 +501,52 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       setShowUnlockModal(true);
       soundManager.playTabSwitch();
     }
+  };
+
+  // Get withdrawal approval time based on Israel business hours
+  const getWithdrawalApprovalTime = () => {
+    // Use currentTime state to ensure re-renders when time updates
+    const now = currentTime;
+    
+    // Get current time in Israel timezone (Asia/Jerusalem handles DST automatically)
+    const israelTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jerusalem',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(now);
+    
+    const [hours] = israelTime.split(':').map(Number);
+    
+    // Business hours: 10:00 to 22:00 Israel time = 30 minutes
+    // After hours: 22:00 to 10:00 Israel time = up to 10 hours
+    if (hours >= 10 && hours < 22) {
+      return "30 minutes";
+    } else {
+      return "10 hours";
+    }
+  };
+
+  // Get current Israel time and business hours status for display
+  const getIsraelTimeStatus = () => {
+    // Use currentTime state to ensure re-renders when time updates
+    const now = currentTime;
+    
+    const israelTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jerusalem',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(now);
+    
+    const [hours] = israelTime.split(':').map(Number);
+    const isBusinessHours = hours >= 10 && hours < 22;
+    
+    return {
+      time: israelTime,
+      isBusinessHours,
+      status: isBusinessHours ? 'Business Hours' : 'After Hours'
+    };
   };
 
   // Calculate unlock tooltip text
@@ -1464,7 +1521,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         onUpdateSOLBalance(newSOLBalance);
         
         // Show success message
-        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. Withdrawal is being processed this typically takes up to 30 minutes.`);
+        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. Withdrawal is being processed this typically takes up to ${getWithdrawalApprovalTime()}.`);
         
         // Reload withdrawal requests to show the new one
         loadWithdrawalRequests();
@@ -3557,7 +3614,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-400 text-base mb-2">Request SOL Withdrawal</p>
             
             <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-6">Minimum withdrawal: 0.04 SOL</p>
+            <p className="text-gray-500 text-sm mb-3">Minimum withdrawal: 0.04 SOL</p>
+
+            {/* Israel Time Status */}
+            <div className={`mb-4 p-2 rounded-lg border text-xs ${
+              getIsraelTimeStatus().isBusinessHours 
+                ? 'bg-green-900 border-green-700 text-green-300' 
+                : 'bg-orange-900 border-orange-700 text-orange-300'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span>Israel Time: {getIsraelTimeStatus().time}</span>
+                <span>{getIsraelTimeStatus().status}</span>
+              </div>
+              <p className="text-center mt-1">
+                Approval Time: {getWithdrawalApprovalTime()}
+              </p>
+            </div>
 
             {/* Error Message */}
             {withdrawError && (
@@ -3669,7 +3741,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             </div>
 
             <p className="text-gray-600 text-xs mb-2">
-              Withdrawal Request Will Be Reviewed by Admin
+              Withdrawal approval can take up to {getWithdrawalApprovalTime()}
             </p>
             <p className="text-gray-500 text-xs">
               SOL will be sent to your wallet after approval
