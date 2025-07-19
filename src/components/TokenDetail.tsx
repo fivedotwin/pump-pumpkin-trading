@@ -4,10 +4,10 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { formatCurrency, formatNumber, formatTokenAmount, formatTimeAgo } from '../utils/formatters';
 import { formatTokenName, formatTokenSymbol, formatDescription, getSmartPriceTextClass } from '../utils/textHelpers';
 import { fetchTokenDetailCached, TokenDetailData, formatPrice } from '../services/birdeyeApi';
+import { jupiterWebSocket } from '../services/birdeyeWebSocket';
 import TradingModal from './TradingModal';
 import LivePrice from './LivePrice';
 import EnhancedTokenChart from './EnhancedTokenChart';
-import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import { userProfileService } from '../services/supabaseClient';
 import { hapticFeedback } from '../utils/animations';
 
@@ -34,6 +34,8 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   const [error, setError] = useState<string | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [previousPrice, setPreviousPrice] = useState<number>(0);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
+  const [updateCount, setUpdateCount] = useState<number>(0);
   
   // Share notification state
   const [shareNotification, setShareNotification] = useState<{
@@ -51,6 +53,77 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
   useEffect(() => {
     loadTokenData();
   }, [tokenAddress]);
+
+  // PURE WebSocket price updates ONLY - Maximum speed, no fallbacks
+  useEffect(() => {
+    if (!tokenData) return;
+
+    console.log(`🚀 PURE WEBSOCKET: Starting continuous real-time price feed for ${tokenData.symbol}`);
+    console.log(`⚡ PUSH ONLY: No REST API fallbacks - WebSocket push updates only`);
+    
+          // Subscribe to WebSocket price updates with maximum frequency
+      const unsubscribePrice = jupiterWebSocket.subscribeToToken(
+        tokenAddress,
+        (address: string, newPrice: number) => {
+          // Immediate price update - no delays, no throttling
+          const timestamp = Date.now();
+          console.log(`⚡ INSTANT: ${tokenData.symbol} price: $${newPrice.toFixed(8)} at ${timestamp}`);
+          
+          // Track update frequency
+          setLastUpdateTime(timestamp);
+          setUpdateCount(prev => prev + 1);
+          
+          // Store previous price for smooth visual transitions
+          setTokenData(prev => {
+            if (prev) {
+              setPreviousPrice(prev.price);
+              return {
+                ...prev,
+                price: newPrice
+              };
+            }
+            return prev;
+          });
+        }
+      );
+
+          // Also subscribe to OHLCV updates for even more granular data
+      const unsubscribeChart = jupiterWebSocket.subscribeToChart(
+        tokenAddress,
+        (address: string, ohlcv: any) => {
+          // Use the latest close price from OHLCV for maximum accuracy
+          const latestPrice = ohlcv.close || ohlcv.c;
+          if (latestPrice && latestPrice !== tokenData.price) {
+            const timestamp = Date.now();
+            console.log(`📊 OHLCV price update: ${tokenData.symbol} = $${latestPrice.toFixed(8)} at ${timestamp}`);
+            
+            // Track update frequency
+            setLastUpdateTime(timestamp);
+            setUpdateCount(prev => prev + 1);
+            
+            setTokenData(prev => {
+              if (prev) {
+                setPreviousPrice(prev.price);
+                return {
+                  ...prev,
+                  price: latestPrice
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      );
+
+    // Log subscription status
+    console.log(`✅ SUBSCRIBED: ${tokenData.symbol} to WebSocket price + OHLCV feeds`);
+
+    return () => {
+      console.log(`🔌 UNSUBSCRIBING: ${tokenData.symbol} from all WebSocket feeds`);
+      unsubscribePrice();
+      unsubscribeChart();
+    };
+  }, [tokenAddress, tokenData?.symbol]);
 
 
 
@@ -331,9 +404,28 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
             />
             <div className="flex items-center space-x-1">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-400 text-xs font-medium">LIVE</span>
+              <span className="text-green-400 text-xs font-medium">WEBSOCKET</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+              <span className="text-blue-400 text-xs">PUSH ONLY</span>
             </div>
           </div>
+          
+          {/* Update Frequency Indicator */}
+          {updateCount > 0 && (
+            <div className="text-center">
+              <span className="text-gray-500 text-xs">
+                {updateCount} updates • Last: {lastUpdateTime > 0 ? 
+                  new Date(lastUpdateTime).toLocaleTimeString('en-US', { 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                  }) : 'Never'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Price Change - Responsive formatting */}
@@ -360,16 +452,7 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
             tokenSymbol={tokenData.symbol}
             priceChangePercent={tokenData.priceChange24h}
             height={300}
-            onPriceUpdate={(newPrice) => {
-              // Store previous price for visual feedback
-              setPreviousPrice(tokenData.price);
-              
-              // Update token data with new price
-              setTokenData(prev => prev ? {
-                ...prev,
-                price: newPrice
-              } : null);
-            }}
+            onPriceUpdate={undefined} // Price updates handled by parent component WebSocket subscription
           />
 
         </div>

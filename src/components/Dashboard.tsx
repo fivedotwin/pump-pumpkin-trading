@@ -4142,6 +4142,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <WelcomePopup
         isOpen={showWelcomePopup}
         onClose={handleWelcomeClose}
+        onOpenDeposit={() => setShowDepositModal(true)}
       />
 
     </div>

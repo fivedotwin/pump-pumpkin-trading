@@ -4,9 +4,10 @@ import { X, Zap } from 'lucide-react';
 interface WelcomePopupProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenDeposit: () => void;
 }
 
-export default function WelcomePopup({ isOpen, onClose }: WelcomePopupProps) {
+export default function WelcomePopup({ isOpen, onClose, onOpenDeposit }: WelcomePopupProps) {
   if (!isOpen) return null;
 
   return (
@@ -41,20 +42,34 @@ export default function WelcomePopup({ isOpen, onClose }: WelcomePopupProps) {
             </p>
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={onClose}
-            className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition-colors"
-            style={{ backgroundColor: '#1e7cfa' }}
-            onMouseEnter={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
-            }}
-          >
-            Got it, let's start!
-          </button>
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            {/* Primary Action - Deposit */}
+            <button
+              onClick={() => {
+                onOpenDeposit();
+                onClose();
+              }}
+              className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition-colors"
+              style={{ backgroundColor: '#1e7cfa' }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+              }}
+            >
+              Deposit to Start Trading
+            </button>
+            
+            {/* Secondary Action - Skip */}
+            <button
+              onClick={onClose}
+              className="w-full py-2 px-4 bg-gray-700 text-gray-300 font-medium rounded-lg hover:bg-gray-600 hover:text-white transition-colors"
+            >
+              Skip for now
+            </button>
+          </div>
         </div>
       </div>
     </div>
