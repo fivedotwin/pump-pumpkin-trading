@@ -2278,7 +2278,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <div className="grid grid-cols-4 gap-2 mb-4">
                 <div className="text-center">
                   <p className="text-sm font-bold text-white">{formatTokenAmount(userBalances.ppa)}</p>
-                  <p className="text-gray-500 text-xs">PPA Owned</p>
+                  <p className="text-gray-500 text-xs">PPA IN Wallet</p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-bold text-white">
