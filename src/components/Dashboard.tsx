@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History } from 'lucide-react';
+import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity } from '../services/birdeyeApi';
+import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
 import { jupiterSwapService, SwapDirection } from '../services/jupiterApi';
 import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
-import { userProfileService, WithdrawalRequest, supabase } from '../services/supabaseClient';
+import { userProfileService, WithdrawalRequest, supabase, ppaLocksService, PPALock } from '../services/supabaseClient';
 import TokenDetail from './TokenDetail';
 import EditProfile from './EditProfile';
 import { positionService, TradingPosition } from '../services/positionService';
@@ -14,6 +14,8 @@ import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket
 import { simplifiedPriceService } from '../services/simplifiedPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
+import LockingModal from './LockingModal';
+import UnlockModal from './UnlockModal';
 import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
 
@@ -136,6 +138,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [userBalances, setUserBalances] = useState({ sol: 0, ppa: 0 });
   const [exchangeRate, setExchangeRate] = useState<string | null>(null);
   
+  // Real PPA price in SOL from Birdeye
+  const [realPPAPriceInSOL, setRealPPAPriceInSOL] = useState<number>(0.0001);
+  
+  // Lifetime PPA Lock Earnings
+  const [lifetimeSOLEarnings, setLifetimeSOLEarnings] = useState<number>(0);
+  const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
+  
+  // Active PPA Locks
+  const [activePPALocks, setActivePPALocks] = useState<PPALock[]>([]);
+  const [totalPPALocked, setTotalPPALocked] = useState<number>(0);
+  const [latestLockCountdown, setLatestLockCountdown] = useState<string>('');
+  
   // SOL price state for portfolio calculations
   const [solPrice, setSolPrice] = useState<number>(98.45); // Default fallback price
   
@@ -147,6 +161,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [showPositionModal, setShowPositionModal] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<TradingPosition | null>(null);
   const [isClosingPosition, setIsClosingPosition] = useState(false);
+
+  // Locking modal state
+  const [showLockingModal, setShowLockingModal] = useState(false);
+  
+  // Unlock modal state
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [expiredLock, setExpiredLock] = useState<PPALock | null>(null);
+  const [showUnlockTooltip, setShowUnlockTooltip] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
   // Track positions being closed to prevent duplicates
   const [closingPositions, setClosingPositions] = useState<Set<number>>(new Set());
@@ -196,6 +219,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     loadTrendingTokens();
     loadPPAPrice();
     loadSOLPrice();
+    loadRealPPAPriceInSOL(); // Load real PPA price in SOL
     if (publicKey) {
       loadUserBalances();
     }
@@ -288,6 +312,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [activeTab]);
 
+  // Load lifetime earnings when rewards tab is selected
+  useEffect(() => {
+    if (activeTab === 'rewards') {
+      loadLifetimeEarnings();
+      loadActivePPALocks();
+    }
+  }, [activeTab, walletAddress]);
+
+  // Update countdown every minute and when active locks change
+  useEffect(() => {
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [activePPALocks]);
+
   const loadTrendingTokens = async () => {
     setIsLoadingTokens(true);
     try {
@@ -312,6 +351,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       console.log('PPA Price loaded:', price);
     } catch (error) {
       console.error('Failed to load PPA price:', error);
+    }
+  };
+
+  // Load real PPA price in SOL from Birdeye
+  const loadRealPPAPriceInSOL = async () => {
+    try {
+      const priceInSOL = await fetchPPAPriceInSOL();
+      setRealPPAPriceInSOL(priceInSOL);
+      console.log('Real PPA Price in SOL loaded:', `${priceInSOL.toFixed(6)} SOL`);
+    } catch (error) {
+      console.error('Failed to load real PPA price in SOL:', error);
+      setRealPPAPriceInSOL(0.0001); // Fallback
     }
   };
 
@@ -350,6 +401,132 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       }
     } catch (error) {
       console.error('Failed to refresh SOL balance:', error);
+    }
+  };
+
+  // Load lifetime SOL earnings from PPA locks
+  const loadLifetimeEarnings = async () => {
+    if (!walletAddress) return;
+    
+    setIsLoadingEarnings(true);
+    try {
+      console.log('💰 Loading lifetime PPA lock earnings...');
+      const totalSOLEarned = await ppaLocksService.getLifetimeEarnings(walletAddress);
+      setLifetimeSOLEarnings(totalSOLEarned);
+      console.log(`✅ Lifetime earnings loaded: ${totalSOLEarned} SOL`);
+    } catch (error) {
+      console.error('Failed to load lifetime earnings:', error);
+      setLifetimeSOLEarnings(0);
+    } finally {
+      setIsLoadingEarnings(false);
+    }
+  };
+
+  // Load active PPA locks and calculate totals
+  const loadActivePPALocks = async () => {
+    if (!walletAddress) return;
+    
+    try {
+      console.log('Loading active PPA locks...');
+      const locks = await ppaLocksService.getActiveLocksByWallet(walletAddress);
+      setActivePPALocks(locks);
+      
+      // Calculate total PPA locked
+      const totalLocked = locks.reduce((total, lock) => total + (lock.ppa_amount || 0), 0);
+      setTotalPPALocked(totalLocked);
+      
+      console.log(`Active locks loaded: ${locks.length} locks, ${totalLocked} PPA locked`);
+    } catch (error) {
+      console.error('Failed to load active PPA locks:', error);
+      setActivePPALocks([]);
+      setTotalPPALocked(0);
+    }
+  };
+
+  // Calculate countdown for latest lock
+  const updateCountdown = () => {
+    if (activePPALocks.length === 0) {
+      setLatestLockCountdown('');
+      setExpiredLock(null);
+      return;
+    }
+
+    // Get the latest lock (most recent)
+    const latestLock = activePPALocks.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+
+    if (!latestLock.unlocks_at) {
+      setLatestLockCountdown('');
+      setExpiredLock(null);
+      return;
+    }
+
+    const now = new Date().getTime();
+    const unlockTime = new Date(latestLock.unlocks_at).getTime();
+    const timeLeft = unlockTime - now;
+
+    if (timeLeft <= 0) {
+      setLatestLockCountdown('Ready to unlock');
+      setExpiredLock(latestLock);
+      return;
+    }
+
+    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    setExpiredLock(null);
+    if (days > 0) {
+      setLatestLockCountdown(`${days} day${days !== 1 ? 's' : ''} ${hours}h remaining`);
+    } else {
+      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      setLatestLockCountdown(`${hours}h ${minutes}m remaining`);
+    }
+  };
+
+  // Handle unlock button click
+  const handleUnlockClick = () => {
+    if (expiredLock) {
+      setShowUnlockModal(true);
+      soundManager.playTabSwitch();
+    }
+  };
+
+  // Calculate unlock tooltip text
+  const getUnlockTooltipText = () => {
+    if (expiredLock) {
+      return "Your PPA tokens are ready to unlock! Click to request unlock.";
+    }
+
+    if (activePPALocks.length === 0) {
+      return "No PPA tokens locked. Lock some tokens first to earn SOL rewards.";
+    }
+
+    // Get the latest lock (most recent)
+    const latestLock = activePPALocks.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+
+    if (!latestLock.unlocks_at) {
+      return "Lock information unavailable.";
+    }
+
+    const now = new Date().getTime();
+    const unlockTime = new Date(latestLock.unlocks_at).getTime();
+    const timeLeft = unlockTime - now;
+
+    if (timeLeft <= 0) {
+      return "Your PPA tokens are ready to unlock!";
+    }
+
+    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) {
+      return `You can press this button to unlock in ${days} day${days !== 1 ? 's' : ''} ${hours}h`;
+    } else {
+      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      return `You can press this button to unlock in ${hours}h ${minutes}m`;
     }
   };
 
@@ -1787,12 +1964,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             loadTrendingTokens(),
             refreshSOLBalance(),
             loadPPAPrice(),
+            loadRealPPAPriceInSOL(),
             loadUserBalances()
           ]);
           break;
         case 'rewards':
           await Promise.all([
             loadPPAPrice(),
+            loadRealPPAPriceInSOL(),
             loadUserBalances(),
             getSwapQuote()
           ]);
@@ -2038,25 +2217,37 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             </h1>
             
             {/* Lifetime Rewards - Smaller */}
-            <p className="text-gray-400 text-xs mb-1">Lifetime Earnings</p>
-            <p className="text-lg font-bold text-white mb-3">$0.00</p>
+            <p className="text-gray-400 text-xs mb-1">Lifetime PPA Lock Earnings</p>
+            {isLoadingEarnings ? (
+              <div className="flex items-center justify-center mb-3">
+                <Loader2 className="w-4 h-4 animate-spin text-white mr-2" />
+                <span className="text-lg font-bold text-white">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-lg font-bold text-white">{lifetimeSOLEarnings.toFixed(4)} SOL</p>
+                <p className="text-gray-400 text-xs mb-3">{formatCurrency(lifetimeSOLEarnings * solPrice)}</p>
+              </>
+            )}
 
             {/* PPA Info - Compact */}
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
-              <h3 className="text-sm font-bold text-white mb-3">Buy PPA And Get Cash When Ever Someone Trades Using The Platform</h3>
+              <h3 className="text-sm font-bold text-white mb-3">Lock Your PPA Tokens And Get SOL To Trade With Immediately</h3>
               <p className="text-gray-400 text-xs mb-3">
-                Purchase PPA tokens to earn passive income from all platform trading activity. No fees on swaps.
+                Lock your PPA tokens for 7-30 days and receive SOL rewards upfront immediately. Start trading with your SOL rewards right away while your PPA earns more over time.
               </p>
               
               {/* PPA Stats - Compact */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-4 gap-2 mb-4">
                 <div className="text-center">
                   <p className="text-sm font-bold text-white">{formatTokenAmount(userBalances.ppa)}</p>
                   <p className="text-gray-500 text-xs">PPA Owned</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-white">$0.00</p>
-                  <p className="text-gray-500 text-xs">Daily Earnings</p>
+                  <p className="text-sm font-bold text-white">
+                    {isLoadingEarnings ? 'Loading...' : formatCurrency(lifetimeSOLEarnings * solPrice)}
+                  </p>
+                  <p className="text-gray-500 text-xs">Lock Earnings</p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-bold text-white">
@@ -2064,10 +2255,34 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   </p>
                   <p className="text-gray-500 text-xs">PPA/SOL</p>
                 </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">{formatTokenAmount(totalPPALocked)}</p>
+                  <p className="text-gray-500 text-xs">PPA Locked</p>
+                </div>
               </div>
 
+              {/* Lock Countdown - Wide across the card */}
+              {latestLockCountdown && (
+                <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 mb-4">
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs mb-1">Latest Lock Status</p>
+                    <p className="text-white font-bold text-sm">{latestLockCountdown}</p>
+                    {expiredLock && (
+                      <button
+                        onClick={handleUnlockClick}
+
+                        className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-500 transition-colors text-sm flex items-center justify-center space-x-2 mx-auto"
+                      >
+                        <Unlock className="w-4 h-4" />
+                        <span>Request Unlock</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons - Compact */}
-              <div className="space-y-2">
+              <div className="space-y-2 relative" style={{ overflow: 'visible' }}>
                 <button
                   onClick={() => {
                     handleBuyPPA();
@@ -2085,9 +2300,66 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   Buy PPA Tokens
                 </button>
                 
+                {/* Earn SOL Button */}
+                <button
+                  onClick={() => {
+                    setShowLockingModal(true);
+                    hapticFeedback.medium();
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+                  }}
+                  className="btn-premium w-full text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
+                  style={{ backgroundColor: '#1e7cfa' }}
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Earn SOL</span>
+                </button>
+
+                {/* Unlock Button with Tooltip */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      if (expiredLock) {
+                        setShowUnlockModal(true);
+                        hapticFeedback.medium();
+                      }
+                    }}
+                    disabled={!expiredLock}
+                    onMouseEnter={(e) => {
+                      if (!expiredLock) return;
+                      (e.target as HTMLElement).style.backgroundColor = '#16a34a';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!expiredLock) return;
+                      (e.target as HTMLElement).style.backgroundColor = '#22c55e';
+                    }}
+                    className="btn-premium w-full text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ 
+                      backgroundColor: expiredLock ? '#22c55e' : '#6b7280',
+                      color: 'white'
+                    }}
+                  >
+                    <Unlock className="w-4 h-4" />
+                    <span>{expiredLock ? 'Unlock PPA' : 'No Unlocks Available'}</span>
+                  </button>
+
+                  {/* Unlock Info Text Below Button */}
+                  <div className="mt-2 text-center">
+                    <p className="text-gray-400 text-xs">
+                      {getUnlockTooltipText()}
+                    </p>
+                  </div>
+
+                </div>
 
               </div>
             </div>
+
+
           </div>
         );
       
@@ -3727,6 +3999,39 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }}
         tradeData={tradeResultsData}
       />
+
+      {/* Locking Modal */}
+      <LockingModal
+        isOpen={showLockingModal}
+        onClose={() => setShowLockingModal(false)}
+        userPPABalance={userBalances.ppa}
+        ppaPrice={realPPAPriceInSOL}
+        onUpdateSOLBalance={(newBalance: number) => {
+          setCurrentSOLBalance(newBalance);
+          onUpdateSOLBalance(newBalance); // Update database through parent callback
+        }}
+        onLockPPA={async (amount: number, lockPeriod: number) => {
+          // This callback is now handled internally by the LockingModal
+          console.log(`Lock initiated: ${amount} PPA for ${lockPeriod} days`);
+          // Refresh lifetime earnings and active locks after successful lock
+          loadLifetimeEarnings();
+          loadActivePPALocks();
+        }}
+      />
+
+      {/* Unlock Modal */}
+      <UnlockModal
+        isOpen={showUnlockModal}
+        onClose={() => setShowUnlockModal(false)}
+        expiredLock={expiredLock}
+        solPrice={solPrice}
+        onUnlockRequested={() => {
+          // Refresh active locks after unlock request
+          loadActivePPALocks();
+        }}
+      />
+
+
 
     </div>
   );

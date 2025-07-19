@@ -249,6 +249,45 @@ export const fetchSOLPrice = async (): Promise<number> => {
   }
 };
 
+// PPA token address
+const PPA_TOKEN_ADDRESS = '51NRTtZ8GwG3J4MGmxTsGJAdLViwu9s5ggEQup35pump';
+
+export const fetchPPAPriceInSOL = async (): Promise<number> => {
+  try {
+    console.log('🟣 Fetching PPA price in SOL from Birdeye...');
+    
+    // Fetch both PPA price (in USD) and SOL price (in USD) concurrently
+    const [ppaResponse, solPrice] = await Promise.all([
+      birdeyeApi.get('/defi/price', {
+        params: {
+          address: PPA_TOKEN_ADDRESS,
+        },
+        timeout: 10000,
+      }),
+      fetchSOLPrice()
+    ]);
+    
+    if (ppaResponse.data?.success && ppaResponse.data?.data?.value) {
+      const ppaPriceUSD = parseFloat(ppaResponse.data.data.value);
+      const ppaPriceInSOL = ppaPriceUSD / solPrice;
+      
+      console.log('✅ PPA price fetched:', {
+        usd: `$${ppaPriceUSD.toFixed(6)}`,
+        sol: `${ppaPriceInSOL.toFixed(6)} SOL`,
+        solPrice: `$${solPrice.toFixed(2)}`
+      });
+      
+      return ppaPriceInSOL;
+    } else {
+      console.warn('⚠️ Invalid PPA price response, using fallback');
+      return 0.0001; // Fallback PPA price in SOL
+    }
+  } catch (error: any) {
+    console.error('💥 Error fetching PPA price:', error.message);
+    return 0.0001; // Fallback PPA price in SOL
+  }
+};
+
 export const fetchTrendingTokens = async (): Promise<TrendingToken[]> => {
   try {
     console.log('🔑 Using API key:', BIRDEYE_API_KEY);

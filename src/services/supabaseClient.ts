@@ -414,3 +414,239 @@ export class UserProfileService {
 
 // Export singleton instance
 export const userProfileService = new UserProfileService();
+
+// PPA Lock interface
+export interface PPALock {
+  id: string;
+  wallet_address: string;
+  ppa_amount: number;
+  lock_days: number;
+  sol_reward: number;
+  ppa_price_sol: number;
+  base_percentage: number;
+  boost_percentage: number;
+  total_percentage: number;
+  locked_at: string;
+  unlocks_at: string;
+  status: 'active' | 'unlocked' | 'cancelled';
+  transaction_hash: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePPALockData {
+  wallet_address: string;
+  ppa_amount: number;
+  lock_days: number;
+  sol_reward: number;
+  ppa_price_sol: number;
+  base_percentage: number;
+  boost_percentage: number;
+  total_percentage: number;
+  transaction_hash: string;
+}
+
+export interface PPAUnlockRequest {
+  id: string;
+  wallet_address: string;
+  lock_id: string;
+  ppa_amount: number;
+  requested_at: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  processed_at?: string;
+  transaction_hash?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePPAUnlockRequestData {
+  wallet_address: string;
+  lock_id: string;
+  ppa_amount: number;
+}
+
+// PPA locks service
+export class PPALocksService {
+  /**
+   * Create a new PPA lock record
+   */
+  async createLock(data: CreatePPALockData): Promise<PPALock | null> {
+    try {
+      console.log('🔒 Creating PPA lock record:', data.wallet_address);
+      
+      // Calculate unlock date
+      const lockedAt = new Date();
+      const unlocksAt = new Date(lockedAt.getTime() + (data.lock_days * 24 * 60 * 60 * 1000));
+      
+      const { data: lock, error } = await supabase
+        .from('ppa_locks')
+        .insert([{
+          wallet_address: data.wallet_address,
+          ppa_amount: data.ppa_amount,
+          lock_days: data.lock_days,
+          sol_reward: data.sol_reward,
+          ppa_price_sol: data.ppa_price_sol,
+          base_percentage: data.base_percentage,
+          boost_percentage: data.boost_percentage,
+          total_percentage: data.total_percentage,
+          locked_at: lockedAt.toISOString(),
+          unlocks_at: unlocksAt.toISOString(),
+          transaction_hash: data.transaction_hash,
+          status: 'active'
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating PPA lock:', error);
+        return null;
+      }
+
+      console.log('✅ PPA lock created successfully:', lock.id);
+      return lock;
+    } catch (error) {
+      console.error('💥 Error in createLock:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get PPA locks for a wallet address
+   */
+  async getLocksByWallet(walletAddress: string): Promise<PPALock[]> {
+    try {
+      console.log('🔍 Fetching PPA locks for:', walletAddress);
+      
+      const { data: locks, error } = await supabase
+        .from('ppa_locks')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching PPA locks:', error);
+        return [];
+      }
+
+      return locks || [];
+    } catch (error) {
+      console.error('💥 Error in getLocksByWallet:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get active PPA locks for a wallet address
+   */
+  async getActiveLocksByWallet(walletAddress: string): Promise<PPALock[]> {
+    try {
+      const { data: locks, error } = await supabase
+        .from('ppa_locks')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching active PPA locks:', error);
+        return [];
+      }
+
+      return locks || [];
+    } catch (error) {
+      console.error('💥 Error in getActiveLocksByWallet:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate lifetime SOL earnings from PPA locks for a wallet
+   */
+  async getLifetimeEarnings(walletAddress: string): Promise<number> {
+    try {
+      console.log('💰 Calculating lifetime PPA lock earnings for:', walletAddress);
+      
+      const { data: locks, error } = await supabase
+        .from('ppa_locks')
+        .select('sol_reward')
+        .eq('wallet_address', walletAddress);
+
+      if (error) {
+        console.error('❌ Error fetching PPA lock earnings:', error);
+        return 0;
+      }
+
+      if (!locks || locks.length === 0) {
+        return 0;
+      }
+
+      // Sum all SOL rewards from all locks
+      const totalSOLEarned = locks.reduce((total, lock) => total + (lock.sol_reward || 0), 0);
+      
+      console.log(`✅ Lifetime PPA lock earnings: ${totalSOLEarned} SOL`);
+      return totalSOLEarned;
+    } catch (error) {
+      console.error('💥 Error in getLifetimeEarnings:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Create an unlock request for an expired PPA lock
+   */
+  async createUnlockRequest(data: CreatePPAUnlockRequestData): Promise<PPAUnlockRequest | null> {
+    try {
+      console.log('🔓 Creating PPA unlock request:', data.lock_id);
+      
+      const { data: unlockRequest, error } = await supabase
+        .from('ppa_unlock_requests')
+        .insert([{
+          wallet_address: data.wallet_address,
+          lock_id: data.lock_id,
+          ppa_amount: data.ppa_amount,
+          requested_at: new Date().toISOString(),
+          status: 'pending'
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating unlock request:', error);
+        return null;
+      }
+
+      console.log('✅ Unlock request created successfully:', unlockRequest.id);
+      return unlockRequest;
+    } catch (error) {
+      console.error('💥 Error in createUnlockRequest:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get unlock requests for a wallet address
+   */
+  async getUnlockRequestsByWallet(walletAddress: string): Promise<PPAUnlockRequest[]> {
+    try {
+      console.log('🔍 Fetching unlock requests for:', walletAddress);
+      
+      const { data: requests, error } = await supabase
+        .from('ppa_unlock_requests')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching unlock requests:', error);
+        return [];
+      }
+
+      return requests || [];
+    } catch (error) {
+      console.error('💥 Error in getUnlockRequestsByWallet:', error);
+      return [];
+    }
+  }
+}
+
+export const ppaLocksService = new PPALocksService();
