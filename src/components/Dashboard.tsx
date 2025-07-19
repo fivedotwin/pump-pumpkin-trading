@@ -11,7 +11,8 @@ import EditProfile from './EditProfile';
 import { positionService, TradingPosition } from '../services/positionService';
 import PositionModal from './PositionModal';
 import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import { simplifiedPriceService } from '../services/simplifiedPriceService';
+import businessPlanPriceService from '../services/businessPlanPriceService';
+import { initializeBusinessPlanOptimizations } from '../services/birdeyeApi';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
 import LockingModal from './LockingModal';
@@ -67,7 +68,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
-  const [previousTokenPrices, setPreviousTokenPrices] = useState<Record<string, number>>({});
   const [previousPortfolioValue, setPreviousPortfolioValue] = useState<number>(0);
   const [isLoadingTokens, setIsLoadingTokens] = useState(true);
   
@@ -232,53 +232,37 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-  // SIMPLIFIED PRICE SERVICE - Clean 3-second updates for everything
+    // HIGH-FREQUENCY PRICE SERVICE - Only for trading positions
   useEffect(() => {
-          console.log('Starting simplified price service (3-second updates)');
+    if (!walletAddress || tradingPositions.length === 0) return;
     
-    const unsubscribe = simplifiedPriceService.subscribe('dashboard', (priceData) => {
-      // Update SOL price
-      setSolPrice(priceData.solPrice);
-      
-      // Update token prices for positions
-      setTokenPrices(priceData.tokenPrices);
-      
-      // Update trending tokens with live prices
-      setTrendingTokens(prevTokens => {
-        // Store previous prices for visual feedback
-        const newPreviousPrices: Record<string, number> = {};
-        prevTokens.forEach(token => {
-          newPreviousPrices[token.address] = token.price;
-        });
-        setPreviousTokenPrices(newPreviousPrices);
-        
-        // Update tokens with new prices
-        return prevTokens.map(token => ({
-          ...token,
-          price: priceData.tokenPrices[token.address] || token.price
-        }));
-      });
-      
-      // Update P&L for all positions using new price data (only if wallet connected)
-      if (walletAddress) {
-        updatePositionPnLFromData(priceData);
-        
-        // Track portfolio value change for visual feedback
-        const currentPortfolioData = calculateTotalPortfolioValue();
-        if (currentPortfolioData.totalValue !== previousPortfolioValue && currentPortfolioData.totalValue > 0) {
-          setPreviousPortfolioValue(currentPortfolioData.totalValue);
-        }
+    // Initialize business plan optimizations
+    initializeBusinessPlanOptimizations();
+    
+    console.log('🚀 BUSINESS PLAN: Setting up ultra-fast 10Hz price service for trading positions');
+    
+    // Only track position tokens for real-time updates (not trending tokens)
+    const positionTokens = tradingPositions.map(p => p.token_address);
+    
+    if (positionTokens.length === 0) return;
+    
+    console.log(`⚡ BUSINESS PLAN: Tracking ${positionTokens.length} position tokens at ultra-fast 10Hz`);
+    
+    // Subscribe to business plan ultra-fast price updates for positions
+    const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (tokenPrices: { [address: string]: number }) => {
+      // Reduced logging for ultra-fast updates (10x per second)
+      if (Math.random() < 0.02) { // Only log ~2% of updates to avoid spam
+        console.log(`📊 BUSINESS PLAN: Ultra-fast update - Position tokens: ${Object.keys(tokenPrices).length}`);
       }
       
-      console.log('Simplified price updates active - SOL:', priceData.solPrice.toFixed(2), 'Tokens:', Object.keys(priceData.tokenPrices).length);
+      // Update token prices cache for P&L calculations
+      setTokenPrices(tokenPrices);
+      
+      // Recalculate P&L for positions with fresh prices
+      if (walletAddress && Object.keys(tokenPrices).length > 0) {
+        updatePositionPnL();
+      }
     });
-
-    // Track tokens for price updates (if we have positions)
-    if (walletAddress && tradingPositions.length > 0) {
-      const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
-      simplifiedPriceService.trackTokens(uniqueTokens);
-      console.log('Tracking tokens for price updates:', uniqueTokens.length);
-    }
     
     return unsubscribe;
   }, [walletAddress, tradingPositions.length]);
@@ -356,17 +340,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   }, [walletAddress]);
 
   const loadTrendingTokens = async () => {
+    console.log('📈 TRENDING: Loading trending tokens via simple REST API call...');
     setIsLoadingTokens(true);
     try {
       const tokens = await fetchTrendingTokens();
+      console.log(`📈 TRENDING: Successfully loaded ${tokens.length} trending tokens from Birdeye API`);
       setTrendingTokens(tokens);
       
-      // Track trending tokens for live price updates
-      const trendingTokenAddresses = tokens.map(t => t.address);
-      simplifiedPriceService.trackTokens(trendingTokenAddresses);
-      console.log('Tracking trending tokens for live price updates:', trendingTokenAddresses.length);
+      // Note: Trending tokens use static prices from the API call (no real-time updates)
+      console.log('✅ TRENDING: Tokens loaded with static prices (regular REST API call only)');
     } catch (error) {
-      console.error('Failed to load trending tokens:', error);
+      console.error('❌ TRENDING: Failed to load trending tokens:', error);
     } finally {
       setIsLoadingTokens(false);
     }
@@ -2878,9 +2862,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                         <div className="text-right">
                           <LivePrice 
                             price={token.price}
-                            previousPrice={previousTokenPrices[token.address]}
+                            previousPrice={undefined}
                             className="text-white text-sm font-bold"
-                            showChange={true}
+                            showChange={false}
                           />
                           <p className={`text-xs font-bold ${
                             token.priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'

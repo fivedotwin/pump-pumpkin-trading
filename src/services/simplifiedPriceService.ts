@@ -17,13 +17,13 @@ class SimplifiedPriceService {
   private currentData: PriceData = { solPrice: 0, tokenPrices: {}, lastUpdate: 0 };
   private updateInterval: NodeJS.Timeout | null = null;
 
-  // Single update frequency - keep it simple
-  private readonly UPDATE_INTERVAL = 3000; // 3 seconds for everything
+  // Fast update frequency for real-time trading
+  private readonly UPDATE_INTERVAL = 1500; // 1.5 seconds for faster updates
 
   start(): void {
     if (this.updateInterval) return;
     
-    console.log('Starting simplified price service (3-second updates)');
+    console.log('Starting simplified price service (1.5-second updates for real-time trading)');
     
     // Initial fetch
     this.updatePrices();

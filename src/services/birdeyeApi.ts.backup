@@ -554,7 +554,8 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       
       const metaResponse = await birdeyeApi.get('/defi/v3/token/meta-data/single', {
         params: { 
-          address: cleanAddress
+          address: cleanAddress,
+          chain: 'solana' // Explicitly specify Solana chain
         },
         timeout: 15000,
       });
@@ -696,7 +697,8 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
         {
           path: '/defi/v3/token/market-data',
           params: { 
-            address: cleanAddress
+            address: cleanAddress,
+            chain: 'solana'
           }
         }
       ];
@@ -743,7 +745,8 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       
       const overviewResponse = await birdeyeApi.get('/defi/token_overview', {
         params: { 
-          address: tokenAddress
+          address: tokenAddress,
+          chain: 'solana'
         },
         timeout: 10000,
       });
@@ -1057,7 +1060,8 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
       
       const metaResponse = await birdeyeApi.get<BirdeyeTokenResponse>('/defi/v3/token/meta-data/single', {
         params: { 
-          address: cleanAddress
+          address: cleanAddress,
+          chain: 'solana'
         },
         timeout: 10000,
       });
@@ -2044,72 +2048,5 @@ export const clearTokenCache = (tokenAddress?: string) => {
     tokenCache.clear();
     priceCache.clear();
     console.log('🗑️ Cleared all token caches');
-  }
-};
-
-// Force browser cache refresh (call this if you still see old API calls)
-export const forceRefresh = () => {
-  // Clear all caches
-  clearTokenCache();
-  
-  // Clear any potential service worker cache
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(registration => {
-      registration.unregister();
-    });
-  }
-  
-  // Clear browser cache if possible
-  if ('caches' in window) {
-    caches.keys().then(names => {
-      names.forEach(name => {
-        caches.delete(name);
-      });
-    });
-  }
-  
-  // Force clear all localStorage
-  localStorage.clear();
-  
-  // Force clear all sessionStorage  
-  sessionStorage.clear();
-  
-  // Clear any axios cache
-  if (birdeyeApi.defaults) {
-    delete birdeyeApi.defaults.adapter;
-  }
-  
-  console.log('🔄 AGGRESSIVE CACHE CLEAR: All caches, storage, and service workers cleared');
-  
-  // Auto-reload after cache clear
-  setTimeout(() => {
-    window.location.reload();
-  }, 500);
-};
-
-// BUSINESS PLAN OPTIMIZED: Force refresh on app load to clear old endpoints
-export const initializeBusinessPlanOptimizations = () => {
-  // Check if we need to clear old cache (detect old API calls)
-  const lastCacheVersion = localStorage.getItem('cacheVersion');
-  const currentVersion = '2.0-business';
-  
-  if (lastCacheVersion !== currentVersion) {
-    console.log('🚀 BUSINESS PLAN: Clearing old cache for optimizations');
-    clearTokenCache();
-    
-    // Clear any axios interceptors that might be cached
-    birdeyeApi.interceptors.request.clear();
-    birdeyeApi.interceptors.response.clear();
-    
-    // Re-add our optimized interceptors
-    birdeyeApi.interceptors.request.use(
-      (config) => {
-        console.log(`🚀 BUSINESS PLAN API: ${config.method?.toUpperCase()} ${config.url}`);
-        return config;
-      }
-    );
-    
-    localStorage.setItem('cacheVersion', currentVersion);
-    console.log('✅ BUSINESS PLAN: Cache optimizations initialized');
   }
 };

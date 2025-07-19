@@ -90,19 +90,22 @@ class BirdeyeWebSocketService {
   private readonly WS_URL = 'wss://public-api.birdeye.so/socket/solana';
 
   constructor() {
-    // Use the same API key as Birdeye REST API
-    this.apiKey = 'd43c3786090f4ed997afb84acc4d84c4';
+    // Use the correct API key for Birdeye WebSocket
+    this.apiKey = '9a5835740ef1448bafe50f8fbdc519ec';
     
     console.log('🔄 Attempting Birdeye WebSocket connection...');
     this.connect();
     
-    // Try WebSocket longer before falling back for better real-time performance
+    // Start REST API fallback immediately for faster price updates while WebSocket connects
+    console.log('🚀 Starting immediate REST API fallback for instant price updates');
+    this.startRestApiFallback();
+    
+    // Stop REST fallback if WebSocket connects successfully
     setTimeout(() => {
       if (!this.hasWebSocketAccess) {
-        console.log('🔧 Starting REST API fallback after 15 seconds - WebSocket unavailable');
-        this.startRestApiFallback();
+        console.log('⚠️ WebSocket connection failed after 8 seconds - continuing with REST API');
       }
-    }, 15000);
+    }, 8000);
   }
 
   private connect(): void {
@@ -113,15 +116,15 @@ class BirdeyeWebSocketService {
     this.isConnecting = true;
     console.log('🔗 Connecting to Birdeye WebSocket...');
 
-    // Set connection timeout - if no connection in 10 seconds, fallback to REST API
+    // Set fast connection timeout for trading performance
     this.connectionTimeout = setTimeout(() => {
       if (this.isConnecting) {
-        console.log('⏰ WebSocket connection timeout after 10 seconds - falling back to REST API polling');
+        console.log('⏰ WebSocket connection timeout after 5 seconds - continuing with REST API polling');
         this.isConnecting = false;
         this.hasWebSocketAccess = false;
-        this.startRestApiFallback();
+        // Don't start REST fallback here since it's already running
       }
-    }, 10000); // 10 second timeout allows proper WebSocket connection
+    }, 5000); // 5 second timeout for faster startup
 
     try {
       const wsUrlWithKey = `${this.WS_URL}?x-api-key=${this.apiKey}`;
@@ -224,9 +227,9 @@ class BirdeyeWebSocketService {
     // Stop any existing fallback interval
     this.stopRestApiFallback();
 
-    console.log('🚀 Starting REST API fallback with conservative 10-second polling to respect rate limits');
+    console.log('🚀 Starting REST API fallback with 1-second polling for real-time trading performance');
     
-    // Poll REST API every 10 seconds for conservative rate-limit-friendly updates
+    // Poll REST API every 1 second for real-time trading updates
     this.restApiFallbackInterval = setInterval(async () => {
       // Only poll if we have active subscribers
       const activeTokens = Array.from(this.priceSubscribers.keys());

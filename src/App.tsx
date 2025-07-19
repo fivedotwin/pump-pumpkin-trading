@@ -5,6 +5,7 @@ import TermsOfService from './components/TermsOfService';
 import SetupProfile from './components/SetupProfile';
 import Dashboard from './components/Dashboard';
 import { userProfileService, UserProfile } from './services/supabaseClient';
+import { initializeBusinessPlanOptimizations } from './services/birdeyeApi';
 
 type AppState = 'connect' | 'terms' | 'profile' | 'dashboard' | 'loading';
 
@@ -281,6 +282,12 @@ function AppContent() {
 }
 
 function App() {
+  // BUSINESS PLAN: Initialize optimizations on app startup
+  useEffect(() => {
+    console.log('🚀 BUSINESS PLAN: Initializing professional trading optimizations...');
+    initializeBusinessPlanOptimizations();
+  }, []);
+
   return (
     <WalletContextProvider>
       <AppContent />

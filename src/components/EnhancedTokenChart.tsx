@@ -30,6 +30,11 @@ interface ViewState {
   panOffset: number;
 }
 
+// 📊 PROFESSIONAL TRADING CHART COMPONENT
+// ✅ CHART FIXED: Uses Birdeye WebSocket for proper OHLCV candlestick data
+// 🎯 ARCHITECTURE: Chart handles OHLCV data, TokenDetail handles 10Hz price updates separately
+// 📈 NO CONFLICTS: Chart and price updates work independently for optimal performance
+
 export default function EnhancedTokenChart({ 
   tokenAddress, 
   tokenSymbol, 
@@ -39,7 +44,7 @@ export default function EnhancedTokenChart({
   onPriceUpdate 
 }: EnhancedTokenChartProps) {
   const [chartData, setChartData] = useState<CandlestickDataPoint[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback' | 'disconnected'>('connecting');
+
   const [selectedTimeframe, setSelectedTimeframe] = useState<TimeFrame>('15m');
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [viewState, setViewState] = useState<ViewState>({
@@ -144,14 +149,29 @@ export default function EnhancedTokenChart({
     loadHistoricalData();
   }, [loadHistoricalData]);
 
-  // Subscribe to real-time WebSocket updates
+  // 📊 PROFESSIONAL VIEW MANAGEMENT: Smart auto-scroll for live trading
   useEffect(() => {
-    console.log(`🚀 Enhanced Chart: Subscribing to WebSocket for ${tokenSymbol}`);
+    // Only auto-scroll if user is viewing the latest data (within last 20 candles)
+    if (chartData.length > 0 && viewState.endIndex >= chartData.length - 20) {
+      setViewState(prev => ({
+        ...prev,
+        startIndex: Math.max(0, chartData.length - 100),
+        endIndex: chartData.length
+      }));
+    }
+  }, [chartData.length]); // Only trigger when new candles are added, not on updates
+
+  // 📊 PROFESSIONAL CHART: Subscribe to Birdeye WebSocket for proper OHLCV data
+  useEffect(() => {
+    if (!tokenAddress) return;
     
-    // Subscribe to real-time chart data
+    console.log(`📊 PROFESSIONAL CHART: Subscribing to Birdeye OHLCV WebSocket for ${tokenSymbol}`);
+    
+    // Subscribe to Birdeye WebSocket for proper OHLCV candle data
     const unsubscribeChart = jupiterWebSocket.subscribeToChart(
       tokenAddress,
       (address: string, ohlcv: BirdeyeOHLCV) => {
+        // Create proper candlestick from OHLCV data
         const newDataPoint: CandlestickDataPoint = {
           time: ohlcv.timestamp,
           open: ohlcv.open,
@@ -162,92 +182,57 @@ export default function EnhancedTokenChart({
         };
 
         setChartData(prev => {
-          const updated = [...prev];
-          
-          // Find if we need to update existing candle or add new one
-          const existingIndex = updated.findIndex(candle => 
-            Math.abs(candle.time - newDataPoint.time) < getTimeframeSeconds() / 2
-          );
-          
-          if (existingIndex >= 0) {
-            // Update existing candle
-            updated[existingIndex] = {
-              ...updated[existingIndex],
-              high: Math.max(updated[existingIndex].high, newDataPoint.high),
-              low: Math.min(updated[existingIndex].low, newDataPoint.low),
-              close: newDataPoint.close,
-              volume: newDataPoint.volume
-            };
-          } else {
-            // Add new candle
-            updated.push(newDataPoint);
+          if (prev.length === 0) {
+            return [newDataPoint];
           }
+
+          const currentTimeframe = getTimeframeSeconds();
+          const lastCandle = prev[prev.length - 1];
           
-          // Keep last 1000 points for better performance
-          const trimmed = updated.slice(-1000);
+          // Calculate timeframe boundaries for proper candle grouping
+          const candleStartTime = Math.floor(newDataPoint.time / currentTimeframe) * currentTimeframe;
+          const lastCandleStartTime = Math.floor(lastCandle.time / currentTimeframe) * currentTimeframe;
           
-          // Auto-adjust view to show latest data if user is viewing recent data
-          setViewState(prevView => {
-            if (prevView.endIndex >= prev.length - 10) {
-              return {
-                ...prevView,
-                startIndex: Math.max(0, trimmed.length - 100),
-                endIndex: trimmed.length
-              };
+          if (candleStartTime === lastCandleStartTime) {
+            // Update existing candle with new OHLCV data
+            const updatedCandle = {
+              ...lastCandle,
+              high: Math.max(lastCandle.high, newDataPoint.high),
+              low: Math.min(lastCandle.low, newDataPoint.low),
+              close: newDataPoint.close,
+              volume: Math.max(lastCandle.volume || 0, newDataPoint.volume || 0)
+            };
+            
+            // Only update if there's a significant change
+            if (lastCandle.close !== updatedCandle.close || 
+                lastCandle.high !== updatedCandle.high || 
+                lastCandle.low !== updatedCandle.low) {
+              
+              const updated = [...prev];
+              updated[updated.length - 1] = updatedCandle;
+              return updated;
             }
-            return prevView;
-          });
-          
-          return trimmed;
+            
+            return prev;
+          } else {
+            // New timeframe - add new candle
+            const updated = [...prev, newDataPoint];
+            return updated.length > 500 ? updated.slice(-500) : updated;
+          }
         });
 
-        // Notify parent component of price update
+        // Optional: Notify parent of OHLCV close price (TokenDetail uses separate business plan service)
         if (onPriceUpdate) {
           onPriceUpdate(ohlcv.close);
-        }
-
-        setConnectionStatus('connected');
-      }
-    );
-
-    // Also subscribe to price updates for immediate feedback
-    const unsubscribePrice = jupiterWebSocket.subscribeToToken(
-      tokenAddress,
-      (address: string, price: number) => {
-        // Update the latest candlestick's close price if it's very recent
-        setChartData(prev => {
-          if (prev.length === 0) return prev;
-          
-          const now = Math.floor(Date.now() / 1000);
-          const latest = prev[prev.length - 1];
-          
-          // If the latest candle is within the current timeframe, update its close price
-          if (now - latest.time < getTimeframeSeconds()) {
-            const updated = [...prev];
-            updated[updated.length - 1] = { 
-              ...latest, 
-              close: price,
-              high: Math.max(latest.high, price),
-              low: Math.min(latest.low, price)
-            };
-            return updated;
-          }
-          
-          return prev;
-        });
-
-        if (onPriceUpdate) {
-          onPriceUpdate(price);
         }
       }
     );
 
     return () => {
-      console.log(`🔌 Enhanced Chart: Unsubscribing from WebSocket for ${tokenSymbol}`);
+      console.log(`🔌 PROFESSIONAL CHART: Unsubscribing from Birdeye OHLCV WebSocket for ${tokenSymbol}`);
       unsubscribeChart();
-      unsubscribePrice();
     };
-  }, [tokenAddress, tokenSymbol, onPriceUpdate, selectedTimeframe]);
+  }, [tokenAddress, tokenSymbol, onPriceUpdate, selectedTimeframe, getTimeframeSeconds]);
 
   // Get visible chart data based on current view state
   const getVisibleData = useCallback(() => {
@@ -382,8 +367,8 @@ export default function EnhancedTokenChart({
     });
   };
 
-  // Generate candlestick chart elements
-  const generateCandlesticks = () => {
+  // 🚀 ULTRA-SMOOTH candlestick generation for professional trading (no refreshes!)
+  const generateCandlesticks = useCallback(() => {
     const visibleData = getVisibleData();
     if (visibleData.length === 0) return [];
     
@@ -415,10 +400,12 @@ export default function EnhancedTokenChart({
         bodyHeight,
         candleWidth,
         isGreen,
-        candle
+        candle,
+        // Add unique stable key for React optimization
+        key: `${candle.time}-${candle.close}`
       };
     });
-  };
+  }, [getVisibleData]); // Optimized dependencies for speed
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -439,23 +426,8 @@ export default function EnhancedTokenChart({
 
   return (
     <div ref={containerRef} className={`relative ${className}`} style={{ height }}>
-      {/* Chart Header with Status and Controls */}
-      <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between">
-        {/* Connection Status */}
-        <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full animate-pulse ${
-            connectionStatus === 'connected' ? 'bg-green-500' : 
-            connectionStatus === 'fallback' ? 'bg-blue-500' : 'bg-yellow-500'
-          }`}></div>
-          <span className={`text-xs font-medium ${
-            connectionStatus === 'connected' ? 'text-green-400' : 
-            connectionStatus === 'fallback' ? 'text-blue-400' : 'text-yellow-400'
-          }`}>
-            {connectionStatus === 'connected' ? 'LIVE' : 
-             connectionStatus === 'fallback' ? 'FAST' : 'CONNECTING'}
-          </span>
-        </div>
-
+      {/* Chart Header with Controls */}
+      <div className="absolute top-2 right-2 z-10 flex items-center">
         {/* Chart Controls */}
         <div className="flex items-center space-x-1">
           <button
@@ -530,31 +502,53 @@ export default function EnhancedTokenChart({
               onMouseLeave={handleMouseLeave}
               style={{ touchAction: 'none' }}
             >
-              {/* Render Candlesticks */}
-              {generateCandlesticks().map((candlestick, index) => (
-                <g key={`candle-${index}`}>
-                  {/* High-Low Wick */}
-                  <line
-                    x1={candlestick.x}
-                    y1={candlestick.highY}
-                    x2={candlestick.x}
-                    y2={candlestick.lowY}
-                    stroke={candlestick.isGreen ? "#10b981" : "#ef4444"}
-                    strokeWidth="1"
-                  />
+              {/* Render Candlesticks with stable keys for smooth updates */}
+              {(() => {
+                const candlesticks = generateCandlesticks();
+                const visibleData = getVisibleData();
+                
+                return candlesticks.map((candlestick, index) => {
+                  const dataPoint = visibleData[index];
+                  const stableKey = dataPoint ? `candle-${dataPoint.time}` : `candle-${index}`;
                   
-                  {/* Candle Body */}
-                  <rect
-                    x={candlestick.x - candlestick.candleWidth / 2}
-                    y={candlestick.bodyY}
-                    width={candlestick.candleWidth}
-                    height={Math.max(1, candlestick.bodyHeight)}
-                    fill={candlestick.isGreen ? "#10b981" : "#ef4444"}
-                    stroke={candlestick.isGreen ? "#10b981" : "#ef4444"}
-                    strokeWidth="1"
-                  />
-                </g>
-              ))}
+                  return (
+                    <g 
+                      key={stableKey}
+                      style={{
+                        transition: 'all 0.1s ease-out', // 🚀 ULTRA-SMOOTH transitions for professional trading
+                        transform: 'translateZ(0)', // Hardware acceleration for speed
+                      }}
+                    >
+                      {/* High-Low Wick */}
+                      <line
+                        x1={candlestick.x}
+                        y1={candlestick.highY}
+                        x2={candlestick.x}
+                        y2={candlestick.lowY}
+                        stroke={candlestick.isGreen ? "#10b981" : "#ef4444"}
+                        strokeWidth="1"
+                        style={{ 
+                          transition: 'stroke 0.1s ease-out, y1 0.1s ease-out, y2 0.1s ease-out',
+                        }}
+                      />
+                      
+                      {/* Candle Body */}
+                      <rect
+                        x={candlestick.x - candlestick.candleWidth / 2}
+                        y={candlestick.bodyY}
+                        width={candlestick.candleWidth}
+                        height={Math.max(1, candlestick.bodyHeight)}
+                        fill={candlestick.isGreen ? "#10b981" : "#ef4444"}
+                        stroke={candlestick.isGreen ? "#10b981" : "#ef4444"}
+                        strokeWidth="1"
+                        style={{ 
+                          transition: 'fill 0.1s ease-out, stroke 0.1s ease-out, y 0.1s ease-out, height 0.1s ease-out',
+                        }}
+                      />
+                    </g>
+                  );
+                });
+              })()}
 
               {/* Hover Elements */}
               {isHovering && hoverData && (
@@ -640,13 +634,7 @@ export default function EnhancedTokenChart({
               <span>
                 {visibleData.length > 0 && `${selectedTimeframe} • ${visibleData.length} candles`}
               </span>
-              <span className="flex items-center space-x-2">
-                {connectionStatus === 'connected' && (
-                  <span className="flex items-center space-x-1">
-                    <div className="w-1 h-1 bg-green-500 rounded-full"></div>
-                    <span>Live</span>
-                  </span>
-                )}
+                            <span className="flex items-center space-x-2">
                 {viewState.zoom !== 1 && <span>Zoom: {viewState.zoom.toFixed(1)}x</span>}
               </span>
             </div>
@@ -655,7 +643,7 @@ export default function EnhancedTokenChart({
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="text-gray-400 text-sm mb-2">
-                {connectionStatus === 'connecting' ? 'Connecting to live data...' : 'No chart data available'}
+                No chart data available
               </div>
               <div className="w-8 h-8 mx-auto">
                 <div className="w-full h-full border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
