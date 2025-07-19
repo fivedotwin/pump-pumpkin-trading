@@ -527,27 +527,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  // Get current Israel time and business hours status for display
-  const getIsraelTimeStatus = () => {
-    // Use currentTime state to ensure re-renders when time updates
-    const now = currentTime;
-    
-    const israelTime = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jerusalem',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(now);
-    
-    const [hours] = israelTime.split(':').map(Number);
-    const isBusinessHours = hours >= 10 && hours < 22;
-    
-    return {
-      time: israelTime,
-      isBusinessHours,
-      status: isBusinessHours ? 'Business Hours' : 'After Hours'
-    };
-  };
+
 
   // Calculate unlock tooltip text
   const getUnlockTooltipText = () => {
@@ -3616,17 +3596,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
             <p className="text-gray-500 text-sm mb-3">Minimum withdrawal: 0.04 SOL</p>
 
-            {/* Israel Time Status */}
-            <div className={`mb-4 p-2 rounded-lg border text-xs ${
-              getIsraelTimeStatus().isBusinessHours 
-                ? 'bg-green-900 border-green-700 text-green-300' 
-                : 'bg-orange-900 border-orange-700 text-orange-300'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span>Israel Time: {getIsraelTimeStatus().time}</span>
-                <span>{getIsraelTimeStatus().status}</span>
-              </div>
-              <p className="text-center mt-1">
+            {/* Approval Time */}
+            <div className="mb-4 p-2 rounded-lg border text-xs bg-gray-800 border-gray-600 text-gray-300">
+              <p className="text-center">
                 Approval Time: {getWithdrawalApprovalTime()}
               </p>
             </div>
