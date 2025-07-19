@@ -16,6 +16,7 @@ import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
 import LockingModal from './LockingModal';
 import UnlockModal from './UnlockModal';
+import WelcomePopup from './WelcomePopup';
 import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
 
@@ -173,6 +174,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   
   // State to trigger re-render for withdrawal time updates
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Welcome popup state
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
   
   // Track positions being closed to prevent duplicates
   const [closingPositions, setClosingPositions] = useState<Set<number>>(new Set());
@@ -338,6 +342,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     return () => clearInterval(interval);
   }, []);
 
+  // Check if user has seen welcome popup before
+  useEffect(() => {
+    if (walletAddress) {
+      const hasSeenWelcome = localStorage.getItem(`welcomePopupSeen_${walletAddress}`);
+      if (!hasSeenWelcome) {
+        // Show popup after a short delay for better UX
+        setTimeout(() => {
+          setShowWelcomePopup(true);
+        }, 1000);
+      }
+    }
+  }, [walletAddress]);
+
   const loadTrendingTokens = async () => {
     setIsLoadingTokens(true);
     try {
@@ -500,6 +517,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (expiredLock) {
       setShowUnlockModal(true);
       soundManager.playTabSwitch();
+    }
+  };
+
+  // Handle welcome popup close
+  const handleWelcomeClose = () => {
+    setShowWelcomePopup(false);
+    if (walletAddress) {
+      // Mark as seen for this wallet
+      localStorage.setItem(`welcomePopupSeen_${walletAddress}`, 'true');
     }
   };
 
@@ -4102,7 +4128,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }}
       />
 
-
+      {/* Welcome Popup */}
+      <WelcomePopup
+        isOpen={showWelcomePopup}
+        onClose={handleWelcomeClose}
+      />
 
     </div>
   );
