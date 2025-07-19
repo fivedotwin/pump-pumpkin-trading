@@ -3493,7 +3493,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             
             <p className="text-gray-400 text-lg mb-2">Add SOL To Your Platform Balance</p>
             
-            <p className="text-gray-500 text-sm mb-2">Current Deposited: {currentSOLBalance.toFixed(4)} SOL</p>
+            <p className="text-gray-500 text-sm mb-2">Wallet Balance: {userBalances.sol.toFixed(4)} SOL</p>
             <p className="text-gray-500 text-sm mb-8">Minimum deposit: 0.04 SOL</p>
 
             {/* Error Message */}
@@ -3504,36 +3504,54 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             )}
 
             <div className="mb-8">
-              <input
-                type="number"
-                value={depositAmount}
-                onChange={(e) => {
-                  setDepositAmount(e.target.value);
-                  setDepositError(null); // Clear error when user types
-                }}
-                placeholder="Enter SOL amount (min 0.04)"
-                min="0.04"
-                step="0.001"
-                disabled={isDepositing}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={depositAmount}
+                  onChange={(e) => {
+                    setDepositAmount(e.target.value);
+                    setDepositError(null); // Clear error when user types
+                  }}
+                  placeholder="Enter SOL amount (min 0.04)"
+                  min="0.04"
+                  max={Math.max(0.04, userBalances.sol - 0.05)}
+                  step="0.001"
+                  disabled={isDepositing}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-4 pr-16 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
+                />
+                <button
+                  onClick={() => {
+                    const maxAmount = Math.max(0, userBalances.sol - 0.05);
+                    if (maxAmount >= 0.04) {
+                      setDepositAmount(maxAmount.toFixed(4));
+                      setDepositError(null);
+                    } else {
+                      setDepositError('Insufficient SOL balance. You need at least 0.09 SOL (0.04 deposit + 0.05 transaction fees).');
+                    }
+                  }}
+                  disabled={isDepositing || userBalances.sol < 0.09}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors"
+                >
+                  MAX
+                </button>
+              </div>
             </div>
 
             <button
               onClick={handleDeposit}
-              disabled={!depositAmount || parseFloat(depositAmount) < 0.04 || isDepositing}
+              disabled={!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.05 > userBalances.sol || isDepositing}
               className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
               style={{ 
-                backgroundColor: (!depositAmount || parseFloat(depositAmount) < 0.04 || isDepositing) ? '#374151' : '#1e7cfa',
-                color: (!depositAmount || parseFloat(depositAmount) < 0.04 || isDepositing) ? '#9ca3af' : 'black'
+                backgroundColor: (!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.05 > userBalances.sol || isDepositing) ? '#374151' : '#1e7cfa',
+                color: (!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.05 > userBalances.sol || isDepositing) ? '#9ca3af' : 'black'
               }}
               onMouseEnter={(e) => {
-                if (depositAmount && parseFloat(depositAmount) >= 0.04 && !isDepositing) {
+                if (depositAmount && parseFloat(depositAmount) >= 0.04 && parseFloat(depositAmount) + 0.05 <= userBalances.sol && !isDepositing) {
                   (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
                 }
               }}
               onMouseLeave={(e) => {
-                if (depositAmount && parseFloat(depositAmount) >= 0.04 && !isDepositing) {
+                if (depositAmount && parseFloat(depositAmount) >= 0.04 && parseFloat(depositAmount) + 0.05 <= userBalances.sol && !isDepositing) {
                   (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
                 }
               }}
@@ -3551,8 +3569,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <p className="text-gray-600 text-xs mb-2">
               SOL Will Be Added To Your Platform Balance
             </p>
-            <p className="text-gray-500 text-xs">
+            <p className="text-gray-500 text-xs mb-1">
               Transfer to: {PLATFORM_WALLET.slice(0, 8)}...{PLATFORM_WALLET.slice(-8)}
+            </p>
+            <p className="text-gray-500 text-xs">
+              Note: 0.05 SOL reserved for transaction fees
             </p>
           </div>
         </div>
