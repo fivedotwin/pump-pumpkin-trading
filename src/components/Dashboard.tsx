@@ -3521,6 +3521,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 />
                 <button
                   onClick={() => {
+                    if (!userBalances.sol || userBalances.sol < 0.09) {
+                      setDepositError('Insufficient SOL balance. You need at least 0.09 SOL (0.04 deposit + 0.05 transaction fees).');
+                      return;
+                    }
+                    
                     const maxAmount = Math.max(0, userBalances.sol - 0.05);
                     if (maxAmount >= 0.04) {
                       setDepositAmount(maxAmount.toFixed(4));
@@ -3529,7 +3534,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       setDepositError('Insufficient SOL balance. You need at least 0.09 SOL (0.04 deposit + 0.05 transaction fees).');
                     }
                   }}
-                  disabled={isDepositing || userBalances.sol < 0.09}
+                  disabled={isDepositing}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors"
                 >
                   MAX
