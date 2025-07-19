@@ -60,8 +60,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   const [isPriceLoading, setIsPriceLoading] = useState<boolean>(true);
   const [priceError, setPriceError] = useState<string | null>(null);
   
+  const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null); // Track selected percentage
 
-  
   // Subscribe to simplified price service for token price updates
   useEffect(() => {
     console.log(`TradingModal: Subscribing to simplified price service for ${tokenData.symbol}`);
@@ -381,6 +381,18 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     return Object.keys(errors).length === 0;
   };
 
+  // Auto-recalculate amount when leverage changes (if percentage was selected)
+  useEffect(() => {
+    if (selectedPercentage !== null && userSOLBalance > 0 && solPrice) {
+      console.log(`🔄 Leverage changed to ${leverage}x, recalculating ${selectedPercentage}% amount...`);
+      // Small delay to ensure state updates properly
+      const timer = setTimeout(() => {
+        handlePercentageClick(selectedPercentage);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [leverage, solPrice]); // Watch leverage and solPrice changes
+
   // Run validation whenever relevant values change
   useEffect(() => {
     validateTpSl();
@@ -648,24 +660,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     
     // If MAX has been used and this is a limit order, recalculate max amount for new price
     if (isMaxUsed && orderType === 'Limit Order') {
-      const newPrice = parseFloat(value);
-      if (newPrice > 0 && solPrice && userSOLBalance > 0) {
-        const tokenPriceInSOL = newPrice / solPrice;
-        const availableSOL = userSOLBalance * 0.95;
-        const positionCostFactor = (1 / leverage);
-        const maxPositionValueSOL = availableSOL / positionCostFactor;
-        const newMaxAmount = maxPositionValueSOL / tokenPriceInSOL;
-        
-        if (newMaxAmount > 0) {
-          setAmount(newMaxAmount.toFixed(6));
-        }
-      }
+      handlePercentageClick(100); // Use the new dynamic handler for 100%
     }
   };
 
   const handleAmountChange = (value: string) => {
     setAmount(value);
     setIsMaxUsed(false); // Reset MAX when user manually changes amount
+    setSelectedPercentage(null); // Reset selected percentage when manually typing
     // Clear position validation error when amount changes
     if (validationErrors.position) {
       setValidationErrors(prev => ({ ...prev, position: undefined }));
@@ -677,22 +679,13 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
       setLeverage(value);
       // Leverage adjustment is now silent for better UX
       
-      // If MAX has been used, recalculate max amount for new leverage
-      if (isMaxUsed) {
-        // We need to use the new leverage value for calculation
-        // Create a temporary calculation with the new leverage
-        const refPrice = getReferencePrice();
-        if (refPrice > 0 && solPrice && userSOLBalance > 0) {
-          const tokenPriceInSOL = refPrice / solPrice;
-          const availableSOL = userSOLBalance * 0.95;
-          const positionCostFactor = (1 / value); // Use new leverage value
-          const maxPositionValueSOL = availableSOL / positionCostFactor;
-          const newMaxAmount = maxPositionValueSOL / tokenPriceInSOL;
-          
-          if (newMaxAmount > 0) {
-            setAmount(newMaxAmount.toFixed(6));
-          }
-        }
+      // If a percentage was selected, recalculate with new leverage
+      if (selectedPercentage !== null) {
+        handlePercentageClick(selectedPercentage);
+      }
+      // Also recalculate if user has MAX selected (for backwards compatibility)
+      else if (isMaxUsed) {
+        handlePercentageClick(100);
       }
     }
   };
@@ -738,17 +731,69 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     return Math.max(0, maxTokenAmount);
   };
 
-  const handleMaxClick = () => {
+  // Handle percentage button clicks dynamically
+  const handlePercentageClick = (percentage: number) => {
     const maxAmount = getMaxPositionSize();
-    if (maxAmount > 0) {
-      setAmount(maxAmount.toFixed(6));
-      setIsMaxUsed(true); // Mark MAX as used
-      // Clear position validation error when amount changes
+    const percentAmount = maxAmount * (percentage / 100);
+    
+    console.log(`🔢 ${percentage}% calculation:`, {
+      currentLeverage: `${leverage}x`,
+      maxPossibleAmount: maxAmount.toFixed(6),
+      percentageAmount: percentAmount.toFixed(6),
+      userSOLBalance: userSOLBalance.toFixed(4),
+      solPrice: solPrice?.toFixed(2)
+    });
+    
+    if (percentAmount > 0) {
+      setAmount(percentAmount.toFixed(6));
+      setIsMaxUsed(percentage === 100); // Only mark as MAX if 100%
+      setSelectedPercentage(percentage); // Track selected percentage
+      
+      // Clear validation errors when amount changes
       if (validationErrors.position) {
         setValidationErrors(prev => ({ ...prev, position: undefined }));
       }
+      
+      // Sound feedback for button clicks (only for manual clicks, not auto-recalculation)
+      if (document.activeElement?.tagName === 'BUTTON') {
+        soundManager.playInputChange();
+      }
+    } else {
+      console.warn(`⚠️ Cannot calculate ${percentage}% - insufficient balance or missing price data`);
     }
   };
+
+  // Dynamic percentage buttons configuration with enhanced styling
+  const percentageButtons = [
+    { 
+      label: '10%', 
+      value: 10, 
+      baseColor: 'bg-blue-600 hover:bg-blue-500',
+      activeColor: 'bg-blue-400 hover:bg-blue-300',
+      description: '10% of max collateral'
+    },
+    { 
+      label: '25%', 
+      value: 25, 
+      baseColor: 'bg-blue-600 hover:bg-blue-500',
+      activeColor: 'bg-blue-400 hover:bg-blue-300',
+      description: '25% of max collateral'
+    },
+    { 
+      label: '50%', 
+      value: 50, 
+      baseColor: 'bg-blue-600 hover:bg-blue-500',
+      activeColor: 'bg-blue-400 hover:bg-blue-300',
+      description: '50% of max collateral'
+    },
+    { 
+      label: 'MAX', 
+      value: 100, 
+      baseColor: 'bg-orange-600 hover:bg-orange-500',
+      activeColor: 'bg-orange-400 hover:bg-orange-300',
+      description: '100% of max collateral'
+    }
+  ];
 
   const handleOrderTypeChange = (newOrderType: OrderType) => {
     soundManager.playSwitch();
@@ -757,10 +802,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
     
     // If MAX has been used, recalculate max amount for new order type
     if (isMaxUsed) {
-      const maxAmount = getMaxPositionSize();
-      if (maxAmount > 0) {
-        setAmount(maxAmount.toFixed(6));
-      }
+      handlePercentageClick(100); // Use the new dynamic handler for 100%
     }
   };
 
@@ -922,27 +964,59 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
               </div>
             )}
 
-            {/* Quantity Input with Max Button - Much larger */}
-            <div className="relative">
+            {/* Quantity Input with Percentage Buttons - Much larger */}
+            <div className="">
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => handleAmountChange(e.target.value)}
                 placeholder={`Amount (${tokenData.symbol})`}
-                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-4 pr-20 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 transition-all text-center"
+                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 transition-all text-center"
                 step="0.01"
               />
-              <button
-                onClick={handleMaxClick}
-                onMouseEnter={() => {}}
-                className={`absolute right-2 top-1/2 transform -translate-y-1/2 text-white text-sm px-3 py-2 rounded-lg transition-colors font-bold ${
-                  isMaxUsed 
-                    ? 'bg-green-600 hover:bg-green-700' 
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {isMaxUsed ? 'MAX ON' : 'MAX'}
-              </button>
+              
+              {/* Percentage Buttons */}
+              <div className="grid grid-cols-4 gap-3 mt-4">
+                {percentageButtons.map((button) => (
+                  <button
+                    key={button.value}
+                    onClick={() => handlePercentageClick(button.value)}
+                    className={`${selectedPercentage === button.value ? button.activeColor : button.baseColor} text-white py-3 px-4 rounded-lg transition-all duration-200 text-sm font-bold border-2 ${selectedPercentage === button.value ? 'border-white shadow-lg' : 'border-gray-600'} hover:border-white`}
+                    title={button.description}
+                  >
+                    {button.label}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Collateral Preview for Percentage Buttons */}
+              {userSOLBalance > 0 && solPrice && (
+                <div className="grid grid-cols-4 gap-2 mt-1">
+                  {percentageButtons.map((button) => {
+                    const maxAmount = getMaxPositionSize();
+                    const percentAmount = maxAmount * (button.value / 100);
+                    const refPrice = getReferencePrice();
+                    
+                    if (!refPrice || !solPrice) return (
+                      <div key={button.value} className="text-center">
+                        <span className="text-gray-500 text-xs">-</span>
+                      </div>
+                    );
+                    
+                    const tokenPriceInSOL = refPrice / solPrice;
+                    const positionValueSOL = percentAmount * tokenPriceInSOL;
+                    const collateralSOL = positionValueSOL / leverage;
+                    
+                    return (
+                      <div key={button.value} className="text-center">
+                        <span className="text-gray-400 text-xs">
+                          {collateralSOL > 0 ? `${collateralSOL.toFixed(3)} SOL` : '-'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             
 
