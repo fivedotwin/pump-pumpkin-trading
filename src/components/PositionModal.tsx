@@ -56,6 +56,47 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     totalReturn: number;
   } | null>(null);
 
+  // Calculate real-time P&L with current price
+  const calculateRealtimePnL = (currentPrice: number) => {
+    const entry_price = position.entry_price;
+    const amount = position.amount;
+    const leverage = position.leverage;
+    
+    // Calculate P&L in USD
+    let pnl_usd = 0;
+    if (position.direction === 'Long') {
+      pnl_usd = (currentPrice - entry_price) * amount * leverage;
+    } else {
+      pnl_usd = (entry_price - currentPrice) * amount * leverage;
+    }
+    
+    // Calculate margin ratio
+    const collateralUSD = position.collateral_sol * solPrice;
+    let margin_ratio = 0;
+    if (pnl_usd < 0) {
+      margin_ratio = Math.abs(pnl_usd) / collateralUSD;
+    }
+    
+    return {
+      pnl: pnl_usd,
+      margin_ratio: Math.min(margin_ratio, 1)
+    };
+  };
+
+  // Get current P&L using real-time price if available
+  const getCurrentPnL = () => {
+    const currentPrice = realtimePrice || position.current_price || position.entry_price;
+    const pnlData = calculateRealtimePnL(currentPrice);
+    return pnlData.pnl;
+  };
+
+  // Get current margin ratio using real-time price if available
+  const getCurrentMarginRatio = () => {
+    const currentPrice = realtimePrice || position.current_price || position.entry_price;
+    const pnlData = calculateRealtimePnL(currentPrice);
+    return pnlData.margin_ratio;
+  };
+
   // Subscribe to simplified price service for price updates
   useEffect(() => {
     console.log(`PositionModal: Subscribing to simplified price service for ${position.token_symbol}`);
@@ -79,9 +120,11 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     };
   }, [position.token_address, position.token_symbol]);
 
-  const isProfit = position.current_pnl >= 0;
-  const marginRatio = position.margin_ratio || 0;
-  const marginRiskLevel = marginRatio <= 0.5 ? 'safe' : marginRatio <= 0.8 ? 'warning' : 'danger';
+  // Use real-time calculated values instead of static position values
+  const currentPnL = getCurrentPnL();
+  const currentMarginRatio = getCurrentMarginRatio();
+  const isProfit = currentPnL >= 0;
+  const marginRiskLevel = currentMarginRatio <= 0.5 ? 'safe' : currentMarginRatio <= 0.8 ? 'warning' : 'danger';
 
   // Check for trade results after closing modal completes
   const checkForTradeResults = async (positionId: number) => {
@@ -313,10 +356,10 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
         }`}>
           <p className="text-gray-300 text-xs mb-1">Unrealized P&L</p>
           <p className={`text-xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-            {formatPnL(position.current_pnl)}
+            {formatPnL(currentPnL)}
           </p>
           <p className={`text-xs ${isProfit ? 'text-green-300' : 'text-red-300'}`}>
-            {formatPnLPercentage(position.current_pnl, position.collateral_sol)}
+            {formatPnLPercentage(currentPnL, position.collateral_sol)}
           </p>
         </div>
 
@@ -357,15 +400,15 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
           <div className="w-full bg-gray-700 rounded-full h-1 mb-1">
             <div 
               className={`h-1 rounded-full transition-all duration-300 ${
-                marginRatio >= 0.8 ? 'bg-red-500' : 
-                marginRatio >= 0.6 ? 'bg-yellow-500' : 
+                currentMarginRatio >= 0.8 ? 'bg-red-500' : 
+                currentMarginRatio >= 0.6 ? 'bg-yellow-500' : 
                 'bg-green-500'
               }`}
-              style={{ width: `${Math.min(marginRatio * 100, 100)}%` }}
+              style={{ width: `${Math.min(currentMarginRatio * 100, 100)}%` }}
             />
           </div>
           <p className="text-gray-400 text-xs">
-            {(marginRatio * 100).toFixed(1)}% margin used
+            {(currentMarginRatio * 100).toFixed(1)}% margin used
           </p>
         </div>
 

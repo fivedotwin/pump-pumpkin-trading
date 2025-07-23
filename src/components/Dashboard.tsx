@@ -234,46 +234,155 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
     // HIGH-FREQUENCY PRICE SERVICE - Only for trading positions
   useEffect(() => {
-    if (!walletAddress || tradingPositions.length === 0) return;
+    if (!walletAddress) return;
     
-    // Initialize business plan optimizations
+    // Always initialize business plan optimizations
     initializeBusinessPlanOptimizations();
     
-    console.log('🚀 BUSINESS PLAN: Setting up ultra-fast 10Hz price service for trading positions');
+    // If no positions yet, wait for them to load
+    if (tradingPositions.length === 0) {
+      console.log('🚀 BUSINESS PLAN: No positions yet, waiting for positions to load...');
+      return;
+    }
+    
+    console.log('🚀 BUSINESS PLAN: Setting up ultra-fast 20Hz price service for trading positions');
     
     // Only track position tokens for real-time updates (not trending tokens)
     const positionTokens = tradingPositions.map(p => p.token_address);
     
-    if (positionTokens.length === 0) return;
-    
-    console.log(`⚡ BUSINESS PLAN: Tracking ${positionTokens.length} position tokens at ultra-fast 10Hz`);
+    console.log(`⚡ BUSINESS PLAN: Tracking ${positionTokens.length} position tokens at ultra-fast 20Hz`);
     
     // Subscribe to business plan ultra-fast price updates for positions
     const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (tokenPrices: { [address: string]: number }) => {
-      // Reduced logging for ultra-fast updates (10x per second)
-      if (Math.random() < 0.02) { // Only log ~2% of updates to avoid spam
-        console.log(`📊 BUSINESS PLAN: Ultra-fast update - Position tokens: ${Object.keys(tokenPrices).length}`);
+      // Reduced logging for ultra-fast updates (20x per second)
+      if (Math.random() < 0.01) { // Only log ~1% of updates to avoid spam
+        console.log(`⚡ LATEST PRICE UPDATE: ${Object.keys(tokenPrices).length} tokens - NO QUEUING, IMMEDIATE DISPLAY`);
       }
       
-      // Update token prices cache for P&L calculations
-      setTokenPrices(tokenPrices);
+      // IMMEDIATE UPDATE - No queuing, always show the latest price
+      setTokenPrices(prevPrices => {
+        const newPrices = { ...prevPrices, ...tokenPrices };
+        
+        // Log price changes for debugging
+        Object.entries(tokenPrices).forEach(([address, newPrice]) => {
+          const oldPrice = prevPrices[address];
+          if (oldPrice && Math.abs(newPrice - oldPrice) > 0.000001) {
+            console.log(`💰 INSTANT PRICE UPDATE: ${address.slice(0,8)}... $${oldPrice?.toFixed(6)} → $${newPrice.toFixed(6)} (${((newPrice - oldPrice) / oldPrice * 100).toFixed(2)}%)`);
+          }
+        });
+        
+        return newPrices;
+      });
       
-      // Recalculate P&L for positions with fresh prices
+      // IMMEDIATE P&L UPDATE - No delays, no queuing
       if (walletAddress && Object.keys(tokenPrices).length > 0) {
-        updatePositionPnL();
+        updatePositionPnLFromCachedPrices();
       }
     });
     
     return unsubscribe;
   }, [walletAddress, tradingPositions.length]);
 
-  // Periodic refreshes - SOL balance every 30 seconds
+  // NEW: Separate effect to ensure positions are loaded first
+  useEffect(() => {
+    if (!walletAddress) return;
+    
+    // Load positions immediately when wallet connects
+    loadTradingPositions();
+  }, [walletAddress]);
+
+  // ADDED: Refresh SOL balance when user returns to app (after trading in other tabs/windows)
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const handleFocus = () => {
+      console.log('🔄 App regained focus - refreshing SOL balance to show latest trades');
+      refreshSOLBalance();
+      loadTradingPositions(); // Also refresh positions
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 App became visible - refreshing SOL balance to show latest trades');
+        refreshSOLBalance();
+        loadTradingPositions(); // Also refresh positions
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [walletAddress]);
+
+  // Update position P&L using cached prices (much faster) - RENAMED AND FIXED
+  const updatePositionPnLFromCachedPrices = () => {
+    if (!walletAddress || tradingPositions.length === 0) return;
+    
+    try {
+      console.log('🔄 Updating position P&L using real-time cached prices...');
+      
+      const updatedPositions = tradingPositions.map((position) => {
+        try {
+          const pnlData = calculatePositionPnLWithCachedPrice(position);
+          
+          // Check for liquidation FIRST (margin ratio >= 100%)
+          if (pnlData.margin_ratio >= 1.0) {
+            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
+            // Mark for liquidation (will be handled by separate liquidation service)
+            positionService.liquidatePosition(position.id, pnlData.current_price);
+            
+            return {
+              ...position,
+              status: 'liquidated' as const,
+              current_pnl: pnlData.pnl,
+              current_price: pnlData.current_price,
+              margin_ratio: pnlData.margin_ratio,
+              updated_at: new Date().toISOString()
+            };
+          }
+          
+          return {
+            ...position,
+            current_pnl: pnlData.pnl,
+            current_price: pnlData.current_price,
+            margin_ratio: pnlData.margin_ratio,
+            updated_at: new Date().toISOString()
+          };
+        } catch (error) {
+          console.error(`Error updating P&L for position ${position.id}:`, error);
+          return position;
+        }
+      });
+      
+      // Filter out liquidated positions from the display
+      const activePositions = updatedPositions.filter(p => p.status === 'open' || p.status === 'opening');
+      setTradingPositions(activePositions);
+      
+      const liquidatedCount = updatedPositions.length - activePositions.length;
+      if (liquidatedCount > 0) {
+        console.log(`${liquidatedCount} position(s) liquidated and removed from display`);
+      }
+      
+      // Only log occasionally to avoid console spam
+      if (Math.random() < 0.1) { // Log 10% of updates
+        console.log(`✅ Updated ${activePositions.length} positions using cached prices (Update #${priceUpdateCount})`);
+      }
+    } catch (error) {
+      console.error('Error updating position P&L:', error);
+    }
+  };
+
+  // Periodic refreshes - SOL balance every 10 seconds (faster refresh)
   useEffect(() => {
     if (!walletAddress) return;
 
     const interval = setInterval(() => {
       refreshSOLBalance();
-    }, 30000); // 30 seconds
+    }, 10000); // 10 seconds - much faster refresh
 
     return () => clearInterval(interval);
   }, [walletAddress]);
@@ -288,10 +397,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [payAmount, swapMode]);
 
-  // Load positions when positions tab is selected
+  // Load positions when positions tab is selected (with smart caching)
   useEffect(() => {
     if (activeTab === 'positions') {
-      loadTradingPositions();
+      // Only reload if positions are empty or data is stale (older than 30 seconds)
+      const shouldReload = tradingPositions.length === 0 || 
+        (tradingPositions.length > 0 && Date.now() - priceUpdateCount > 30000);
+      
+      if (shouldReload) {
+        console.log('⚡ Loading positions for positions tab...');
+        loadTradingPositions();
+      } else {
+        console.log('⚡ Using cached positions (fresh data available)');
+      }
     }
   }, [activeTab]);
 
@@ -340,17 +458,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   }, [walletAddress]);
 
   const loadTrendingTokens = async () => {
-    console.log('📈 TRENDING: Loading trending tokens via simple REST API call...');
+    console.log('📈 TRENDING: Starting robust multi-stage loading system...');
     setIsLoadingTokens(true);
     try {
       const tokens = await fetchTrendingTokens();
-      console.log(`📈 TRENDING: Successfully loaded ${tokens.length} trending tokens from Birdeye API`);
+      console.log(`📈 TRENDING: Successfully loaded ${tokens.length} trending tokens from robust fallback system`);
       setTrendingTokens(tokens);
       
-      // Note: Trending tokens use static prices from the API call (no real-time updates)
-      console.log('✅ TRENDING: Tokens loaded with static prices (regular REST API call only)');
+      // Log the data source for debugging
+      if (tokens.length > 0) {
+        console.log('✅ TRENDING: Tokens loaded successfully');
+        console.log('📊 Data source: Birdeye API (primary) or DexScreener (fallback)');
+      }
     } catch (error) {
-      console.error('❌ TRENDING: Failed to load trending tokens:', error);
+      console.error('❌ TRENDING: All fallback systems failed:', error);
+      setTrendingTokens([]); // Ensure empty array for error UI
     } finally {
       setIsLoadingTokens(false);
     }
@@ -392,27 +514,40 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  // ADDED: Refresh SOL balance from database to prevent stale balance issues
+  // IMPROVED: Refresh SOL balance from both database AND wallet to detect real balance
   const refreshSOLBalance = async () => {
-    if (!walletAddress) return;
+    if (!walletAddress || !publicKey) return;
     
     try {
-      console.log('🔄 Refreshing SOL balance from database...');
+      console.log('🔄 Refreshing SOL balance from database AND wallet...');
+      
+      // Get database balance (deposited SOL)
       const profile = await userProfileService.getProfile(walletAddress);
-      if (profile) {
-        const dbBalance = profile.sol_balance;
-        if (Math.abs(dbBalance - currentSOLBalance) > 0.0001) { // Only update if difference is significant
-          console.log('SOL balance updated from database:', {
-            ui_balance: currentSOLBalance,
-            db_balance: dbBalance,
-            difference: dbBalance - currentSOLBalance
-          });
-          setCurrentSOLBalance(dbBalance);
-          onUpdateSOLBalance(dbBalance);
-        }
+      const dbBalance = profile ? profile.sol_balance : 0;
+      
+      // Get actual wallet SOL balance
+      const walletBalances = await jupiterSwapService.getUserBalances(publicKey);
+      const walletSOLBalance = walletBalances.sol;
+      
+      console.log('💰 SOL Balance Detection:', {
+        deposited_sol_db: dbBalance.toFixed(4),
+        wallet_sol_real: walletSOLBalance.toFixed(4),
+        ui_balance: currentSOLBalance.toFixed(4),
+        wallet_address: walletAddress.slice(0, 8)
+      });
+      
+      // Update user balances state for wallet operations
+      setUserBalances(walletBalances);
+      
+      // Update platform balance if database changed
+      if (Math.abs(dbBalance - currentSOLBalance) > 0.0001) {
+        console.log('✅ Platform SOL balance updated from database:', dbBalance.toFixed(4));
+        setCurrentSOLBalance(dbBalance);
+        onUpdateSOLBalance(dbBalance);
       }
+      
     } catch (error) {
-      console.error('Failed to refresh SOL balance:', error);
+      console.error('❌ Failed to refresh SOL balance:', error);
     }
   };
 
@@ -633,69 +768,65 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  const loadTradingPositions = async () => {
+    const loadTradingPositions = async () => {
     if (!walletAddress) return;
     
     setIsLoadingPositions(true);
     try {
-      console.log('Loading trading positions and checking for liquidations...');
+      console.log('⚡ FAST LOADING: Loading positions with optimized performance...');
+      const startTime = Date.now();
+      
+      // STEP 1: Get basic position data (FAST - no API calls)
       const positions = await positionService.getUserPositions(walletAddress);
       const openPositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
       
-      // Calculate real-time P&L, check liquidations, and fetch token images
-      const positionsWithPnL = await Promise.all(
-        openPositions.map(async (position) => {
-          try {
-            // Get P&L data and token details from Birdeye API
-            const [pnlData, tokenData] = await Promise.all([
-              positionService.calculatePositionPnL(position),
-              fetchTokenDetailCached(position.token_address)
-            ]);
-            
-            // IMMEDIATE LIQUIDATION CHECK on load
-            if (pnlData.margin_ratio >= 1.0) {
-              console.log(`LIQUIDATING POSITION ${position.id} ON LOAD: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
-                              console.log(`Position details:`, {
-                token: position.token_symbol,
-                direction: position.direction,
-                leverage: position.leverage,
-                entry_price: position.entry_price,
-                current_price: pnlData.current_price,
-                pnl: pnlData.pnl,
-                margin_ratio: pnlData.margin_ratio
-              });
-              
-              await positionService.liquidatePosition(position.id, pnlData.current_price);
-              
-              // Return null to filter out liquidated position
-              return null;
-            }
-            
-            return {
-              ...position,
-              current_pnl: pnlData.pnl,
-              current_price: pnlData.current_price,
-              margin_ratio: pnlData.margin_ratio,
-              token_image: tokenData?.logoURI || null // Add token image from Birdeye API
-            };
-          } catch (error) {
-            console.error(`Error calculating P&L for position ${position.id}:`, error);
-            return position; // Return original position if P&L calculation fails
-          }
-        })
-      );
+      console.log(`⚡ FAST LOADING: Got ${openPositions.length} positions from database in ${Date.now() - startTime}ms`);
       
-      // Filter out liquidated positions (null values)
-      const activePositions = positionsWithPnL.filter(p => p !== null);
-      const liquidatedCount = positionsWithPnL.length - activePositions.length;
-      
-      setTradingPositions(activePositions);
-      
-      if (liquidatedCount > 0) {
-        console.log(`${liquidatedCount} position(s) liquidated on load and removed`);
+      if (openPositions.length === 0) {
+        setTradingPositions([]);
+        console.log('⚡ FAST LOADING: No positions found, completed instantly');
+        return;
       }
       
-              console.log(`Loaded ${activePositions.length} active positions with real-time P&L and images`);
+      // STEP 2: Batch fetch token images (OPTIMIZED - parallel requests)
+      const tokenAddresses = [...new Set(openPositions.map(p => p.token_address))];
+      console.log(`⚡ FAST LOADING: Batching token data for ${tokenAddresses.length} unique tokens...`);
+      
+      const tokenDataPromises = tokenAddresses.map(async (address) => {
+        try {
+          const tokenData = await fetchTokenDetailCached(address);
+          return { address, logoURI: tokenData?.logoURI || null };
+        } catch (error) {
+          console.warn(`Token data fetch failed for ${address}:`, error);
+          return { address, logoURI: null };
+        }
+      });
+      
+      const tokenResults = await Promise.all(tokenDataPromises);
+      const tokenImageMap = tokenResults.reduce((acc, { address, logoURI }) => {
+        acc[address] = logoURI;
+        return acc;
+      }, {} as Record<string, string | null>);
+      
+      // STEP 3: Set positions with images (FAST - no P&L calculations yet)
+      const positionsWithImages = openPositions.map(position => ({
+        ...position,
+        token_image: tokenImageMap[position.token_address],
+        // Use existing P&L values from database or defaults
+        current_pnl: position.current_pnl || 0,
+        current_price: position.current_price || position.entry_price,
+        margin_ratio: position.margin_ratio || 0
+      }));
+      
+      setTradingPositions(positionsWithImages);
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`⚡ FAST LOADING: Completed in ${loadTime}ms - positions displayed immediately!`);
+      console.log(`🚀 BUSINESS PLAN: Real-time P&L updates will start via 20Hz price service`);
+      
+      // STEP 4: Refresh SOL balance (non-blocking)
+      refreshSOLBalance();
+      
     } catch (error) {
       console.error('Error loading positions:', error);
       setTradingPositions([]);
@@ -792,11 +923,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const leverage = position.leverage;
     
     // Calculate P&L in USD
+    // FIXED: Don't multiply by leverage - amount already represents the leveraged position
     let pnl_usd = 0;
     if (position.direction === 'Long') {
-      pnl_usd = (current_price - entry_price) * amount * leverage;
+      pnl_usd = (current_price - entry_price) * amount;
     } else {
-      pnl_usd = (entry_price - current_price) * amount * leverage;
+      pnl_usd = (entry_price - current_price) * amount;
     }
     
     // Calculate margin ratio in SOL terms (CORRECT WAY)
@@ -822,250 +954,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       margin_ratio: Math.min(margin_ratio, 1),
       current_price
     };
-  };
-
-  // Update position P&L using cached prices (much faster)
-  const updatePositionPnL = async () => {
-    if (!walletAddress || tradingPositions.length === 0) return;
-    
-    try {
-      console.log('🔄 Updating position P&L using real-time cached prices...');
-      
-      const updatedPositions = tradingPositions.map((position) => {
-        try {
-          const pnlData = calculatePositionPnLWithCachedPrice(position);
-          
-          // Check for liquidation FIRST (margin ratio >= 100%)
-          if (pnlData.margin_ratio >= 1.0) {
-            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
-            // Mark for liquidation (will be handled by separate liquidation service)
-            positionService.liquidatePosition(position.id, pnlData.current_price);
-            
-            return {
-              ...position,
-              status: 'liquidated' as const,
-              current_pnl: pnlData.pnl,
-              current_price: pnlData.current_price,
-              margin_ratio: pnlData.margin_ratio,
-              updated_at: new Date().toISOString()
-            };
-          }
-          
-          return {
-            ...position,
-            current_pnl: pnlData.pnl,
-            current_price: pnlData.current_price,
-            margin_ratio: pnlData.margin_ratio,
-            updated_at: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Error updating P&L for position ${position.id}:`, error);
-          return position;
-        }
-      });
-      
-      // Filter out liquidated positions from the display
-      const activePositions = updatedPositions.filter(p => p.status === 'open');
-      setTradingPositions(activePositions);
-      
-      const liquidatedCount = updatedPositions.length - activePositions.length;
-      if (liquidatedCount > 0) {
-        console.log(`${liquidatedCount} position(s) liquidated and removed from display`);
-      }
-      
-              console.log(`Updated ${activePositions.length} positions using cached prices (Update #${priceUpdateCount})`);
-    } catch (error) {
-      console.error('Error updating position P&L:', error);
-    }
-  };
-
-  // Update position P&L using unified price service data
-  const updatePositionPnLFromData = (priceData: { solPrice: number; tokenPrices: Record<string, number>; lastUpdate: number }) => {
-    if (!walletAddress || tradingPositions.length === 0) return;
-    
-    try {
-      const updatedPositions = tradingPositions.map((position) => {
-        try {
-          const current_price = priceData.tokenPrices[position.token_address] || position.entry_price;
-          const entry_price = position.entry_price;
-          const amount = position.amount;
-          const leverage = position.leverage;
-          
-          // Calculate P&L in USD
-          let pnl_usd = 0;
-          if (position.direction === 'Long') {
-            pnl_usd = (current_price - entry_price) * amount * leverage;
-          } else {
-            pnl_usd = (entry_price - current_price) * amount * leverage;
-          }
-          
-          // Track P&L changes for monitoring
-          const lastPnL = lastPnLValues[position.id] || 0;
-          
-          // Update last P&L values for position tracking
-          setLastPnLValues(prev => ({ ...prev, [position.id]: pnl_usd }));
-          
-          // Calculate margin ratio in SOL terms
-          const max_loss_sol = position.collateral_sol;
-          const pnl_sol = pnl_usd / priceData.solPrice;
-          
-          let margin_ratio = 0;
-          if (pnl_sol < 0) {
-            margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
-          }
-          
-          // Check for liquidation risk
-          if (margin_ratio >= 0.9) {
-            hapticFeedback.error();
-          } else if (margin_ratio >= 0.8) {
-            hapticFeedback.medium();
-          }
-          
-          // Check for liquidation
-          if (margin_ratio >= 1.0) {
-            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(margin_ratio * 100).toFixed(1)}%`);
-            positionService.liquidatePosition(position.id, current_price);
-            
-            return {
-              ...position,
-              status: 'liquidated' as const,
-              current_pnl: pnl_usd,
-              current_price,
-              margin_ratio,
-              updated_at: new Date().toISOString()
-            };
-          }
-          
-          return {
-            ...position,
-            current_pnl: pnl_usd,
-            current_price,
-            margin_ratio,
-            updated_at: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Error updating P&L for position ${position.id}:`, error);
-          return position;
-        }
-      });
-      
-      // Filter out liquidated positions from the display
-      const activePositions = updatedPositions.filter(p => p.status === 'open');
-      setTradingPositions(activePositions);
-      
-    } catch (error) {
-      console.error('Error updating position P&L from unified data:', error);
-    }
-  };
-
-  // LIVE: Update position P&L using Birdeye WebSocket every 1 second
-  const updatePositionPnLLive = async () => {
-    if (!walletAddress || tradingPositions.length === 0) return;
-
-    try {
-      // Get unique token addresses from positions
-      const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
-      
-      // Get fresh prices from Birdeye WebSocket (lightning fast)
-      const freshPrices = getJupiterPrices(uniqueTokens);
-      
-      // Fallback to Birdeye REST API for any missing WebSocket prices
-      const missingTokens = uniqueTokens.filter(token => !freshPrices[token]);
-      if (missingTokens.length > 0) {
-        console.log(`Missing Birdeye WebSocket prices for ${missingTokens.length} tokens, using REST API fallback`);
-        await Promise.all(
-          missingTokens.map(async (tokenAddress) => {
-            try {
-              const tokenData = await fetchTokenDetailCached(tokenAddress);
-              if (tokenData) {
-                freshPrices[tokenAddress] = tokenData.price;
-              }
-            } catch (error) {
-              // Silent fail for individual token price fetches
-            }
-          })
-        );
-      }
-
-      const updatedPositions = tradingPositions.map((position) => {
-        try {
-          const freshPrice = freshPrices[position.token_address];
-          
-          if (!freshPrice) {
-            // Keep current data if price fetch failed
-            return position;
-          }
-
-          const currentPrice = freshPrice;
-          const priceChange = currentPrice - position.entry_price;
-          
-          let pnl: number;
-          if (position.direction === 'Long') {
-            pnl = (priceChange / position.entry_price) * position.position_value_usd * position.leverage;
-          } else { // Short
-            pnl = -(priceChange / position.entry_price) * position.position_value_usd * position.leverage;
-          }
-
-          // Calculate margin ratio for liquidation risk
-          const currentPositionValue = Math.abs(position.position_value_usd + pnl);
-          const collateralValue = position.collateral_sol * (solPrice || 150);
-          const margin_ratio = currentPositionValue > 0 ? collateralValue / currentPositionValue : 0;
-          
-          // Check for liquidation (margin ratio below 5%)
-          const isLiquidated = margin_ratio < 0.05;
-
-          // Update position P&L in database with fresh price
-          if (isLiquidated && position.status === 'open') {
-            console.log(`LIVE Position ${position.id} liquidated! Fresh price: $${currentPrice.toFixed(6)}, Margin ratio: ${(margin_ratio * 100).toFixed(1)}%`);
-            positionService.liquidatePosition(position.id, currentPrice);
-            
-            return {
-              ...position,
-              status: 'liquidated' as const,
-              current_pnl: pnl,
-              current_price: currentPrice,
-              margin_ratio: margin_ratio,
-              updated_at: new Date().toISOString()
-            };
-          } else if (position.status === 'open') {
-            positionService.updatePositionPnL(position.id, {
-              position_id: position.id,
-              price: currentPrice,
-              pnl: pnl,
-              margin_ratio: margin_ratio
-            });
-          }
-
-          return {
-            ...position,
-            current_pnl: pnl,
-            current_price: currentPrice,
-            margin_ratio: margin_ratio,
-            updated_at: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Error updating LIVE P&L for position ${position.id}:`, error);
-          return position;
-        }
-      });
-
-      // Filter out liquidated positions from active display
-      const activePositions = updatedPositions.filter(p => p.status === 'open');
-      setTradingPositions(activePositions);
-
-      const liquidatedCount = updatedPositions.length - activePositions.length;
-      if (liquidatedCount > 0) {
-        console.log(`${liquidatedCount} position(s) were liquidated with LIVE Birdeye prices`);
-      }
-
-      // Only log occasionally to avoid spam (every 5 seconds approximately)
-      if (Date.now() % 5000 < 1000) {
-        console.log(`Updated ${activePositions.length} positions with LIVE Birdeye prices`);
-      }
-
-    } catch (error) {
-      console.error('Error updating positions with Birdeye WebSocket:', error);
-    }
   };
 
   // Calculate total portfolio value including position P&L
@@ -1674,10 +1562,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       await positionService.closePosition(positionId, 'manual');
       
-      // Reload positions to reflect the change
+            // Reload positions to reflect the change
       await loadTradingPositions();
       
-                console.log('Position closed successfully with fresh price');
+      // ADDED: Refresh SOL balance immediately after closing position (user should see returned collateral)
+      refreshSOLBalance();
+      
+      console.log('Position closed successfully with fresh price');
     } catch (error) {
               console.error('Error closing position:', error);
     } finally {
@@ -1818,7 +1709,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  // Debug function to check profile status
+    // Debug function to check profile status
   const debugProfile = async () => {
     if (!walletAddress) {
       console.log('No wallet connected');
@@ -1834,7 +1725,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return;
       }
       
-              console.log('Profile found in database:', {
+      console.log('Profile found in database:', {
         wallet_address: profile.wallet_address,
         username: profile.username,
         usd_balance: profile.balance,
@@ -1843,7 +1734,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         updated_at: profile.updated_at
       });
       
-              console.log('Current state comparison:', {
+      console.log('Current state comparison:', {
         db_sol_balance: profile.sol_balance,
         ui_sol_balance: currentSOLBalance,
         db_usd_balance: profile.balance,
@@ -1851,9 +1742,79 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       });
       
     } catch (error) {
-              console.error('Error debugging profile:', error);
+      console.error('Error debugging profile:', error);
     }
   };
+
+  // ADDED: Debug SOL balance issues - add to window for testing
+  useEffect(() => {
+    if (walletAddress) {
+      (window as any).debugSOLBalance = async () => {
+        console.log('🔧 DEBUG SOL BALANCE SYSTEM:');
+        
+        try {
+          const profile = await userProfileService.getProfile(walletAddress);
+          const positions = await positionService.getUserPositions(walletAddress);
+          const activePositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
+          
+          const totalCollateral = activePositions.reduce((sum, pos) => sum + pos.collateral_sol, 0);
+          
+          console.log('📊 SOL BALANCE BREAKDOWN:', {
+            database_sol_balance: profile?.sol_balance || 0,
+            ui_displayed_balance: currentSOLBalance,
+            active_positions: activePositions.length,
+            collateral_locked: totalCollateral.toFixed(4),
+            available_sol: (profile?.sol_balance || 0).toFixed(4),
+            total_sol_holdings: ((profile?.sol_balance || 0) + totalCollateral).toFixed(4)
+          });
+          
+          console.log('🔄 REFRESHING SOL BALANCE NOW...');
+          await refreshSOLBalance();
+          console.log('✅ SOL balance refresh complete');
+          
+          return {
+            database_balance: profile?.sol_balance || 0,
+            ui_balance: currentSOLBalance,
+            positions_count: activePositions.length,
+            collateral_locked: totalCollateral
+          };
+        } catch (error) {
+          console.error('❌ Error debugging SOL balance:', error);
+          return error;
+        }
+      };
+      
+      (window as any).forceRefreshSOL = () => {
+        console.log('🔄 FORCE REFRESHING SOL BALANCE...');
+        refreshSOLBalance();
+        loadTradingPositions();
+        return 'SOL balance and positions refreshed';
+      };
+
+      (window as any).testPositionLoadSpeed = async () => {
+        console.log('⚡ TESTING POSITION LOAD PERFORMANCE...');
+        const startTime = Date.now();
+        
+        setIsLoadingPositions(true);
+        await loadTradingPositions();
+        
+        const loadTime = Date.now() - startTime;
+        console.log(`🏁 POSITION LOAD COMPLETED IN: ${loadTime}ms`);
+        
+        return {
+          loadTimeMs: loadTime,
+          positionCount: tradingPositions.length,
+          performance: loadTime < 500 ? 'EXCELLENT' : loadTime < 1000 ? 'GOOD' : loadTime < 2000 ? 'FAIR' : 'SLOW',
+          optimizations: [
+            '✅ Eliminated heavy P&L calculations on load',
+            '✅ Batched token image fetches',
+            '✅ Used database values instead of API calls',
+            '✅ Deferred calculations to real-time service'
+          ]
+        };
+      };
+    }
+  }, [walletAddress, currentSOLBalance]);
 
   // Show different views based on viewState
   if (viewState === 'token-detail') {
@@ -2631,8 +2592,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="space-y-4">
                     {activePositions.map((position) => {
                       const isPositive = position.current_pnl >= 0;
-                      const pnlPercent = position.position_value_usd > 0 
-                        ? (position.current_pnl / position.position_value_usd) * 100 
+                      
+                      // FIXED: P&L percentage should be based on collateral (actual investment), not leveraged position value
+                      const collateralValueUSD = (position.collateral_sol || 0) * solPrice;
+                      const pnlPercent = collateralValueUSD > 0 
+                        ? (position.current_pnl / collateralValueUSD) * 100 
                         : 0;
                       
                       // Add warning styling for positions close to liquidation
@@ -2742,7 +2706,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                 <span>Live Price:</span>
 
                               </span>
-                              <p className="text-white font-medium">{formatPrice(tokenPrices[position.token_address] || position.entry_price)}</p>
+                              <p className="text-white font-medium">
+                {formatPrice(tokenPrices[position.token_address] || position.entry_price)}
+                {tokenPrices[position.token_address] && (
+                  <span className="text-green-400 text-xs ml-1">● Live</span>
+                )}
+              </p>
                             </div>
                           </div>
                           
@@ -2803,7 +2772,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               </h3>
 
               {isLoadingTokens ? (
-                <div className="space-y-3">
+                <div>
+                  <div className="text-center mb-4">
+                    <p className="text-gray-500 text-xs">Loading from multiple data sources...</p>
+                  </div>
+                  <div className="space-y-3">
                   {[...Array(6)].map((_, index) => (
                     <div key={index} className="bg-gray-900 border border-gray-700 rounded-lg p-4 animate-pulse">
                       <div className="flex items-center justify-between">
@@ -2821,6 +2794,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -2881,14 +2855,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               {!isLoadingTokens && trendingTokens.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 text-center">
                   <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <TrendingUp className="w-6 h-6 text-gray-500" />
+                    <AlertTriangle className="w-6 h-6 text-orange-500" />
                   </div>
-                  <p className="text-gray-400 text-sm">No trending tokens available</p>
+                  <p className="text-gray-400 text-sm mb-2">Due to technical errors we couldn't load the trending token pairs</p>
+                  <p className="text-gray-500 text-xs mb-3">Our data provider is experiencing issues</p>
                   <button
                     onClick={loadTrendingTokens}
-                    className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+                    className="mt-2 text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1 mx-auto"
                   >
-                    Try again
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Try again</span>
                   </button>
                 </div>
               )}

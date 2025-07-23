@@ -139,13 +139,14 @@ class PositionService {
       const leverage = position.leverage;
       
       // Calculate P&L in USD
+      // FIXED: Don't multiply by leverage - amount already represents the leveraged position
       let pnl_usd = 0;
       if (position.direction === 'Long') {
         // Long: Profit when price goes up
-        pnl_usd = (current_price - entry_price) * amount * leverage;
+        pnl_usd = (current_price - entry_price) * amount;
       } else {
         // Short: Profit when price goes down
-        pnl_usd = (entry_price - current_price) * amount * leverage;
+        pnl_usd = (entry_price - current_price) * amount;
       }
       
       // Calculate margin ratio in SOL terms (FIXED)
@@ -785,7 +786,7 @@ class PositionService {
       }
       
       // Calculate P&L with the selected worst price
-      const finalPnL = this.calculatePositionPnLWithPrice(position, close_price);
+      const finalPnL = await this.calculatePositionPnLWithPrice(position, close_price);
       const sol_price = await fetchSOLPrice();
       
       // Calculate total return amount (collateral + P&L)
@@ -1056,26 +1057,41 @@ class PositionService {
   }
 
   // Calculate P&L with a specific price
-  private calculatePositionPnLWithPrice(position: any, price: number): { pnl: number; margin_ratio: number } {
+  private async calculatePositionPnLWithPrice(position: any, price: number): Promise<{ pnl: number; margin_ratio: number }> {
     const entry_price = position.entry_price;
     const amount = position.amount;
     const leverage = position.leverage;
     
     // Calculate P&L in USD
+    // FIXED: Don't multiply by leverage - amount already represents the leveraged position
     let pnl_usd = 0;
     if (position.direction === 'Long') {
-      pnl_usd = (price - entry_price) * amount * leverage;
+      pnl_usd = (price - entry_price) * amount;
     } else {
-      pnl_usd = (entry_price - price) * amount * leverage;
+      pnl_usd = (entry_price - price) * amount;
     }
     
-    // Calculate margin ratio
+    // Get REAL-TIME SOL price instead of hardcoded value
+    const sol_price = await fetchSOLPrice();
+    
+    // Calculate margin ratio using real SOL price
     const max_loss_sol = position.collateral_sol;
-    const pnl_sol = pnl_usd / 98.45; // Using average SOL price
+    const pnl_sol = pnl_usd / sol_price; // Use real-time SOL price
     let margin_ratio = 0;
     if (pnl_sol < 0) {
       margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
     }
+    
+    console.log('📊 P&L Calculation:', {
+      token: position.token_symbol,
+      price_used: price,
+      entry_price: entry_price,
+      pnl_usd: pnl_usd,
+      sol_price_real_time: sol_price,
+      pnl_sol: pnl_sol,
+      collateral_sol: max_loss_sol,
+      margin_ratio: margin_ratio
+    });
     
     return {
       pnl: pnl_usd,

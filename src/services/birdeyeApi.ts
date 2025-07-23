@@ -145,6 +145,7 @@ const cleanTokenAddress = (address: string): string => {
   return address.split(':')[0].trim();
 };
 
+// DEPRECATED: Fallback data no longer used - we show error messages instead
 const getFallbackData = (): TrendingToken[] => [
   {
     address: 'So11111111111111111111111111111111111111112',
@@ -274,15 +275,27 @@ export const fetchSOLPrice = async (): Promise<number> => {
     
     if (response.data?.success && response.data?.data?.value) {
       const solPrice = parseFloat(response.data.data.value);
-      console.log('✅ SOL price fetched:', `$${solPrice.toFixed(2)}`);
+      
+      // ENHANCED: Validate SOL price before using it
+      if (!validateSOLPrice(solPrice)) {
+        logPriceError(`Invalid SOL price from API: $${solPrice}`, SOL_TOKEN_ADDRESS);
+        throw new Error(`Invalid SOL price: $${solPrice}`);
+      }
+      
+      console.log('✅ SOL price fetched and validated:', `$${solPrice.toFixed(2)}`);
       return solPrice;
     } else {
-      console.warn('⚠️ Invalid SOL price response, using fallback');
-      return 98.45; // Fallback price
+      console.warn('⚠️ Invalid SOL price response structure');
+      logPriceError('Invalid SOL price response structure', SOL_TOKEN_ADDRESS);
+      throw new Error('Invalid SOL price response');
     }
   } catch (error: any) {
     console.error('💥 Error fetching SOL price:', error.message);
-    return 98.45; // Fallback price
+    logPriceError(`SOL price fetch failed: ${error.message}`, SOL_TOKEN_ADDRESS);
+    
+    // CRITICAL: Don't use hardcoded fallback - this can cause wrong prices!
+    // Instead, try alternative methods or throw error
+    throw new Error(`Unable to fetch current SOL price: ${error.message}`);
   }
 };
 
@@ -325,116 +338,276 @@ export const fetchPPAPriceInSOL = async (): Promise<number> => {
   }
 };
 
-export const fetchTrendingTokens = async (): Promise<TrendingToken[]> => {
+// DexScreener API fallback interface
+interface DexScreenerPair {
+  chainId: string;
+  dexId: string;
+  url: string;
+  pairAddress: string;
+  baseToken: {
+    address: string;
+    name: string;
+    symbol: string;
+  };
+  quoteToken: {
+    address: string;
+    name: string;
+    symbol: string;
+  };
+  priceNative: string;
+  priceUsd?: string;
+  txns: {
+    m5: { buys: number; sells: number };
+    h1: { buys: number; sells: number };
+    h6: { buys: number; sells: number };
+    h24: { buys: number; sells: number };
+  };
+  volume: {
+    h24: number;
+    h6: number;
+    h1: number;
+    m5: number;
+  };
+  priceChange: {
+    m5: number;
+    h1: number;
+    h6: number;
+    h24: number;
+  };
+  liquidity?: {
+    usd?: number;
+    base: number;
+    quote: number;
+  };
+  fdv?: number;
+  marketCap?: number;
+}
+
+interface DexScreenerResponse {
+  schemaVersion: string;
+  pairs: DexScreenerPair[];
+}
+
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 2000,      // 2 seconds between retries
+  timeoutMs: 10000,      // 10 seconds timeout per attempt
+  fallbackDelay: 5000    // 5 seconds before trying fallback API
+};
+
+// Helper function to retry API calls with exponential backoff
+const retryApiCall = async <T>(
+  fn: () => Promise<T>,
+  retries: number = RETRY_CONFIG.maxRetries,
+  delay: number = RETRY_CONFIG.retryDelay
+): Promise<T> => {
   try {
-    console.log('🔑 Using API key:', BIRDEYE_API_KEY);
-    console.log('🚀 Fetching trending tokens from: /defi/token_trending');
-    console.log('📡 Making API request now...');
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
     
-    await throttleApiCall(); // Apply rate limiting
+    console.log(`⏰ Retrying in ${delay}ms... (${retries} attempts remaining)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
     
-    const response = await birdeyeApi.get<BirdeyeTrendingResponse>('/defi/token_trending', {
-      params: {
-        limit: 20
+    // Exponential backoff
+    return retryApiCall(fn, retries - 1, delay * 1.5);
+  }
+};
+
+// Fetch trending tokens from DexScreener as fallback
+const fetchTrendingTokensFromDexScreener = async (): Promise<TrendingToken[]> => {
+  try {
+    console.log('🔄 FALLBACK: Trying DexScreener API for trending tokens...');
+    
+    const response = await fetch('https://api.dexscreener.com/latest/dex/pairs/solana', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
       },
-      timeout: 10000,
+      signal: AbortSignal.timeout(RETRY_CONFIG.timeoutMs)
     });
+
+    if (!response.ok) {
+      throw new Error(`DexScreener API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: DexScreenerResponse = await response.json();
     
-    console.log('✅ API Response received:', {
-      status: response.status,
-      success: response.data?.success,
-      hasTokens: !!response.data?.data?.tokens,
-      tokenCount: response.data?.data?.tokens?.length || 0
-    });
-
-    // Check if we have the expected response structure
-    if (!response.data || !response.data.success || !response.data.data || !response.data.data.tokens || !Array.isArray(response.data.data.tokens)) {
-      console.warn('⚠️ Invalid response structure, using fallback data');
-      console.log('Response structure:', JSON.stringify(response.data, null, 2));
-      return getFallbackData();
+    if (!data.pairs || !Array.isArray(data.pairs)) {
+      throw new Error('Invalid DexScreener response structure');
     }
 
-    const tokens = response.data.data.tokens;
-    
-    if (tokens.length === 0) {
-      console.warn('⚠️ No tokens in response, using fallback data');
-      return getFallbackData();
-    }
+    console.log(`📊 DexScreener returned ${data.pairs.length} pairs`);
 
-    console.log(`📈 Processing ${tokens.length} tokens from Birdeye API`);
-
-    // Transform the data to our format using the correct field names from the API response
-    const trendingTokens: TrendingToken[] = tokens.slice(0, 10).map((token: any, index: number) => {
-      try {
-        const transformedToken = {
-          address: token.address || `fallback-${index}`,
-          symbol: token.symbol || `TOKEN${index}`,
-          name: token.name || token.symbol || `Token ${index}`,
-          logoURI: token.logoURI,
-          price: parseFloat(token.price || 0),
-          priceChange24h: parseFloat(token.price24hChangePercent || 0),
-          volume24h: parseFloat(token.volume24hUSD || 0),
-          marketCap: parseFloat(token.marketcap || token.fdv || 0),
-          liquidity: parseFloat(token.liquidity || 0),
-        };
+    // Filter for high-quality Solana tokens
+    const solanaTokens = data.pairs
+      .filter(pair => {
+        // Only Solana pairs
+        if (pair.chainId !== 'solana') return false;
         
-        console.log(`✅ Transformed token ${index + 1}:`, {
-          symbol: transformedToken.symbol,
-          name: transformedToken.name,
-          price: `$${transformedToken.price}`,
-          change24h: `${transformedToken.priceChange24h}%`
-        });
+        // Must have USD price
+        if (!pair.priceUsd || parseFloat(pair.priceUsd) <= 0) return false;
         
-        return transformedToken;
-      } catch (error) {
-        console.error(`❌ Error transforming token ${index}:`, error);
-        return {
-          address: `error-${index}`,
-          symbol: `ERR${index}`,
-          name: `Error Token ${index}`,
-          logoURI: undefined,
-          price: 0,
-          priceChange24h: 0,
-          volume24h: 0,
-          marketCap: 0,
-          liquidity: 0,
-        };
-      }
-    });
+        // Must have reasonable volume
+        if (!pair.volume?.h24 || pair.volume.h24 < 1000) return false;
+        
+        // Must have liquidity
+        if (!pair.liquidity?.usd || pair.liquidity.usd < 5000) return false;
+        
+        // Skip pairs with suspicious names
+        const symbol = pair.baseToken.symbol.toUpperCase();
+        if (symbol.length > 10 || symbol.includes('TEST') || symbol.includes('FAKE')) return false;
+        
+        return true;
+      })
+      .sort((a, b) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0)) // Sort by volume
+      .slice(0, 15) // Take top 15
+      .map((pair): TrendingToken => ({
+        address: pair.baseToken.address,
+        symbol: pair.baseToken.symbol,
+        name: pair.baseToken.name || pair.baseToken.symbol,
+        logoURI: undefined, // DexScreener doesn't provide logos
+        price: parseFloat(pair.priceUsd || '0'),
+        priceChange24h: pair.priceChange?.h24 || 0,
+        volume24h: pair.volume?.h24 || 0,
+        marketCap: pair.marketCap || pair.fdv || 0,
+        liquidity: pair.liquidity?.usd || 0,
+      }));
 
-    // Filter out invalid tokens
-    const validTokens = trendingTokens.filter(token => 
-      !token.address.startsWith('error-') && 
-      !token.symbol.startsWith('ERR')
-    );
-
-    if (validTokens.length === 0) {
-      console.warn('⚠️ No valid tokens after transformation, using fallback data');
-      return getFallbackData();
-    }
-
-    console.log(`🎉 Successfully processed ${validTokens.length} valid tokens from Birdeye API`);
-    return validTokens;
+    console.log(`✅ FALLBACK SUCCESS: Processed ${solanaTokens.length} quality tokens from DexScreener`);
+    return solanaTokens;
 
   } catch (error: any) {
-    console.error('💥 Error fetching trending tokens:', error.message);
-    
-    if (error.response) {
-      console.error('📡 API Response Error:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        url: error.config?.url
-      });
-    } else if (error.request) {
-      console.error('📡 Network Error - No response received');
-    } else {
-      console.error('⚙️ Request Setup Error:', error.message);
-    }
-    
-    console.log('🔄 Using fallback data due to API error');
-    return getFallbackData();
+    console.error('❌ DexScreener fallback failed:', error.message);
+    throw new Error(`DexScreener fallback failed: ${error.message}`);
   }
+};
+
+// Enhanced trending tokens function with robust fallback system
+export const fetchTrendingTokens = async (): Promise<TrendingToken[]> => {
+  const startTime = Date.now();
+  
+  console.log('🚀 ROBUST TRENDING TOKENS: Starting multi-stage fallback system...');
+  
+  // STAGE 1: Try Birdeye API with retries
+  try {
+    console.log('📡 STAGE 1: Attempting Birdeye API with retries...');
+    
+    const birdeyeTokens = await retryApiCall(async () => {
+      console.log('🔑 Using API key:', BIRDEYE_API_KEY);
+      console.log('🚀 Fetching trending tokens from: /defi/token_trending');
+      
+      await throttleApiCall(); // Apply rate limiting
+      
+      const response = await birdeyeApi.get<BirdeyeTrendingResponse>('/defi/token_trending', {
+        params: {
+          limit: 20
+        },
+        timeout: RETRY_CONFIG.timeoutMs,
+      });
+      
+      console.log('✅ API Response received:', {
+        status: response.status,
+        success: response.data?.success,
+        hasTokens: !!response.data?.data?.tokens,
+        tokenCount: response.data?.data?.tokens?.length || 0
+      });
+
+      // Check if we have the expected response structure
+      if (!response.data || !response.data.success || !response.data.data || !response.data.data.tokens || !Array.isArray(response.data.data.tokens)) {
+        console.warn('⚠️ Invalid response structure from Birdeye API');
+        throw new Error('Invalid API response structure');
+      }
+
+      const tokens = response.data.data.tokens;
+      
+      if (tokens.length === 0) {
+        console.warn('⚠️ No tokens in API response');
+        throw new Error('No trending tokens available from API');
+      }
+
+      console.log(`📈 Processing ${tokens.length} tokens from Birdeye API`);
+
+      // Transform the data to our format using the correct field names from the API response
+      const trendingTokens: TrendingToken[] = tokens.slice(0, 10).map((token: any, index: number) => {
+        try {
+          const transformedToken = {
+            address: token.address || `fallback-${index}`,
+            symbol: token.symbol || `TOKEN${index}`,
+            name: token.name || token.symbol || `Token ${index}`,
+            logoURI: token.logoURI,
+            price: parseFloat(token.price || 0),
+            priceChange24h: parseFloat(token.price24hChangePercent || 0),
+            volume24h: parseFloat(token.volume24hUSD || 0),
+            marketCap: parseFloat(token.marketcap || token.fdv || 0),
+            liquidity: parseFloat(token.liquidity || 0),
+          };
+          
+          console.log(`✅ Transformed token ${index + 1}:`, {
+            symbol: transformedToken.symbol,
+            name: transformedToken.name,
+            price: `$${transformedToken.price}`,
+            change24h: `${transformedToken.priceChange24h}%`
+          });
+          
+          return transformedToken;
+        } catch (transformError) {
+          console.error(`❌ Error transforming token ${index + 1}:`, transformError);
+          return null;
+        }
+      }).filter(token => token !== null) as TrendingToken[];
+
+      // Filter out invalid tokens
+      const validTokens = trendingTokens.filter(token => 
+        token.address && 
+        token.symbol && 
+        token.price > 0 &&
+        !token.symbol.startsWith('ERR')
+      );
+
+      if (validTokens.length === 0) {
+        console.warn('⚠️ No valid tokens after transformation');
+        throw new Error('All tokens failed validation checks');
+      }
+
+      console.log(`🎉 STAGE 1 SUCCESS: ${validTokens.length} valid tokens from Birdeye API in ${Date.now() - startTime}ms`);
+      return validTokens;
+    });
+    
+    return birdeyeTokens;
+
+  } catch (birdeyeError: any) {
+    console.warn(`⚠️ STAGE 1 FAILED: Birdeye API unsuccessful after retries: ${birdeyeError.message}`);
+    
+    // Wait a bit before trying fallback
+    console.log(`⏰ Waiting ${RETRY_CONFIG.fallbackDelay}ms before trying fallback...`);
+    await new Promise(resolve => setTimeout(resolve, RETRY_CONFIG.fallbackDelay));
+  }
+
+  // STAGE 2: Try DexScreener API as fallback
+  try {
+    console.log('📡 STAGE 2: Attempting DexScreener API fallback...');
+    
+    const dexScreenerTokens = await retryApiCall(async () => {
+      return await fetchTrendingTokensFromDexScreener();
+    });
+    
+    console.log(`🎉 STAGE 2 SUCCESS: ${dexScreenerTokens.length} tokens from DexScreener in ${Date.now() - startTime}ms`);
+    return dexScreenerTokens;
+
+  } catch (dexScreenerError: any) {
+    console.error(`❌ STAGE 2 FAILED: DexScreener fallback unsuccessful: ${dexScreenerError.message}`);
+  }
+
+  // STAGE 3: All APIs failed - return empty array for error handling
+  const totalTime = Date.now() - startTime;
+  console.error(`💥 ALL STAGES FAILED: No trending tokens available after ${totalTime}ms`);
+  console.error('🔧 Both Birdeye API and DexScreener fallback failed');
+  
+  return []; // Return empty array for UI error handling
 };
 
 // Token data cache to prevent excessive API calls
@@ -1189,39 +1362,64 @@ export const fetchTokenDetailCached = async (tokenAddress: string): Promise<Toke
   try {
     const now = Date.now();
     
-    // Check cache first
+    // Check cache first - using enhanced cache duration (30 seconds)
     const cached = tokenCache.get(tokenAddress);
     if (cached && now < cached.expires) {
       console.log('✅ Using cached token data for:', tokenAddress.slice(0, 8) + '...');
-      return cached.data;
+      
+      // ENHANCED: Validate cached price before using it
+      if (cached.data?.price && !validateTokenPrice(cached.data.price, cached.data.symbol)) {
+        console.warn('⚠️ Cached price failed validation, fetching fresh data');
+        logPriceError(`Cached price validation failed: $${cached.data.price}`, tokenAddress);
+      } else {
+        return cached.data;
+      }
     }
     
-    // If cache miss or expired, fetch fresh data
+    // If cache miss, expired, or validation failed, fetch fresh data
     console.log('🔄 Fetching fresh token data for:', tokenAddress.slice(0, 8) + '...');
     await throttleApiCall();
     
     const tokenData = await fetchTokenDetail(tokenAddress);
     
-    // Cache the result
+    // ENHANCED: Validate fresh token data before caching
     if (tokenData) {
+      if (!validateTokenPrice(tokenData.price, tokenData.symbol)) {
+        logPriceError(`Fresh token price validation failed: $${tokenData.price}`, tokenAddress);
+        
+        // If fresh data is invalid, check if we have valid stale cache
+        const cached = tokenCache.get(tokenAddress);
+        if (cached?.data?.price && validateTokenPrice(cached.data.price, cached.data.symbol)) {
+          console.log('⚠️ Using validated stale cache due to invalid fresh data');
+          return cached.data;
+        }
+        
+        // If no valid cache, return null to prevent using bad prices
+        console.error('❌ No valid price data available');
+        return null;
+      }
+      
+      // Cache the validated result with enhanced duration
       tokenCache.set(tokenAddress, {
         data: tokenData,
         timestamp: now,
-        expires: now + CACHE_DURATION
+        expires: now + ENHANCED_CACHE_DURATION // 30 seconds instead of 5 minutes
       });
     }
     
     return tokenData;
   } catch (error) {
     console.error('Error fetching cached token detail:', error);
+    logPriceError(`Token detail fetch failed: ${error}`, tokenAddress);
     
-    // Return stale cache if available on error
+    // ENHANCED: Only return stale cache if it passes validation
     const cached = tokenCache.get(tokenAddress);
-    if (cached) {
-      console.log('⚠️ Using stale cache due to API error');
+    if (cached?.data?.price && validateTokenPrice(cached.data.price, cached.data.symbol)) {
+      console.log('⚠️ Using validated stale cache due to API error');
       return cached.data;
     }
     
+    console.warn('❌ No valid cached data available during error');
     return null;
   }
 };
@@ -2112,4 +2310,261 @@ export const initializeBusinessPlanOptimizations = () => {
     localStorage.setItem('cacheVersion', currentVersion);
     console.log('✅ BUSINESS PLAN: Cache optimizations initialized');
   }
+};
+
+// PRICE VALIDATION AND ACCURACY SYSTEM
+const PRICE_VALIDATION = {
+  MIN_TOKEN_PRICE: 0.000000001, // Minimum valid token price
+  MAX_TOKEN_PRICE: 1000000,     // Maximum reasonable token price for meme tokens
+  MIN_SOL_PRICE: 50,           // Minimum reasonable SOL price
+  MAX_SOL_PRICE: 500,          // Maximum reasonable SOL price
+  MAX_PRICE_CHANGE_PERCENT: 50, // Maximum % change considered valid
+  CACHE_DURATION: 30000,        // Reduced to 30 seconds for trading accuracy
+};
+
+// Price change validation to detect errors
+const validatePriceChange = (oldPrice: number, newPrice: number, tokenSymbol?: string): boolean => {
+  if (!oldPrice || !newPrice) return true; // No comparison possible
+  
+  const changePercent = Math.abs((newPrice - oldPrice) / oldPrice) * 100;
+  
+  if (changePercent > PRICE_VALIDATION.MAX_PRICE_CHANGE_PERCENT) {
+    console.warn(`🚨 SUSPICIOUS PRICE CHANGE: ${tokenSymbol || 'Token'} ${oldPrice.toFixed(6)} → ${newPrice.toFixed(6)} (${changePercent.toFixed(1)}% change)`);
+    return false;
+  }
+  
+  return true;
+};
+
+// Enhanced price validation
+const validateTokenPrice = (price: number, tokenSymbol?: string): boolean => {
+  if (!price || price <= 0) {
+    console.error(`❌ INVALID PRICE: ${tokenSymbol || 'Token'} has price: ${price}`);
+    return false;
+  }
+  
+  if (price < PRICE_VALIDATION.MIN_TOKEN_PRICE) {
+    console.warn(`⚠️ SUSPICIOUS LOW PRICE: ${tokenSymbol || 'Token'} price $${price} is extremely low`);
+    return false;
+  }
+  
+  if (price > PRICE_VALIDATION.MAX_TOKEN_PRICE) {
+    console.warn(`⚠️ SUSPICIOUS HIGH PRICE: ${tokenSymbol || 'Token'} price $${price} is extremely high`);
+    return false;
+  }
+  
+  return true;
+};
+
+// Enhanced SOL price validation
+const validateSOLPrice = (price: number): boolean => {
+  if (!price || price <= 0) {
+    console.error(`❌ INVALID SOL PRICE: ${price}`);
+    return false;
+  }
+  
+  if (price < PRICE_VALIDATION.MIN_SOL_PRICE || price > PRICE_VALIDATION.MAX_SOL_PRICE) {
+    console.warn(`⚠️ SUSPICIOUS SOL PRICE: $${price} is outside reasonable range ($${PRICE_VALIDATION.MIN_SOL_PRICE}-$${PRICE_VALIDATION.MAX_SOL_PRICE})`);
+    return false;
+  }
+  
+  return true;
+};
+
+// Global price accuracy monitoring
+let priceErrorCount = 0;
+let lastPriceErrorTime = 0;
+
+const logPriceError = (error: string, tokenAddress?: string) => {
+  priceErrorCount++;
+  lastPriceErrorTime = Date.now();
+  
+  console.error(`🚨 PRICE ACCURACY ERROR #${priceErrorCount}: ${error}`, {
+    token: tokenAddress?.slice(0, 8) + '...' || 'Unknown',
+    errorCount: priceErrorCount,
+    lastError: new Date(lastPriceErrorTime).toISOString()
+  });
+  
+  // Add to window for debugging
+  (window as any).priceErrors = (window as any).priceErrors || [];
+  (window as any).priceErrors.push({
+    error,
+    token: tokenAddress,
+    timestamp: lastPriceErrorTime,
+    count: priceErrorCount
+  });
+};
+
+// Enhanced cache duration based on price accuracy - override existing CACHE_DURATION
+const ENHANCED_CACHE_DURATION = PRICE_VALIDATION.CACHE_DURATION; // 30 seconds instead of 5 minutes
+
+// PRICE ACCURACY DEBUGGING AND MONITORING
+(window as any).checkPriceAccuracy = () => {
+  console.log('🔍 PRICE ACCURACY SYSTEM STATUS:');
+  console.log('📊 Validation Thresholds:', PRICE_VALIDATION);
+  console.log('🚨 Total Price Errors:', priceErrorCount);
+  console.log('⏰ Last Error Time:', lastPriceErrorTime ? new Date(lastPriceErrorTime).toISOString() : 'None');
+  
+  // Check cache status
+  console.log('💾 Current Cache Status:');
+  let validCacheCount = 0;
+  let invalidCacheCount = 0;
+  
+  tokenCache.forEach((cached, address) => {
+    const isValid = cached.data?.price && validateTokenPrice(cached.data.price, cached.data.symbol);
+    const age = Date.now() - cached.timestamp;
+    
+    console.log(`  ${address.slice(0, 8)}...: $${cached.data?.price?.toFixed(6) || 'N/A'} (${isValid ? '✅ Valid' : '❌ Invalid'}, ${Math.floor(age/1000)}s old)`);
+    
+    if (isValid) validCacheCount++;
+    else invalidCacheCount++;
+  });
+  
+  console.log(`📈 Cache Summary: ${validCacheCount} valid, ${invalidCacheCount} invalid prices`);
+  
+  // Show recent errors
+  if ((window as any).priceErrors && (window as any).priceErrors.length > 0) {
+    console.log('🚨 Recent Price Errors:');
+    (window as any).priceErrors.slice(-5).forEach((error: any, i: number) => {
+      console.log(`  ${i + 1}. ${error.error} (${error.token || 'Unknown'}) at ${new Date(error.timestamp).toLocaleTimeString()}`);
+    });
+  }
+  
+  return {
+    totalErrors: priceErrorCount,
+    validCache: validCacheCount,
+    invalidCache: invalidCacheCount,
+    thresholds: PRICE_VALIDATION
+  };
+};
+
+// Clear all cached prices - use when you suspect price issues
+(window as any).clearPriceCache = () => {
+  const cacheSize = tokenCache.size;
+  tokenCache.clear();
+  console.log(`🧹 Cleared ${cacheSize} cached prices - next requests will fetch fresh data`);
+  return `Cleared ${cacheSize} cached prices`;
+};
+
+// Test price validation manually
+(window as any).testPriceValidation = (price: number, symbol?: string) => {
+  const isValid = validateTokenPrice(price, symbol);
+  console.log(`🧪 Price Validation Test: $${price} for ${symbol || 'Token'} → ${isValid ? '✅ Valid' : '❌ Invalid'}`);
+  return isValid;
+};
+
+// Test the robust trending tokens fallback system
+(window as any).testTrendingTokensFallback = async () => {
+  console.log('🧪 TESTING ROBUST TRENDING TOKENS FALLBACK SYSTEM...');
+  
+  const results = {
+    stage1_birdeye: 'NOT_TESTED',
+    stage2_dexscreener: 'NOT_TESTED',
+    total_time: 0,
+    tokens_found: 0,
+    source: 'UNKNOWN'
+  };
+  
+  const startTime = Date.now();
+  
+  try {
+    const tokens = await fetchTrendingTokens();
+    results.total_time = Date.now() - startTime;
+    results.tokens_found = tokens.length;
+    
+    if (tokens.length > 0) {
+      // Try to detect source based on token structure
+      const firstToken = tokens[0];
+      if (firstToken.logoURI) {
+        results.source = 'BIRDEYE_API';
+      } else {
+        results.source = 'DEXSCREENER_FALLBACK';
+      }
+    }
+    
+    console.log('🏁 FALLBACK SYSTEM TEST COMPLETE:', results);
+    console.log('📊 Sample tokens found:', tokens.slice(0, 3).map(t => ({
+      symbol: t.symbol,
+      price: `$${t.price.toFixed(6)}`,
+      volume24h: `$${t.volume24h.toLocaleString()}`
+    })));
+    
+    return {
+      success: true,
+      ...results,
+      sample_tokens: tokens.slice(0, 3)
+    };
+    
+  } catch (error: any) {
+    results.total_time = Date.now() - startTime;
+    console.error('❌ FALLBACK SYSTEM TEST FAILED:', error.message);
+    
+    return {
+      success: false,
+      error: error.message,
+      ...results
+    };
+  }
+};
+
+// Check retry configuration status
+(window as any).checkRetryConfig = () => {
+  console.log('⚙️ RETRY CONFIGURATION:', RETRY_CONFIG);
+  console.log('🔄 This means:');
+  console.log(`  - ${RETRY_CONFIG.maxRetries} retries with ${RETRY_CONFIG.retryDelay}ms initial delay`);
+  console.log(`  - ${RETRY_CONFIG.timeoutMs}ms timeout per attempt`);
+  console.log(`  - ${RETRY_CONFIG.fallbackDelay}ms wait before trying DexScreener`);
+  console.log(`  - Exponential backoff (delays increase by 1.5x each retry)`);
+  
+  return RETRY_CONFIG;
+};
+
+// Monitor price changes in real-time
+(window as any).monitorPriceChanges = (tokenAddress: string, duration: number = 60000) => {
+  console.log(`📊 MONITORING PRICE CHANGES for ${tokenAddress.slice(0,8)}... for ${duration/1000} seconds`);
+  
+  const prices: Array<{time: number, price: number, change?: number}> = [];
+  let lastPrice = 0;
+  
+  const monitor = setInterval(async () => {
+    try {
+      const tokenData = await fetchTokenDetailCached(tokenAddress);
+      if (tokenData?.price) {
+        const changePercent = lastPrice > 0 ? ((tokenData.price - lastPrice) / lastPrice) * 100 : 0;
+        
+        prices.push({
+          time: Date.now(),
+          price: tokenData.price,
+          change: changePercent
+        });
+        
+        console.log(`📈 Price: $${tokenData.price.toFixed(6)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%)`);
+        
+        // Alert on suspicious changes
+        if (Math.abs(changePercent) > PRICE_VALIDATION.MAX_PRICE_CHANGE_PERCENT / 2) {
+          console.warn(`⚠️ LARGE PRICE CHANGE DETECTED: ${changePercent.toFixed(2)}%`);
+        }
+        
+        lastPrice = tokenData.price;
+      }
+    } catch (error) {
+      console.error('❌ Price monitoring error:', error);
+    }
+  }, 5000); // Check every 5 seconds
+  
+  // Stop monitoring after duration
+  setTimeout(() => {
+    clearInterval(monitor);
+    console.log('🏁 PRICE MONITORING COMPLETE:', {
+      totalSamples: prices.length,
+      priceRange: prices.length > 0 ? {
+        min: Math.min(...prices.map(p => p.price)),
+        max: Math.max(...prices.map(p => p.price)),
+        latest: prices[prices.length - 1]?.price
+      } : null,
+      largestChange: prices.length > 0 ? Math.max(...prices.map(p => Math.abs(p.change || 0))) : 0
+    });
+  }, duration);
+  
+  return `Monitoring started for ${duration/1000} seconds`;
 };
