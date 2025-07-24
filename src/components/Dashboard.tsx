@@ -15,6 +15,7 @@ import businessPlanPriceService from '../services/businessPlanPriceService';
 import { initializeBusinessPlanOptimizations } from '../services/birdeyeApi';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
+import TradingModal from './TradingModal';
 import LockingModal from './LockingModal';
 import UnlockModal from './UnlockModal';
 import WelcomePopup from './WelcomePopup';
@@ -189,6 +190,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     leverage: number;
     positionId: number; // Add position ID to track results
   } | null>(null);
+  
+  // Trading modal state for direct token trading
+  const [showTradingModal, setShowTradingModal] = useState(false);
+  const [selectedTokenData, setSelectedTokenData] = useState<any | null>(null);
   
   // Trade results modal state
   const [showTradeResults, setShowTradeResults] = useState(false);
@@ -1073,10 +1078,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
               console.log('Token passes all validation checks, proceeding to trading...');
       
-      // Token passes all validation, proceed to trading
-      setSelectedTokenAddress(tokenAddress);
-    setViewState('token-detail');
-    setCaInput('');
+      // Token passes all validation, proceed to trading modal directly
+      setSelectedTokenData(tokenData);
+      setShowTradingModal(true);
+      setCaInput('');
       setCaValidationError(null);
       
     } catch (error: any) {
@@ -1233,12 +1238,20 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  const handleTokenClick = (token: TrendingToken) => {
-    // Go directly to token detail page
-    setSelectedTokenAddress(token.address);
-    setViewState('token-detail');
+  const handleTokenClick = async (token: TrendingToken) => {
+    // Go directly to trading modal
     soundManager.playClick();
     hapticFeedback.light();
+    
+    try {
+      const tokenData = await fetchTokenDetailCached(token.address);
+      if (tokenData) {
+        setSelectedTokenData(tokenData);
+        setShowTradingModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading token for trading:', error);
+    }
   };
 
   const handleCloseSuccessModal = () => {
@@ -1903,13 +1916,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  // Handle search result selection
-  const handleSearchResultClick = (result: SearchResult) => {
-    setSelectedTokenAddress(result.address);
-    setViewState('token-detail');
+  // Handle search result selection - go directly to trading modal
+  const handleSearchResultClick = async (result: SearchResult) => {
     setSearchQuery('');
     setShowSearchResults(false);
     setSearchResults([]);
+    
+    // Fetch token data and open trading modal directly
+    try {
+      const tokenData = await fetchTokenDetailCached(result.address);
+      if (tokenData) {
+        setSelectedTokenData(tokenData);
+        setShowTradingModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading token for trading:', error);
+    }
   };
 
   // Swipe to refresh functionality
@@ -2940,10 +2962,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <h1 className="text-4xl font-normal mb-4">
                 Trade <span style={{ color: '#1e7cfa' }}>History</span>
               </h1>
-              <p className="text-gray-400 text-xl mb-4">View Your Completed Trades</p>
-              <p className="text-gray-500 text-lg">
-                {tradeHistory.length} completed trades
-              </p>
             </div>
 
 
@@ -3011,7 +3029,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       <div 
                         key={trade.id} 
                         onClick={() => {
-                          // Navigate to token detail page when clicked
+                          // Navigate to trading modal when clicked
                           handleTokenClick({
                             address: trade.token_address,
                             symbol: trade.token_symbol,
@@ -4034,6 +4052,29 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }}
         tradeData={tradeResultsData}
       />
+
+      {/* Trading Modal */}
+      {showTradingModal && selectedTokenData && (
+        <TradingModal
+          tokenData={selectedTokenData}
+          onClose={() => {
+            setShowTradingModal(false);
+            setSelectedTokenData(null);
+          }}
+          userSOLBalance={currentSOLBalance}
+          walletAddress={walletAddress}
+          onUpdateSOLBalance={(newBalance) => {
+            setCurrentSOLBalance(newBalance);
+            onUpdateSOLBalance(newBalance);
+          }}
+          onShowTerms={onShowTerms}
+          onNavigateToPositions={() => {
+            setShowTradingModal(false);
+            setSelectedTokenData(null);
+            setActiveTab('positions');
+          }}
+        />
+      )}
 
       {/* Locking Modal */}
       <LockingModal
