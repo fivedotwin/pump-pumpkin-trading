@@ -17,7 +17,6 @@ interface TokenDetailProps {
   onBack: () => void;
   onBuy: () => void;
   userSOLBalance?: number;
-  userUSDBalance?: number;
   walletAddress?: string;
   onUpdateSOLBalance?: (newBalance: number) => void;
   onShowTerms: () => void;
@@ -28,7 +27,7 @@ interface TokenDetailProps {
 
 
 
-export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, userUSDBalance = 0, walletAddress = '', onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TokenDetailProps) {
+export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalance = 0, walletAddress = '', onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TokenDetailProps) {
   const { publicKey } = useWallet();
   const [tokenData, setTokenData] = useState<TokenDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -763,7 +762,6 @@ export default function TokenDetail({ tokenAddress, onBack, onBuy, userSOLBalanc
           tokenData={tokenData}
           onClose={handleCloseTradingModal}
           userSOLBalance={userSOLBalance}
-          userUSDBalance={userUSDBalance}
           walletAddress={walletAddress || publicKey?.toString() || ''}
           onUpdateSOLBalance={onUpdateSOLBalance}
           onShowTerms={onShowTerms}

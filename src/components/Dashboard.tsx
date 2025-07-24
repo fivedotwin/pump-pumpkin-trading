@@ -63,7 +63,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [swapSuccessData, setSwapSuccessData] = useState<SwapSuccessData | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activeTab, setActiveTab] = useState<TabType>('positions');
   const [payAmount, setPayAmount] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -1824,7 +1824,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         onBack={handleBackFromTokenDetail}
         onBuy={handleBuyFromTokenDetail}
         userSOLBalance={currentSOLBalance}
-        userUSDBalance={balance}
+
         walletAddress={walletAddress}
         onUpdateSOLBalance={(newBalance) => {
           setCurrentSOLBalance(newBalance);
@@ -1860,22 +1860,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const tabs = [
     { 
-      id: 'home' as TabType, 
+      id: 'positions' as TabType, 
       label: 'Home', 
       icon: Home,
-      badgeCount: 0 
+      badgeCount: activePositions.length 
     },
     { 
       id: 'rewards' as TabType, 
       label: 'Rewards', 
       icon: DollarSign,
       badgeCount: 0 
-    },
-    { 
-      id: 'positions' as TabType, 
-      label: 'Positions', 
-      icon: TrendingUpIcon,
-      badgeCount: activePositions.length 
     },
     { 
       id: 'orders' as TabType, 
@@ -1967,10 +1961,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       // Refresh based on current tab
       switch (activeTab) {
-        case 'home':
+        case 'positions':
           await Promise.all([
-            loadTrendingTokens(),
+            loadTradingPositions(),
+            loadPendingOrders(),
+            loadWithdrawalRequests(),
             refreshSOLBalance(),
+            loadTrendingTokens(),
             loadPPAPrice(),
             loadRealPPAPriceInSOL(),
             loadUserBalances()
@@ -1982,14 +1979,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             loadRealPPAPriceInSOL(),
             loadUserBalances(),
             getSwapQuote()
-          ]);
-          break;
-        case 'positions':
-          await Promise.all([
-            loadTradingPositions(),
-            loadPendingOrders(),
-            loadWithdrawalRequests(),
-            refreshSOLBalance()
           ]);
           break;
         case 'orders':
@@ -2391,8 +2380,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   </div>
                 )}
               </div>
-              <h1 className="text-xl font-normal mb-2">
-                Your <span style={{ color: '#1e7cfa' }}>Portfolio</span>
+              <h1 className="text-xl font-normal mb-4">
+                Welcome Back, <span style={{ color: '#1e7cfa' }}>{currentUsername}</span>
               </h1>
               <div className="text-center mb-4">
                 <p className="text-gray-400 text-sm mb-2 font-medium">
@@ -2427,6 +2416,64 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     <div className="flex justify-between">
                       <span>Trading Balance:</span>
                       <span className="text-white">{formatCurrency(portfolioData.tradingBalance)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Token Search Bar */}
+            <div className="mb-6 relative">
+              <input
+                type="text"
+                placeholder="Search tokens to trade..."
+                value={searchQuery}
+                onChange={(e) => handleTokenSearch(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400"
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-3">
+                  <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                </div>
+              )}
+              {showSearchResults && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-64 overflow-y-auto z-50">
+                  {searchResults.length > 0 ? (
+                    searchResults.map((result, index) => (
+                      <div
+                        key={result.address || index}
+                        onClick={() => handleSearchResultClick(result)}
+                        className="p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0 flex items-center space-x-3"
+                      >
+                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
+                          {result.logoURI ? (
+                            <img
+                              src={result.logoURI}
+                              alt={result.symbol}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xs font-bold text-white">{result.symbol.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white font-bold text-sm">{result.symbol}</p>
+                          <p className="text-gray-400 text-xs truncate">{result.name}</p>
+                        </div>
+                        {result.price && (
+                          <div className="text-right">
+                            <p className="text-white text-sm font-bold">{formatPrice(result.price)}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-gray-400 text-sm">
+                      {isSearching ? 'Searching...' : 'No tokens found'}
                     </div>
                   )}
                 </div>
@@ -3152,7 +3199,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <h4 className="text-white font-semibold text-lg mb-2">No Trading History</h4>
                   <p className="text-gray-400 text-sm mb-4">Start trading to see your completed positions here</p>
                   <button
-                    onClick={() => setActiveTab('home')}
+                    onClick={() => setActiveTab('positions')}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
                   >
                     Start Trading

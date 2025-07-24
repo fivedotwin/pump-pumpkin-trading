@@ -13,7 +13,6 @@ interface TradingModalProps {
   tokenData: TokenDetailData;
   onClose: () => void;
   userSOLBalance?: number; // Add SOL balance prop
-  userUSDBalance?: number; // Add USD balance prop
   walletAddress: string; // Add wallet address for position creation
   onUpdateSOLBalance?: (newBalance: number) => void; // Add callback for SOL balance updates
   onShowTerms: () => void;
@@ -23,7 +22,7 @@ interface TradingModalProps {
 type OrderType = 'Market Order' | 'Limit Order';
 type TradeDirection = 'Long' | 'Short';
 
-export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, userUSDBalance = 0, walletAddress, onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TradingModalProps) {
+export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, walletAddress, onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TradingModalProps) {
   const [tradeDirection, setTradeDirection] = useState<TradeDirection>('Long');
   const [orderType, setOrderType] = useState<OrderType>('Market Order');
   const [price, setPrice] = useState(tokenData.price.toString());
@@ -129,7 +128,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
   };
 
   // Use real USD balance from props
-  const availableUSDBalance = userUSDBalance;
+
 
   const orderTypes: OrderType[] = ['Market Order', 'Limit Order'];
 
@@ -933,17 +932,13 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, u
             </div>
 
             {/* Available Balances - Much larger */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="w-full">
               <div className="text-center bg-gray-900 rounded-xl p-4">
                 <div className="flex items-center justify-center mb-2">
                   <Wallet className="w-5 h-5 text-gray-400 mr-2" />
-                  <p className="text-gray-400 text-sm">SOL</p>
+                  <p className="text-gray-400 text-sm">Available SOL Balance</p>
                 </div>
-                <p className="text-white text-lg font-bold">{userSOLBalance.toFixed(3)}</p>
-              </div>
-              <div className="text-center bg-gray-900 rounded-xl p-4">
-                <p className="text-gray-400 text-sm mb-2">USD</p>
-                <p className="text-white text-lg font-bold">{availableUSDBalance.toFixed(2)}</p>
+                <p className="text-white text-lg font-bold">{userSOLBalance.toFixed(3)} SOL</p>
               </div>
             </div>
 
