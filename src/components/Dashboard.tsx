@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, TrendingDown, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock } from 'lucide-react';
+import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
@@ -237,51 +237,59 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-    // HIGH-FREQUENCY PRICE SERVICE - Only for trading positions
+    // 500ms PRICE SERVICE - Always active for positions (2Hz updates)
   useEffect(() => {
     if (!walletAddress) return;
     
     // Always initialize business plan optimizations
     initializeBusinessPlanOptimizations();
     
-    // If no positions yet, wait for them to load
-    if (tradingPositions.length === 0) {
-      console.log('🚀 BUSINESS PLAN: No positions yet, waiting for positions to load...');
-      return;
-    }
-    
-    console.log('🚀 BUSINESS PLAN: Setting up ultra-fast 20Hz price service for trading positions');
+    console.log('🚀 PRICE SERVICE: Setting up 500ms price updates (2Hz)');
+    console.log(`📊 Current positions count: ${tradingPositions.length}`);
     
     // Only track position tokens for real-time updates (not trending tokens)
     const positionTokens = tradingPositions.map(p => p.token_address);
     
-    console.log(`⚡ BUSINESS PLAN: Tracking ${positionTokens.length} position tokens at ultra-fast 20Hz`);
+    if (positionTokens.length === 0) {
+      console.log('⚡ PRICE SERVICE: No position tokens to track yet');
+      return; // Exit early if no tokens to track
+    }
     
-    // Subscribe to business plan ultra-fast price updates for positions
-    const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (tokenPrices: { [address: string]: number }) => {
-      // Reduced logging for ultra-fast updates (20x per second)
-      if (Math.random() < 0.01) { // Only log ~1% of updates to avoid spam
-        console.log(`⚡ LATEST PRICE UPDATE: ${Object.keys(tokenPrices).length} tokens - NO QUEUING, IMMEDIATE DISPLAY`);
+    console.log(`⚡ PRICE SERVICE: Tracking ${positionTokens.length} position tokens at 500ms intervals (2Hz):`, 
+      positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
+    
+    // Subscribe to 500ms price updates for positions
+    const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (newTokenPrices: { [address: string]: number }) => {
+      // Enhanced logging for debugging (more frequent logging since updates are slower)
+      if (Math.random() < 0.2) { // Log 20% of updates for debugging (since it's only 2Hz)
+        console.log(`⚡ RECEIVED 500ms PRICE UPDATE: ${Object.keys(newTokenPrices).length} tokens`, newTokenPrices);
       }
       
       // IMMEDIATE UPDATE - No queuing, always show the latest price
       setTokenPrices(prevPrices => {
-        const newPrices = { ...prevPrices, ...tokenPrices };
+        const mergedPrices = { ...prevPrices, ...newTokenPrices };
         
-        // Log price changes for debugging
-        Object.entries(tokenPrices).forEach(([address, newPrice]) => {
+        // Enhanced debugging: Log every price change
+        Object.entries(newTokenPrices).forEach(([address, newPrice]) => {
           const oldPrice = prevPrices[address];
-          if (oldPrice && Math.abs(newPrice - oldPrice) > 0.000001) {
-            console.log(`💰 INSTANT PRICE UPDATE: ${address.slice(0,8)}... $${oldPrice?.toFixed(6)} → $${newPrice.toFixed(6)} (${((newPrice - oldPrice) / oldPrice * 100).toFixed(2)}%)`);
+          if (!oldPrice) {
+            console.log(`🆕 NEW PRICE: ${address.slice(0,8)}... = $${newPrice.toFixed(6)}`);
+          } else if (Math.abs(newPrice - oldPrice) > 0.000001) {
+            console.log(`💰 PRICE CHANGE: ${address.slice(0,8)}... $${oldPrice?.toFixed(6)} → $${newPrice.toFixed(6)} (${((newPrice - oldPrice) / oldPrice * 100).toFixed(2)}%)`);
           }
         });
         
-        return newPrices;
+        return mergedPrices;
       });
       
-      // IMMEDIATE P&L UPDATE - No delays, no queuing
-      if (walletAddress && Object.keys(tokenPrices).length > 0) {
-        updatePositionPnLFromCachedPrices();
+      // IMMEDIATE P&L UPDATE - No delays, no queuing - but with error handling
+      if (walletAddress && Object.keys(newTokenPrices).length > 0) {
+        try {
+          console.log('🔄 Triggering position P&L update from price change');
+          updatePositionPnLFromCachedPrices();
+        } catch (error) {
+          console.error('❌ Error updating P&L from price change:', error);
+        }
       }
     });
     
@@ -325,18 +333,33 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Update position P&L using cached prices (much faster) - RENAMED AND FIXED
   const updatePositionPnLFromCachedPrices = () => {
-    if (!walletAddress || tradingPositions.length === 0) return;
+    if (!walletAddress) {
+      console.log('❌ No wallet address - skipping P&L update');
+      return;
+    }
+    
+    if (tradingPositions.length === 0) {
+      console.log('❌ No trading positions - skipping P&L update');
+      return;
+    }
     
     try {
-      console.log('🔄 Updating position P&L using real-time cached prices...');
+      console.log(`🔄 Updating P&L for ${tradingPositions.length} positions using real-time cached prices...`);
+      console.log(`🔍 Available token prices:`, Object.keys(tokenPrices).map(addr => `${addr.slice(0,8)}...: $${tokenPrices[addr]?.toFixed(6)}`));
       
       const updatedPositions = tradingPositions.map((position) => {
         try {
+          const oldPrice = position.current_price || position.entry_price;
           const pnlData = calculatePositionPnLWithCachedPrice(position);
+          
+          // Log price and P&L changes for debugging
+          if (Math.abs(pnlData.current_price - oldPrice) > 0.000001) {
+            console.log(`📈 Position ${position.id} (${position.token_symbol}): Price $${oldPrice.toFixed(6)} → $${pnlData.current_price.toFixed(6)}, P&L: $${pnlData.pnl.toFixed(2)}`);
+          }
           
           // Check for liquidation FIRST (margin ratio >= 100%)
           if (pnlData.margin_ratio >= 1.0) {
-            console.log(`LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
+            console.log(`🚨 LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
             // Mark for liquidation (will be handled by separate liquidation service)
             positionService.liquidatePosition(position.id, pnlData.current_price);
             
@@ -358,7 +381,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             updated_at: new Date().toISOString()
           };
         } catch (error) {
-          console.error(`Error updating P&L for position ${position.id}:`, error);
+          console.error(`❌ Error updating P&L for position ${position.id}:`, error);
           return position;
         }
       });
@@ -369,15 +392,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       const liquidatedCount = updatedPositions.length - activePositions.length;
       if (liquidatedCount > 0) {
-        console.log(`${liquidatedCount} position(s) liquidated and removed from display`);
+        console.log(`🗑️ ${liquidatedCount} position(s) liquidated and removed from display`);
       }
       
-      // Only log occasionally to avoid console spam
-      if (Math.random() < 0.1) { // Log 10% of updates
-        console.log(`✅ Updated ${activePositions.length} positions using cached prices (Update #${priceUpdateCount})`);
-      }
+      console.log(`✅ Successfully updated ${activePositions.length} positions with real-time prices`);
     } catch (error) {
-      console.error('Error updating position P&L:', error);
+      console.error('❌ Error updating position P&L:', error);
     }
   };
 
@@ -922,10 +942,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Calculate P&L using cached real-time prices
   const calculatePositionPnLWithCachedPrice = (position: TradingPosition) => {
-    const current_price = tokenPrices[position.token_address] || position.entry_price;
+    const cached_price = tokenPrices[position.token_address];
+    const current_price = cached_price || position.entry_price;
     const entry_price = position.entry_price;
     const amount = position.amount;
     const leverage = position.leverage;
+    
+    // Log price source for debugging
+    if (!cached_price) {
+      console.log(`⚠️ Position ${position.id} (${position.token_symbol}): No cached price found for ${position.token_address.slice(0,8)}..., using entry price $${entry_price.toFixed(6)}`);
+    } else {
+      console.log(`✅ Position ${position.id} (${position.token_symbol}): Using cached price $${cached_price.toFixed(6)} for ${position.token_address.slice(0,8)}...`);
+    }
     
     // Calculate P&L in USD
     // FIXED: Don't multiply by leverage - amount already represents the leveraged position
@@ -945,14 +973,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
     }
     
-          console.log(`Position ${position.id} margin calculation:`, {
-      token: position.token_symbol,
-      pnl_usd: pnl_usd.toFixed(6),
-      pnl_sol: pnl_sol.toFixed(8),
-      collateral_sol: position.collateral_sol.toFixed(8),
-      margin_ratio: (margin_ratio * 100).toFixed(1) + '%',
-      sol_price: solPrice
-    });
+    // Reduced logging - only log occasionally
+    if (Math.random() < 0.1) { // Log 10% of calculations
+      console.log(`💰 Position ${position.id} calculation:`, {
+        token: position.token_symbol,
+        entry_price: entry_price.toFixed(6),
+        current_price: current_price.toFixed(6),
+        price_source: cached_price ? 'cached' : 'entry',
+        pnl_usd: pnl_usd.toFixed(2),
+        direction: position.direction
+      });
+    }
     
     return {
       pnl: pnl_usd, // Return P&L in USD for display
@@ -2056,20 +2087,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               {formatCurrency(homePortfolioData.totalValue)}
             </p>
 
-            {/* PnL - Properly sized */}
-            <div className="flex items-center justify-center space-x-2 mb-6">
-              {homePortfolioData.positionPnL >= 0 ? (
-                <TrendingUp className="w-5 h-5 text-green-500" />
-              ) : (
-                <TrendingDown className="w-5 h-5 text-red-500" />
-              )}
-              <span className={`text-lg font-bold ${homePortfolioData.positionPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {formatCurrency(homePortfolioData.positionPnL)}
-              </span>
-              <span className={`text-sm ${homePortfolioData.positionPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {homePortfolioData.positionCount > 0 ? `(${homePortfolioData.positionCount} position${homePortfolioData.positionCount > 1 ? 's' : ''})` : '(No positions)'}
-              </span>
-            </div>
+
             
             {/* Token Search Bar */}
             <div className="mb-4 relative">
@@ -2709,27 +2727,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                           {/* Header with token info and position value */}
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gray-700">
-                                {/* Show token image from Birdeye API or fallback to symbol */}
-                                {position.token_image ? (
-                                  <img 
-                                    src={position.token_image}
-                                    alt={position.token_symbol}
-                                    className="w-full h-full object-cover rounded-full"
-                                    onError={(e) => {
-                                      // If image fails to load, show symbol fallback
-                                      const target = e.currentTarget as HTMLImageElement;
-                                      target.style.display = 'none';
-                                      const parent = target.parentElement as HTMLDivElement;
-                                      if (parent) {
-                                        parent.innerHTML = `<span class="text-white text-xs font-bold">${position.token_symbol.charAt(0)}</span>`;
-                                      }
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-white text-xs font-bold">{position.token_symbol.charAt(0)}</span>
-                                )}
-                              </div>
                               <div>
                                 <div className="flex items-center space-x-2 mb-1">
                                   <span className="text-white font-bold text-sm">{position.token_symbol}</span>
@@ -3054,25 +3051,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                         {/* Main trade info */}
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-3 flex-1">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-gray-700 border border-gray-600">
-                              {trade.token_image ? (
-                                <img 
-                                  src={trade.token_image}
-                                  alt={trade.token_symbol}
-                                  className="w-full h-full object-cover rounded-xl"
-                                  onError={(e) => {
-                                    const target = e.currentTarget as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const parent = target.parentElement as HTMLDivElement;
-                                    if (parent) {
-                                      parent.innerHTML = `<span class="text-white text-sm font-bold">${trade.token_symbol.charAt(0)}</span>`;
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <span className="text-white text-sm font-bold">{trade.token_symbol.charAt(0)}</span>
-                              )}
-                            </div>
                             <div className="flex-1">
                               <div className="flex items-center space-x-2 mb-1">
                                 <span className="text-white font-semibold text-sm">{trade.token_symbol}</span>
