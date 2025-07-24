@@ -172,13 +172,13 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     // Show closing trade loading modal
     setShowClosingModal(true);
     
-    // Auto-close loading modal after 65 seconds, then check for results
+    // Auto-close loading modal after 12 seconds, then check for results
     setTimeout(async () => {
       setShowClosingModal(false);
       
       // Check for trade results
       await checkForTradeResults(position.id);
-    }, 65000);
+    }, 12000);
     
     onClosePosition(position.id);
     setShowCloseConfirm(false);

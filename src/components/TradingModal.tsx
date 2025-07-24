@@ -585,12 +585,12 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         });
         setShowTradeLoading(true);
         
-        // Auto-close loading modal after 65 seconds and show success modal
+        // Auto-close loading modal after 12 seconds and show success modal
         setTimeout(() => {
           setShowTradeLoading(false);
           setLoadingTradeData(null);
           setShowTradeSuccess(true); // Show success modal instead of closing
-        }, 65000);
+        }, 12000);
       } else {
         // For limit orders, show success message and close normally
         setTradeSuccess(`Limit order placed successfully! Order ID: ${position.id}`);

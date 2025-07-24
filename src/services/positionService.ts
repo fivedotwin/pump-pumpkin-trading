@@ -383,7 +383,7 @@ class PositionService {
       
       // STEP 5: Start delayed opening for Market Orders
       if (data.order_type === 'Market Order') {
-        console.log(`⏳ Starting 1-minute delayed opening for Market Order ${position.id} - Anti-Gaming Protection Active`);
+        console.log(`⏳ Starting 10-second delayed opening for Market Order ${position.id} - Anti-Gaming Protection Active`);
         this.startDelayedOpening(position.id);
       }
       
@@ -630,10 +630,10 @@ class PositionService {
     }
   }
 
-  // Initiate position closing (starts 1-minute delay with worst-price selection)
+  // Initiate position closing (starts 10-second delay with worst-price selection)
   async closePosition(position_id: number, close_reason: 'manual' | 'stop_loss' | 'take_profit'): Promise<void> {
     try {
-      console.log(`🔄 INITIATING 1-MINUTE DELAYED CLOSE for position ${position_id} - Anti-Gaming Protection Active`);
+      console.log(`🔄 INITIATING 10-SECOND DELAYED CLOSE for position ${position_id} - Anti-Gaming Protection Active`);
       
       // STEP 1: Get the position details first
       const { data: position, error: fetchError } = await supabase
@@ -651,7 +651,7 @@ class PositionService {
           status: 'closing',
           close_reason,
           updated_at: new Date().toISOString(),
-          // Store when close was initiated for the 1-minute timer
+          // Store when close was initiated for the 10-second timer
           close_initiated_at: new Date().toISOString()
         })
         .eq('id', position_id);
@@ -661,9 +661,9 @@ class PositionService {
         throw error;
       }
       
-      console.log(`⏳ Position ${position_id} marked as CLOSING - Will execute in 1 minute with WORST price to prevent gaming`);
+      console.log(`⏳ Position ${position_id} marked as CLOSING - Will execute in 10 seconds with WORST price to prevent gaming`);
       
-      // STEP 3: Start the 1-minute delayed closing process
+      // STEP 3: Start the 10-second delayed closing process
       this.startDelayedClosing(position_id);
       
     } catch (error) {
@@ -674,7 +674,7 @@ class PositionService {
 
   // Execute delayed closing with worst-price selection (anti-gaming)
   private async startDelayedClosing(position_id: number): Promise<void> {
-    console.log(`🎯 Starting 1-minute price sampling for position ${position_id} - Will pick WORST price for user`);
+    console.log(`🎯 Starting 10-second price sampling for position ${position_id} - Will pick WORST price for user`);
     
     // Get position details
     const { data: position, error: fetchError } = await supabase
@@ -689,10 +689,10 @@ class PositionService {
     }
     
     const priceSamples: { price: number; timestamp: number }[] = [];
-    const sampleInterval = 5000; // Sample every 5 seconds
-    const totalDuration = 60000; // 1 minute total
+    const sampleInterval = 2000; // Sample every 2 seconds
+    const totalDuration = 10000; // 10 seconds total
     
-    // Sample prices every 5 seconds for 1 minute
+    // Sample prices every 2 seconds for 10 seconds
     const samplePrices = async () => {
       try {
         const tokenData = await fetchTokenDetailCached(position.token_address);
@@ -703,7 +703,7 @@ class PositionService {
           };
           priceSamples.push(sample);
           
-          console.log(`📊 Price sample ${priceSamples.length}/12 for position ${position_id}: $${sample.price.toFixed(6)}`);
+          console.log(`📊 Price sample ${priceSamples.length}/5 for position ${position_id}: $${sample.price.toFixed(6)}`);
         }
       } catch (error) {
         console.error('Error sampling price:', error);
@@ -716,7 +716,7 @@ class PositionService {
     // Continue sampling every 5 seconds
     const sampleIntervalId = setInterval(samplePrices, sampleInterval);
     
-    // After 1 minute, execute the closing with worst price
+    // After 10 seconds, execute the closing with worst price
     setTimeout(async () => {
       clearInterval(sampleIntervalId);
       
@@ -907,7 +907,7 @@ class PositionService {
 
   // Execute delayed opening with worst-price selection (anti-gaming)
   private async startDelayedOpening(position_id: number): Promise<void> {
-    console.log(`🎯 Starting 1-minute price sampling for opening position ${position_id} - Will pick WORST price for user`);
+    console.log(`🎯 Starting 10-second price sampling for opening position ${position_id} - Will pick WORST price for user`);
     
     // Get position details
     const { data: position, error: fetchError } = await supabase
@@ -922,10 +922,10 @@ class PositionService {
     }
     
     const priceSamples: { price: number; timestamp: number }[] = [];
-    const sampleInterval = 5000; // Sample every 5 seconds
-    const totalDuration = 60000; // 1 minute total
+    const sampleInterval = 2000; // Sample every 2 seconds
+    const totalDuration = 10000; // 10 seconds total
     
-    // Sample prices every 5 seconds for 1 minute
+    // Sample prices every 2 seconds for 10 seconds
     const samplePrices = async () => {
       try {
         const tokenData = await fetchTokenDetailCached(position.token_address);
@@ -936,7 +936,7 @@ class PositionService {
           };
           priceSamples.push(sample);
           
-          console.log(`📊 Opening price sample ${priceSamples.length}/12 for position ${position_id}: $${sample.price.toFixed(6)}`);
+          console.log(`📊 Opening price sample ${priceSamples.length}/5 for position ${position_id}: $${sample.price.toFixed(6)}`);
         }
       } catch (error) {
         console.error('Error sampling opening price:', error);
@@ -949,7 +949,7 @@ class PositionService {
     // Continue sampling every 5 seconds
     const sampleIntervalId = setInterval(samplePrices, sampleInterval);
     
-    // After 1 minute, execute the opening with worst price
+    // After 10 seconds, execute the opening with worst price
     setTimeout(async () => {
       clearInterval(sampleIntervalId);
       
@@ -1049,7 +1049,7 @@ class PositionService {
         throw error;
       }
       
-      console.log(`✅ Position ${position_id} opened with 1-minute delay - Anti-gaming protection successful`);
+      console.log(`✅ Position ${position_id} opened with 10-second delay - Anti-gaming protection successful`);
       
     } catch (error) {
       console.error('Error executing delayed opening:', error);

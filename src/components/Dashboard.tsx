@@ -1512,7 +1512,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     // Check if position is already in closing status
     const position = tradingPositions.find(p => p.id === positionId);
     if (position?.status === 'closing') {
-              console.log(`Position ${positionId} is already closing (1-minute delay in progress)`);
+              console.log(`Position ${positionId} is already closing (10-second delay in progress)`);
       return;
     }
     
@@ -1535,14 +1535,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       });
       setShowClosingModal(true);
       
-      // Auto-close loading modal after 65 seconds, then check for results
+      // Auto-close loading modal after 12 seconds, then check for results
       setTimeout(async () => {
         setShowClosingModal(false);
         setClosingTradeData(null);
         
         // Check for trade results after closing modal
         await checkForTradeResults(positionId);
-      }, 65000);
+      }, 12000);
     }
     
     try {

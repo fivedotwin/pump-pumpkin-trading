@@ -21,18 +21,18 @@ export default function TradeLoadingModal({
   canCancel = false
 }: TradeLoadingModalProps) {
   const [progress, setProgress] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(60);
+  const [timeRemaining, setTimeRemaining] = useState(10);
 
-  // Progress animation over 60 seconds
+  // Progress animation over 10 seconds
   useEffect(() => {
     if (!isOpen) {
       setProgress(0);
-      setTimeRemaining(60);
+      setTimeRemaining(10);
       return;
     }
 
     const startTime = Date.now();
-    const duration = 60000; // 60 seconds
+    const duration = 10000; // 10 seconds
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -55,8 +55,8 @@ export default function TradeLoadingModal({
   const isOpening = type === 'opening';
   const title = isOpening ? 'Opening Trade' : 'Closing Trade';
   const description = isOpening 
-    ? 'Analyzing market conditions for optimal entry...' 
-    : 'Processing trade closure at best available price...';
+    ? 'Sampling market prices for trade execution...' 
+    : 'Sampling market prices for trade execution...';
   
   const bgColor = isOpening ? 'bg-blue-900' : 'bg-yellow-900';
   const borderColor = isOpening ? 'border-blue-700' : 'border-yellow-700';
@@ -128,7 +128,7 @@ export default function TradeLoadingModal({
 
         {/* Anti-gaming notice (subtle) */}
         <div className="mt-4 text-xs text-gray-500 opacity-70">
-          Processing for optimal execution
+          Processing trade execution
         </div>
       </div>
     </div>
