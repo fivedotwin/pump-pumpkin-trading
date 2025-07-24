@@ -891,7 +891,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       
       // Fetch token images for trade history
       const historyWithImages = await Promise.all(
-        sortedHistory.slice(0, 20).map(async (trade) => { // Show last 20 trades
+        sortedHistory.slice(0, 6).map(async (trade) => { // Show last 6 trades
           try {
             const tokenData = await fetchTokenDetailCached(trade.token_address);
             return {
@@ -2955,54 +2955,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <div className="flex items-center space-x-2">
                   <History className="w-5 h-5 text-blue-400" />
                   <h3 className="text-lg font-semibold text-white">Recent Trades</h3>
-                  {tradeHistory.length > 0 && (
-                    <span className="bg-blue-600/20 text-blue-400 px-2 py-1 rounded-full text-xs font-bold">
-                      {tradeHistory.length}
-                    </span>
-                  )}
                 </div>
-                {tradeHistory.length > 0 && (
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400">Total Trades</p>
-                    <p className="text-sm font-bold text-white">{tradeHistory.length}</p>
-                  </div>
-                )}
               </div>
 
-              {/* Performance Summary */}
-              {tradeHistory.length > 0 && (
-                <div className="bg-gray-800/50 rounded-lg p-3 grid grid-cols-3 gap-3">
-                  {(() => {
-                    const completedTrades = tradeHistory.filter(t => t.status === 'closed');
-                    const totalPnL = completedTrades.reduce((sum, trade) => sum + (trade.current_pnl || 0), 0);
-                    const winningTrades = completedTrades.filter(t => (t.current_pnl || 0) > 0).length;
-                    const winRate = completedTrades.length > 0 ? (winningTrades / completedTrades.length) * 100 : 0;
-                    
-                    return (
-                      <>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400 mb-1">Total P&L</p>
-                          <p className={`text-sm font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {totalPnL >= 0 ? '+' : ''}{formatCurrency(totalPnL)}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400 mb-1">Win Rate</p>
-                          <p className={`text-sm font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                            {winRate.toFixed(0)}%
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400 mb-1">Wins/Total</p>
-                          <p className="text-sm font-bold text-white">
-                            {winningTrades}/{completedTrades.length}
-                          </p>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+
               
               {isLoadingTradeHistory ? (
                 <div className="space-y-3">
@@ -3026,7 +2982,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   ))}
                 </div>
               ) : tradeHistory.length > 0 ? (
-                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                   {tradeHistory.map((trade, index) => {
                     const isProfit = (trade.current_pnl || 0) >= 0;
                     const wasLiquidated = trade.status === 'liquidated';
@@ -3049,21 +3005,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       timeAgo = tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }
                     
-                    // Calculate trade duration if available
-                    let tradeDuration = '';
-                    if (trade.created_at && trade.closed_at) {
-                      const startTime = new Date(trade.created_at);
-                      const endTime = new Date(trade.closed_at);
-                      const durationMs = endTime.getTime() - startTime.getTime();
-                      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-                      const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                      
-                      if (durationHours > 0) {
-                        tradeDuration = `${durationHours}h ${durationMinutes}m`;
-                      } else {
-                        tradeDuration = `${durationMinutes}m`;
-                      }
-                    }
+
                     
                     return (
                       <div 
@@ -3141,12 +3083,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                                                              {/* Trade details */}
                                <div className="flex items-center space-x-3 text-xs text-gray-400">
                                  <span>{timeAgo}</span>
-                                 {tradeDuration && (
-                                   <>
-                                     <span>•</span>
-                                     <span>{tradeDuration}</span>
-                                   </>
-                                 )}
                                </div>
                             </div>
                           </div>
@@ -3170,22 +3106,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             )}
                           </div>
                         </div>
-                        
-                        {/* Price action bar */}
-                        {!wasCancelled && (
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div className="bg-gray-800/30 rounded-lg p-2">
-                              <p className="text-gray-400 mb-1">Entry Price</p>
-                              <p className="text-white font-semibold">{formatPrice(trade.entry_price)}</p>
-                            </div>
-                            {trade.close_price && (
-                              <div className="bg-gray-800/30 rounded-lg p-2">
-                                <p className="text-gray-400 mb-1">Exit Price</p>
-                                <p className="text-white font-semibold">{formatPrice(trade.close_price)}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
+
 
                       </div>
                     );
