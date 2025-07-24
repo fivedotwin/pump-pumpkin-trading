@@ -237,39 +237,40 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-    // 500ms PRICE SERVICE - Always active for positions (2Hz updates)
+    // 🚀 FIXED: Ultra-fast price service - always runs, no chicken-and-egg problems
   useEffect(() => {
     if (!walletAddress) return;
     
     // Always initialize business plan optimizations
     initializeBusinessPlanOptimizations();
     
-    console.log('🚀 PRICE SERVICE: Setting up 500ms price updates (2Hz)');
+    console.log('🚀 FIXED PRICE SERVICE: Setting up ultra-fast 200ms price updates (5Hz)');
     console.log(`📊 Current positions count: ${tradingPositions.length}`);
     
-    // Only track position tokens for real-time updates (not trending tokens)
+    // Get position tokens for tracking
     const positionTokens = tradingPositions.map(p => p.token_address);
     
+    // 🔧 FIXED: Always set up price service, even with 0 positions (for instant readiness)
     if (positionTokens.length === 0) {
-      console.log('⚡ PRICE SERVICE: No position tokens to track yet');
-      return; // Exit early if no tokens to track
+      console.log('⚡ FIXED: Price service ready for instant position tracking when positions load');
+      // Don't return early - keep service ready
+    } else {
+      console.log(`⚡ FIXED: Tracking ${positionTokens.length} position tokens at 200ms intervals (5Hz):`, 
+        positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
     }
     
-    console.log(`⚡ PRICE SERVICE: Tracking ${positionTokens.length} position tokens at 500ms intervals (2Hz):`, 
-      positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
-    
-    // Subscribe to 500ms price updates for positions
+    // 🚀 FIXED: Subscribe to ultra-fast price updates for positions (or prepare for them)
     const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (newTokenPrices: { [address: string]: number }) => {
-      // Enhanced logging for debugging (more frequent logging since updates are slower)
-      if (Math.random() < 0.2) { // Log 20% of updates for debugging (since it's only 2Hz)
-        console.log(`⚡ RECEIVED 500ms PRICE UPDATE: ${Object.keys(newTokenPrices).length} tokens`, newTokenPrices);
+      // Enhanced logging for debugging
+      if (Math.random() < 0.1) { // Log 10% of updates (since it's now 5Hz)
+        console.log(`⚡ RECEIVED ULTRA-FAST PRICE UPDATE: ${Object.keys(newTokenPrices).length} tokens`, newTokenPrices);
       }
       
-      // IMMEDIATE UPDATE - No queuing, always show the latest price
+      // INSTANT UPDATE - Maximum speed, no delays
       setTokenPrices(prevPrices => {
         const mergedPrices = { ...prevPrices, ...newTokenPrices };
         
-        // Enhanced debugging: Log every price change
+        // Log price changes for debugging
         Object.entries(newTokenPrices).forEach(([address, newPrice]) => {
           const oldPrice = prevPrices[address];
           if (!oldPrice) {
@@ -282,10 +283,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         return mergedPrices;
       });
       
-      // IMMEDIATE P&L UPDATE - No delays, no queuing - but with error handling
+      // INSTANT P&L UPDATE - Maximum trading speed
       if (walletAddress && Object.keys(newTokenPrices).length > 0) {
         try {
-          console.log('🔄 Triggering position P&L update from price change');
+          console.log('🔄 INSTANT: Triggering ultra-fast position P&L update');
           updatePositionPnLFromCachedPrices();
         } catch (error) {
           console.error('❌ Error updating P&L from price change:', error);
@@ -294,7 +295,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     });
     
     return unsubscribe;
-  }, [walletAddress, tradingPositions.length]);
+  }, [walletAddress, JSON.stringify(tradingPositions.map(p => p.token_address))]); // 🔧 FIXED: Track actual token addresses, not just count
 
   // NEW: Separate effect to ensure positions are loaded first
   useEffect(() => {
@@ -2446,12 +2447,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     <span>Locked Collateral:</span>
                     <span className="text-orange-300">{formatCurrency(portfolioData.lockedSOL * solPrice)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Position P&L:</span>
-                    <span className={`${portfolioData.positionPnL >= 0 ? 'text-green-400' : 'text-red-400'} font-bold`}>
-                      {''}{formatCurrency(portfolioData.positionPnL)}
-                    </span>
-                  </div>
+
                   {portfolioData.tradingBalance > 0 && (
                     <div className="flex justify-between">
                       <span>Trading Balance:</span>

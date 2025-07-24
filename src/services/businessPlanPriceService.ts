@@ -14,9 +14,9 @@ class BusinessPlanPriceService {
   private updateInterval: NodeJS.Timeout | null = null;
   private isRunning = false;
   
-  // 500ms update intervals (2Hz) for API fetching and UI updates
-  private readonly UPDATE_INTERVAL = 500; // Every 500ms (2Hz) as requested
-  private readonly PRICE_CACHE_DURATION = 500; // 500ms cache duration to match update frequency
+  // 200ms update intervals (5Hz) for ultra-fast API fetching and UI updates
+  private readonly UPDATE_INTERVAL = 200; // Every 200ms (5Hz) for maximum trading speed
+  private readonly PRICE_CACHE_DURATION = 200; // 200ms cache duration to match update frequency
   
   // State management for UI synchronization
   private lastUpdateTime = 0;
@@ -24,15 +24,15 @@ class BusinessPlanPriceService {
   private activeSubscriptions = 0;
   
   constructor() {
-    console.log('🚀 PRICE SERVICE: Initialized with 500ms intervals (2Hz updates as requested)');
+    console.log('🚀 ULTRA-FAST PRICE SERVICE: Initialized with 200ms intervals (5Hz updates for maximum trading speed)');
     
     // Start the service immediately to be ready for subscriptions
     this.startUltraFastUpdates();
   }
   
-  // Subscribe to 500ms price updates
+  // Subscribe to 200ms price updates
   subscribeToPrice(tokenAddress: string, callback: (price: number) => void): () => void {
-    console.log(`⚡ PRICE SERVICE: Subscribing to 500ms (2Hz) price updates for: ${tokenAddress.slice(0, 8)}...`);
+    console.log(`⚡ ULTRA-FAST PRICE SERVICE: Subscribing to 200ms (5Hz) price updates for: ${tokenAddress.slice(0, 8)}...`);
     
     if (!this.priceCallbacks.has(tokenAddress)) {
       this.priceCallbacks.set(tokenAddress, new Set());
@@ -81,7 +81,7 @@ class BusinessPlanPriceService {
     tokenAddresses: string[],
     callback: (prices: { [address: string]: number }) => void
   ): () => void {
-    console.log(`⚡ PRICE SERVICE: Bulk subscription (${subscriberId}) for ${tokenAddresses.length} tokens at 500ms (2Hz)`);
+    console.log(`⚡ ULTRA-FAST PRICE SERVICE: Bulk subscription (${subscriberId}) for ${tokenAddresses.length} tokens at 200ms (5Hz)`);
     
     const unsubscribeFunctions: (() => void)[] = [];
     const currentPrices: { [address: string]: number } = {};
@@ -106,16 +106,16 @@ class BusinessPlanPriceService {
     };
   }
   
-  // Start 500ms updates as requested
+  // Start 200ms updates for maximum speed
   private startUltraFastUpdates(): void {
     if (this.isRunning) {
-      console.log('🚀 PRICE SERVICE: Updates already running at 500ms (2Hz)');
+      console.log('🚀 ULTRA-FAST PRICE SERVICE: Updates already running at 200ms (5Hz)');
       return;
     }
     
     this.isRunning = true;
     this.lastUpdateTime = Date.now();
-    console.log('🚀 PRICE SERVICE: Starting 500ms (2Hz) price updates');
+    console.log('🚀 ULTRA-FAST PRICE SERVICE: Starting 200ms (5Hz) price updates');
     
     // Start immediately with first update
     this.updateAllPricesUltraFast();
@@ -135,7 +135,7 @@ class BusinessPlanPriceService {
     console.log('⏸️ BUSINESS PLAN: Stopped ultra-fast price updates');
   }
   
-  // 500ms price updates as requested
+  // 200ms price updates for maximum speed
   private async updateAllPricesUltraFast(): Promise<void> {
     if (this.activeTokens.size === 0) {
       // Keep running even with no tokens for instant readiness
@@ -146,9 +146,9 @@ class BusinessPlanPriceService {
     const activeTokensList = Array.from(this.activeTokens);
     this.priceUpdateCount++;
     
-    // Log every 10th update (every 5 seconds at 2Hz) 
-    if (this.priceUpdateCount % 10 === 0) {
-      console.log(`⚡ PRICE SERVICE: Update #${this.priceUpdateCount} - ${activeTokensList.length} tokens at 500ms intervals (2Hz)`);
+    // Log every 25th update (every 5 seconds at 5Hz) 
+    if (this.priceUpdateCount % 25 === 0) {
+      console.log(`⚡ ULTRA-FAST PRICE SERVICE: Update #${this.priceUpdateCount} - ${activeTokensList.length} tokens at 200ms intervals (5Hz)`);
     }
     
     // Update tokens in parallel for maximum speed (business plan can handle it)
@@ -158,7 +158,7 @@ class BusinessPlanPriceService {
         const cached = this.priceCache.get(tokenAddress);
         const cacheAge = now - (cached?.timestamp || 0);
         
-        // Use cache if less than 500ms old (to match update frequency)
+        // Use cache if less than 200ms old (to match ultra-fast update frequency)
         if (cached && cacheAge < this.PRICE_CACHE_DURATION) {
           return;
         }

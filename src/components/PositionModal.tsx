@@ -347,8 +347,6 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
             <span>{position.direction} {position.leverage}x</span>
           </div>
         </div>
-        
-        <p className="text-gray-400 text-xs mb-3">Position #{position.id}</p>
 
         {/* P&L Display - More Compact */}
         <div className={`border rounded-lg p-2 mb-2 ${
