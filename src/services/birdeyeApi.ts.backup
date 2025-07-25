@@ -1525,13 +1525,14 @@ export const formatPrice = (price: number): string => {
   } else if (price >= 1) {
     return `$${price.toFixed(4)}`;
   } else if (price >= 0.01) {
-    return `$${price.toFixed(6)}`;
-  } else if (price >= 0.000001) {
-    return `$${price.toFixed(8)}`;
+    return `$${price.toFixed(4)}`;
+  } else if (price >= 0.0001) {
+    return `$${price.toFixed(4)}`;
+  } else if (price > 0) {
+    // For extremely small values, show as ~$0.00 instead of many zeros
+    return '$0.00';
   } else {
-    // For very small numbers, use scientific notation but make it readable
-    const formatted = price.toExponential(2);
-    return `$${formatted}`;
+    return '$0.00';
   }
 };
 

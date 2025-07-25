@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { TradingPosition } from '../services/positionService';
 import { formatPrice } from '../services/birdeyeApi';
-import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import { simplifiedPriceService } from '../services/simplifiedPriceService';
+import webSocketService from '../services/birdeyeWebSocket';
+import priceService from '../services/businessPlanPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
 import { soundManager } from '../services/soundManager';
@@ -97,26 +97,19 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     return pnlData.margin_ratio;
   };
 
-  // Subscribe to simplified price service for price updates
+  // Subscribe to price service for price updates
   useEffect(() => {
-    console.log(`PositionModal: Subscribing to simplified price service for ${position.token_symbol}`);
+    console.log(`PositionModal: Subscribing to price service for ${position.token_symbol}`);
     
-    // Track this token and subscribe to price updates
-    const unsubscribe = simplifiedPriceService.subscribe(`position-modal-${position.token_address}`, (priceData) => {
-      const newPrice = priceData.tokenPrices[position.token_address];
-      if (newPrice) {
-        console.log(`PositionModal: Price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
-        setRealtimePrice(newPrice);
-      }
+    // Subscribe to price updates for this token
+    const unsubscribe = priceService.subscribeToPrice(position.token_address, (newPrice: number) => {
+      console.log(`PositionModal: Price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
+      setRealtimePrice(newPrice);
     });
     
-    // Track this token for price updates
-    simplifiedPriceService.trackTokens([position.token_address]);
-    
     return () => {
-      console.log(`🔌 PositionModal: Unsubscribing from simplified price service for ${position.token_symbol}`);
+      console.log(`🔌 PositionModal: Unsubscribing from price service for ${position.token_symbol}`);
       unsubscribe();
-      simplifiedPriceService.untrackTokens([position.token_address]);
     };
   }, [position.token_address, position.token_symbol]);
 
@@ -246,11 +239,11 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
           {/* Current P&L Display */}
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-3">
             <p className="text-gray-400 text-xs mb-1">Current P&L</p>
-            <p className={`text-lg font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-              {formatPnL(position.current_pnl)}
+            <p className={`text-lg font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatPnL(currentPnL)}
             </p>
-            <p className={`text-xs ${isProfit ? 'text-green-300' : 'text-red-300'}`}>
-              {formatPnLPercentage(position.current_pnl, position.collateral_sol)}
+            <p className={`text-xs ${currentPnL >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+              {formatPnLPercentage(currentPnL, position.collateral_sol)}
             </p>
           </div>
 
@@ -387,28 +380,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
           </div>
         </div>
 
-        {/* Risk Level - More Compact */}
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-400 text-xs">Risk Level</span>
-            <span className={`font-medium text-xs ${getRiskColor()}`}>
-              {getRiskText()}
-            </span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-1 mb-1">
-            <div 
-              className={`h-1 rounded-full transition-all duration-300 ${
-                currentMarginRatio >= 0.8 ? 'bg-red-500' : 
-                currentMarginRatio >= 0.6 ? 'bg-yellow-500' : 
-                'bg-green-500'
-              }`}
-              style={{ width: `${Math.min(currentMarginRatio * 100, 100)}%` }}
-            />
-          </div>
-          <p className="text-gray-400 text-xs">
-            {(currentMarginRatio * 100).toFixed(1)}% margin used
-          </p>
-        </div>
+
 
         {/* Position Details - More Compact */}
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-3">

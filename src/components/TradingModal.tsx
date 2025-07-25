@@ -3,8 +3,8 @@ import { X, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, Wallet, Calcul
 import { formatPrice, fetchSOLPrice, fetchTokenDetailCached, TokenDetailData } from '../services/birdeyeApi';
 import { positionService, CreatePositionData } from '../services/positionService';
 import { userProfileService } from '../services/supabaseClient';
-import { subscribeToJupiterPrice, getJupiterPrice } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import { simplifiedPriceService } from '../services/simplifiedPriceService';
+import webSocketService from '../services/birdeyeWebSocket';
+import priceService from '../services/businessPlanPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeSuccessModal from './TradeSuccessModal';
 import { soundManager } from '../services/soundManager';
@@ -42,6 +42,11 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [tradeSuccess, setTradeSuccess] = useState<string | null>(null);
   
+  // Enhanced duplicate protection
+  const [lastRequestHash, setLastRequestHash] = useState<string | null>(null);
+  const [lastRequestTime, setLastRequestTime] = useState<number>(0);
+  const [requestCooldown, setRequestCooldown] = useState<boolean>(false);
+  
   // Trade loading modal state
   const [showTradeLoading, setShowTradeLoading] = useState(false);
   const [loadingTradeData, setLoadingTradeData] = useState<{
@@ -62,17 +67,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null); // Track selected percentage
 
   // Subscribe to simplified price service for token price updates
-  useEffect(() => {
-    console.log(`TradingModal: Subscribing to simplified price service for ${tokenData.symbol}`);
-    
-    // Track this token for price updates
-    simplifiedPriceService.trackTokens([tokenData.address]);
-    
-    return () => {
-      console.log(`🔌 TradingModal: Removing ${tokenData.symbol} from tracked tokens`);
-      simplifiedPriceService.untrackTokens([tokenData.address]);
-    };
-  }, [tokenData.address, tokenData.symbol]);
+  // Note: Price tracking is now handled automatically by the price service when subscribing
 
   // Load SOL price on component mount - CRITICAL FOR LIVE TRADING
   useEffect(() => {
@@ -226,11 +221,11 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     
     if (tradeDirection === 'Long') {
       // Long: Loss when price goes down
-      // FIXED: P&L amount should also be leveraged
+      // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (slPrice - entryPrice) * tokenAmount * leverage;
     } else {
       // Short: Loss when price goes up
-      // FIXED: P&L amount should also be leveraged
+      // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (entryPrice - slPrice) * tokenAmount * leverage;
     }
 
@@ -260,11 +255,11 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     
     if (tradeDirection === 'Long') {
       // Long: Profit when price goes up
-      // FIXED: P&L amount should also be leveraged
+      // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (tpPrice - entryPrice) * tokenAmount * leverage;
     } else {
       // Short: Profit when price goes down
-      // FIXED: P&L amount should also be leveraged
+      // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (entryPrice - tpPrice) * tokenAmount * leverage;
     }
 
@@ -397,25 +392,135 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     validateTpSl();
   }, [tradeDirection, orderType, price, amount, leverage, stopLoss, takeProfit, tpSl, userSOLBalance]);
 
+  // Generate request hash for deduplication
+  const generateRequestHash = (tradeData: any): string => {
+    const requestData = {
+      wallet: walletAddress,
+      token: tokenData.address,
+      direction: tradeDirection,
+      orderType: orderType,
+      amount: parseFloat(amount || '0'),
+      leverage: leverage,
+      price: orderType === 'Limit Order' ? parseFloat(price) : null,
+      // Round to 5-second window to prevent minor timing differences
+      timeWindow: Math.floor(Date.now() / 5000) * 5000
+    };
+    
+    const jsonString = JSON.stringify(requestData);
+    // Create simple hash using btoa and character codes
+    let hash = 0;
+    for (let i = 0; i < jsonString.length; i++) {
+      const char = jsonString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36).slice(0, 16);
+  };
+
+  // Enhanced request validation
+  const validateRequest = (): { valid: boolean; error?: string } => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    // Prevent requests within 2 seconds
+    if (timeSinceLastRequest < 2000) {
+      return { 
+        valid: false, 
+        error: `Please wait ${Math.ceil((2000 - timeSinceLastRequest) / 1000)} seconds before trying again` 
+      };
+    }
+    
+    // Generate current request hash
+    const currentHash = generateRequestHash({
+      wallet: walletAddress,
+      token: tokenData.address,
+      direction: tradeDirection,
+      orderType: orderType,
+      amount: amount,
+      leverage: leverage,
+      price: price
+    });
+    
+    // Check for duplicate request
+    if (lastRequestHash === currentHash && timeSinceLastRequest < 30000) {
+      return { 
+        valid: false, 
+        error: 'Duplicate request detected. Please modify trade parameters or wait 30 seconds.' 
+      };
+    }
+    
+    return { valid: true };
+  };
+
+  // Enhanced cooldown management
+  const startRequestCooldown = () => {
+    setRequestCooldown(true);
+    setTimeout(() => {
+      setRequestCooldown(false);
+    }, 3000); // 3-second cooldown
+  };
+
   const handleExecuteTrade = async () => {
             console.log('TRADE EXECUTION STARTED');
     
+    // STEP 0: Enhanced duplicate protection
+    console.log('🛡️ VALIDATING REQUEST (DUPLICATE PROTECTION)');
+    
+    const validation = validateRequest();
+    if (!validation.valid) {
+      console.log('❌ REQUEST BLOCKED:', validation.error);
+      setTradeError(validation.error || 'Request blocked');
+      return;
+    }
+    
+    // Additional protection: Check if already executing
+    if (isExecutingTrade || requestCooldown) {
+      console.log('❌ TRADE ALREADY IN PROGRESS OR IN COOLDOWN');
+      setTradeError('Trade already in progress or too soon after last attempt');
+      return;
+    }
+
+    // IMMEDIATELY disable button and set states
+    setIsExecutingTrade(true);
+    setTradeError(null);
+    setTradeSuccess(null);
+    startRequestCooldown();
+    
+    // Update tracking variables
+    const currentTime = Date.now();
+    const requestHash = generateRequestHash({
+      wallet: walletAddress,
+      token: tokenData.address,
+      direction: tradeDirection,
+      orderType: orderType,
+      amount: amount,
+      leverage: leverage,
+      price: price
+    });
+    
+    setLastRequestHash(requestHash);
+    setLastRequestTime(currentTime);
+    
+    console.log('🔒 REQUEST AUTHORIZED - PROCEEDING WITH TRADE EXECUTION');
+    console.log('🔑 Request hash:', requestHash);
+    console.log('⏰ Request time:', currentTime);
+
     // Trade execution is now silent for better UX
     
     // 🚨 CRITICAL: Get FRESH price from Birdeye WebSocket for maximum accuracy
             console.log('GETTING FRESH PRICE FROM BIRDEYE WEBSOCKET FOR TRADE EXECUTION...');
     let freshPrice = tokenData.price; // Fallback to cached price
     
-    // Try Birdeye WebSocket first (lightning fast)
-    const birdeyePrice = getJupiterPrice(tokenData.address);
-    if (birdeyePrice) {
-      freshPrice = birdeyePrice;
-              console.log('BIRDEYE WEBSOCKET PRICE USED FOR TRADE:', {
+    // Try price service cache first (fast)
+    const cachedPrice = priceService.getCachedPrice(tokenData.address);
+    if (cachedPrice) {
+      freshPrice = cachedPrice;
+      console.log('CACHED PRICE USED FOR TRADE:', {
         cached_price: tokenData.price,
-        birdeye_fresh_price: freshPrice,
+        fresh_cached_price: freshPrice,
         price_difference: freshPrice - tokenData.price,
         price_change_percent: ((freshPrice - tokenData.price) / tokenData.price * 100).toFixed(4) + '%',
-        source: 'Birdeye WebSocket'
+        source: 'Price Service Cache'
       });
     } else {
       // Fallback to Birdeye REST API if WebSocket price not available
@@ -465,10 +570,6 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               console.log('TP/SL validation failed');
       return;
     }
-    
-    setIsExecutingTrade(true);
-    setTradeError(null);
-    setTradeSuccess(null);
     
     try {
       // Step 1: Calculate all required values
@@ -520,7 +621,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         'ULTRA_FRESH_PRICE_DETAILS': {
           cached_price: tokenData.price,
           fresh_price_sent_to_backend: freshPrice,
-          price_source: birdeyePrice ? 'Birdeye WebSocket' : 'Birdeye REST API Fallback',
+          price_source: cachedPrice ? 'Price Service Cache' : 'Token Data Fallback',
           price_difference: freshPrice - tokenData.price,
           price_improvement: ((freshPrice - tokenData.price) / tokenData.price * 100).toFixed(4) + '%'
         },
@@ -532,15 +633,15 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         }
       });
       
-      // Step 3: Send to backend
-              console.log('STEP 3: SENDING TO BACKEND (positionService.createPosition)');
+      // Step 3: Send to atomic backend with enhanced error handling
+      console.log('STEP 3: SENDING TO ATOMIC BACKEND (positionService.createPosition)');
       
       const position = await positionService.createPosition(positionData);
       
-              console.log('BACKEND RESPONSE:', {
+      console.log('BACKEND RESPONSE:', {
         'POSITION_CREATED': position,
         'POSITION_ID': position.id,
-        'ALL_FIELDS': position
+        'STATUS': position.status
       });
       
       // Step 4: Check balance update
@@ -607,8 +708,30 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       console.error('Error details:', error);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
-      setTradeError('Trade failed, please check your details and try again');
-      // Trade errors are now silent
+      
+      // Enhanced error handling with specific messages
+      let errorMessage = 'Trade failed, please check your details and try again';
+      
+      if (error.message?.includes('Request already in progress')) {
+        errorMessage = 'Another request is being processed. Please wait a moment.';
+      } else if (error.message?.includes('already have an active position')) {
+        errorMessage = 'You already have an active position for this token. Please close it first.';
+      } else if (error.message?.includes('Duplicate request detected')) {
+        errorMessage = 'Duplicate request detected. Please wait before retrying.';
+      } else if (error.message?.includes('Insufficient SOL balance')) {
+        errorMessage = error.message;
+      } else if (error.message?.includes('Position size') && error.message?.includes('exceeds limit')) {
+        errorMessage = error.message;
+      }
+      
+      setTradeError(errorMessage);
+      
+      // Reset tracking on error to allow retry after cooldown
+      setTimeout(() => {
+        setLastRequestHash(null);
+        setLastRequestTime(0);
+      }, 5000); // 5-second reset delay
+      
     } finally {
       setIsExecutingTrade(false);
       console.log('🏁 TRADE EXECUTION PROCESS ENDED 🏁');
@@ -631,7 +754,10 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     // CRITICAL: SOL price must be available for live trading
     const priceValidation = solPrice !== null && !isPriceLoading && !priceError;
     
-    return basicValidation && tpSlValidation && positionValidation && priceValidation;
+    // Enhanced validation: Check for execution state and cooldown
+    const executionValidation = !isExecutingTrade && !requestCooldown;
+    
+    return basicValidation && tpSlValidation && positionValidation && priceValidation && executionValidation;
   };
 
   const handleStopLossChange = (value: string) => {
@@ -1253,10 +1379,10 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               </div>
             )}
 
-            {/* Execute Trade Button - CRITICAL SAFETY FOR LIVE TRADING */}
+            {/* Execute Trade Button - ENHANCED SECURITY FOR LIVE TRADING */}
             <button
               onClick={handleExecuteTrade}
-              disabled={!isFormValid() || isExecutingTrade}
+              disabled={!isFormValid()}
               className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               style={{ 
                 backgroundColor: !isFormValid() ? '#374151' : '#1e7cfa',
@@ -1277,6 +1403,11 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Creating Position...</span>
+                </>
+              ) : requestCooldown ? (
+                <>
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Please Wait...</span>
                 </>
               ) : isPriceLoading ? (
                 <>

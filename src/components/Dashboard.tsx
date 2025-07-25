@@ -6,12 +6,12 @@ import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenP
 import { jupiterSwapService, SwapDirection } from '../services/jupiterApi';
 import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
 import { userProfileService, WithdrawalRequest, supabase, ppaLocksService, PPALock } from '../services/supabaseClient';
-import TokenDetail from './TokenDetail';
+
 import EditProfile from './EditProfile';
 import { positionService, TradingPosition } from '../services/positionService';
 import PositionModal from './PositionModal';
 import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import businessPlanPriceService from '../services/businessPlanPriceService';
+import priceService from '../services/businessPlanPriceService';
 import { initializeBusinessPlanOptimizations } from '../services/birdeyeApi';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
@@ -38,7 +38,7 @@ interface DashboardProps {
 
 type TabType = 'home' | 'rewards' | 'positions' | 'orders';
 type SwapMode = 'buy' | 'sell';
-type ViewState = 'dashboard' | 'token-detail' | 'edit-profile';
+type ViewState = 'dashboard' | 'edit-profile';
 
 interface SwapSuccessData {
   txid: string;
@@ -109,7 +109,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   
   // New state for different views
   const [viewState, setViewState] = useState<ViewState>('dashboard');
-  const [selectedTokenAddress, setSelectedTokenAddress] = useState<string>('');
+
   
   // Profile state for updates
   const [currentUsername, setCurrentUsername] = useState(username);
@@ -237,56 +237,37 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-    // 🚀 FIXED: Ultra-fast price service - always runs, no chicken-and-egg problems
+    // Price service for position tracking
   useEffect(() => {
     if (!walletAddress) return;
     
-    // Always initialize business plan optimizations
+    // Initialize optimizations
     initializeBusinessPlanOptimizations();
     
-    console.log('🚀 FIXED PRICE SERVICE: Setting up ultra-fast 200ms price updates (5Hz)');
+    console.log('💰 Setting up price tracking for positions');
     console.log(`📊 Current positions count: ${tradingPositions.length}`);
     
     // Get position tokens for tracking
     const positionTokens = tradingPositions.map(p => p.token_address);
     
-    // 🔧 FIXED: Always set up price service, even with 0 positions (for instant readiness)
     if (positionTokens.length === 0) {
-      console.log('⚡ FIXED: Price service ready for instant position tracking when positions load');
-      // Don't return early - keep service ready
-    } else {
-      console.log(`⚡ FIXED: Tracking ${positionTokens.length} position tokens at 200ms intervals (5Hz):`, 
-        positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
+      console.log('⚡ Price service ready for position tracking');
+      return; // No positions to track
     }
     
-    // 🚀 FIXED: Subscribe to ultra-fast price updates for positions (or prepare for them)
-    const unsubscribe = businessPlanPriceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (newTokenPrices: { [address: string]: number }) => {
-      // Enhanced logging for debugging
-      if (Math.random() < 0.1) { // Log 10% of updates (since it's now 5Hz)
-        console.log(`⚡ RECEIVED ULTRA-FAST PRICE UPDATE: ${Object.keys(newTokenPrices).length} tokens`, newTokenPrices);
-      }
+    console.log(`⚡ Tracking ${positionTokens.length} position tokens:`, 
+      positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
+    
+    // Subscribe to price updates for positions
+    const unsubscribe = priceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (newTokenPrices: { [address: string]: number }) => {
+      console.log(`📊 Price update received for ${Object.keys(newTokenPrices).length} tokens`);
       
-      // INSTANT UPDATE - Maximum speed, no delays
-      setTokenPrices(prevPrices => {
-        const mergedPrices = { ...prevPrices, ...newTokenPrices };
-        
-        // Log price changes for debugging
-        Object.entries(newTokenPrices).forEach(([address, newPrice]) => {
-          const oldPrice = prevPrices[address];
-          if (!oldPrice) {
-            console.log(`🆕 NEW PRICE: ${address.slice(0,8)}... = $${newPrice.toFixed(6)}`);
-          } else if (Math.abs(newPrice - oldPrice) > 0.000001) {
-            console.log(`💰 PRICE CHANGE: ${address.slice(0,8)}... $${oldPrice?.toFixed(6)} → $${newPrice.toFixed(6)} (${((newPrice - oldPrice) / oldPrice * 100).toFixed(2)}%)`);
-          }
-        });
-        
-        return mergedPrices;
-      });
+      // Update token prices
+      setTokenPrices(prevPrices => ({ ...prevPrices, ...newTokenPrices }));
       
-      // INSTANT P&L UPDATE - Maximum trading speed
+      // Update P&L for positions
       if (walletAddress && Object.keys(newTokenPrices).length > 0) {
         try {
-          console.log('🔄 INSTANT: Triggering ultra-fast position P&L update');
           updatePositionPnLFromCachedPrices();
         } catch (error) {
           console.error('❌ Error updating P&L from price change:', error);
@@ -295,7 +276,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     });
     
     return unsubscribe;
-  }, [walletAddress, JSON.stringify(tradingPositions.map(p => p.token_address))]); // 🔧 FIXED: Track actual token addresses, not just count
+  }, [walletAddress, JSON.stringify(tradingPositions.map(p => p.token_address))]);
 
   // NEW: Separate effect to ensure positions are loaded first
   useEffect(() => {
@@ -332,21 +313,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     };
   }, [walletAddress]);
 
-  // Update position P&L using cached prices (much faster) - RENAMED AND FIXED
+  // Update position P&L using cached prices
   const updatePositionPnLFromCachedPrices = () => {
-    if (!walletAddress) {
-      console.log('❌ No wallet address - skipping P&L update');
-      return;
-    }
-    
-    if (tradingPositions.length === 0) {
-      console.log('❌ No trading positions - skipping P&L update');
+    if (!walletAddress || tradingPositions.length === 0) {
       return;
     }
     
     try {
-      console.log(`🔄 Updating P&L for ${tradingPositions.length} positions using real-time cached prices...`);
-      console.log(`🔍 Available token prices:`, Object.keys(tokenPrices).map(addr => `${addr.slice(0,8)}...: $${tokenPrices[addr]?.toFixed(6)}`));
+      console.log(`🔄 Updating P&L for ${tradingPositions.length} positions`);
       
       const updatedPositions = tradingPositions.map((position) => {
         try {
@@ -411,6 +385,32 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }, 10000); // 10 seconds - much faster refresh
 
     return () => clearInterval(interval);
+  }, [walletAddress]);
+
+  // CRITICAL: Automatic liquidation monitoring - runs every 30 seconds
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const liquidationInterval = setInterval(async () => {
+      try {
+        console.log('🔍 AUTOMATED LIQUIDATION CHECK - Monitoring all open positions...');
+        const result = await positionService.checkLiquidations();
+        
+        if (result.liquidatedCount > 0) {
+          console.log(`🚨 ${result.liquidatedCount} positions were automatically liquidated!`);
+          // Refresh positions to update UI after liquidations  
+          await loadTradingPositions();
+          // Refresh SOL balance as liquidated collateral is not returned
+          await refreshSOLBalance();
+        } else {
+          console.log(`✅ All ${result.checkedCount} positions are healthy - no liquidations needed`);
+        }
+      } catch (error) {
+        console.error('❌ Error in automated liquidation check:', error);
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(liquidationInterval);
   }, [walletAddress]);
 
   // Get quote when amount changes
@@ -748,12 +748,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  // Real-time price feed for position tokens - ULTRA-FAST WITH CACHING - MAXIMUM SPEED
+  // Real-time price feed for position tokens - OPTIMIZED WITH CACHING - 2Hz SPEED
   const updateTokenPrices = async () => {
     if (tradingPositions.length === 0) return;
     
     try {
-      console.log('ULTRA-FAST updating real-time token prices using cache...');
+      console.log('Optimized updating real-time token prices using cache...');
       const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
       const pricePromises = uniqueTokens.map(async (tokenAddress) => {
         try {
@@ -775,7 +775,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
       setTokenPrices(newPrices);
       setPriceUpdateCount(prev => prev + 1);
-              console.log(`ULTRA-FAST updated prices for ${uniqueTokens.length} tokens using cache`, newPrices);
+              console.log(`Updated prices for ${uniqueTokens.length} tokens using cache`, newPrices);
     } catch (error) {
       console.error('Error updating token prices:', error);
     }
@@ -957,12 +957,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
     
     // Calculate P&L in USD
-    // FIXED: Don't multiply by leverage - amount already represents the leveraged position
+    // CRITICAL FIX: amount is the raw token amount, must multiply by leverage for correct P&L
     let pnl_usd = 0;
     if (position.direction === 'Long') {
-      pnl_usd = (current_price - entry_price) * amount;
+      pnl_usd = (current_price - entry_price) * amount * leverage;
     } else {
-      pnl_usd = (entry_price - current_price) * amount;
+      pnl_usd = (entry_price - current_price) * amount * leverage;
     }
     
     // Calculate margin ratio in SOL terms (CORRECT WAY)
@@ -1004,9 +1004,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const totalSOLHoldings = currentSOLBalance + lockedSOLCollateral;
     const totalSOLValue = totalSOLHoldings * solPrice;
     
-    // Calculate total unrealized P&L from all active positions
+    // Calculate total unrealized P&L from all active positions using real-time prices
     const totalPositionPnL = tradingPositions.reduce((total, position) => {
-      return total + (position.current_pnl || 0);
+      const realtimePnL = calculatePositionPnLWithCachedPrice(position);
+      return total + realtimePnL.pnl;
     }, 0);
     
     // Total portfolio = USD balance + Total SOL value + unrealized P&L
@@ -1124,15 +1125,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-  const handleBackFromTokenDetail = () => {
-    setViewState('dashboard');
-    setSelectedTokenAddress('');
-  };
 
-  const handleBuyFromTokenDetail = () => {
-    setViewState('dashboard');
-    handleBuyPPA();
-  };
 
   const handleBuyPPA = () => {
     setShowSwapModal(true);
@@ -1862,27 +1855,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   }, [walletAddress, currentSOLBalance]);
 
   // Show different views based on viewState
-  if (viewState === 'token-detail') {
-    return (
-      <TokenDetail
-        tokenAddress={selectedTokenAddress}
-        onBack={handleBackFromTokenDetail}
-        onBuy={handleBuyFromTokenDetail}
-        userSOLBalance={currentSOLBalance}
-
-        walletAddress={walletAddress}
-        onUpdateSOLBalance={(newBalance) => {
-          setCurrentSOLBalance(newBalance);
-          onUpdateSOLBalance(newBalance);
-        }}
-        onShowTerms={onShowTerms}
-        onNavigateToPositions={() => {
-          setViewState('dashboard');
-          setActiveTab('positions');
-        }}
-      />
-    );
-  }
 
   if (viewState === 'edit-profile') {
     return (
@@ -2674,12 +2646,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 ) : activePositions.length > 0 ? (
                   <div className="space-y-4">
                     {activePositions.map((position) => {
-                      const isPositive = position.current_pnl >= 0;
+                      // Calculate real-time P&L using cached prices
+                      const realtimePnL = calculatePositionPnLWithCachedPrice(position);
+                      const currentPnL = realtimePnL.pnl;
+                      const isPositive = currentPnL >= 0;
                       
                       // FIXED: P&L percentage should be based on collateral (actual investment), not leveraged position value
                       const collateralValueUSD = (position.collateral_sol || 0) * solPrice;
                       const pnlPercent = collateralValueUSD > 0 
-                        ? (position.current_pnl / collateralValueUSD) * 100 
+                        ? (currentPnL / collateralValueUSD) * 100 
                         : 0;
                       
                       // Add warning styling for positions close to liquidation
@@ -2716,7 +2691,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                               isInDanger ? 'position-danger bg-red-900 border-2 border-red-500' : 
                               isNearLiquidation ? 'bg-orange-900 border-2 border-orange-500' : 
                               isPositive ? 'position-profit bg-gray-800 border border-gray-600 hover:border-green-500' :
-                              position.current_pnl < -5 ? 'position-loss bg-gray-800 border border-gray-600 hover:border-red-500' :
+                              currentPnL < -5 ? 'position-loss bg-gray-800 border border-gray-600 hover:border-red-500' :
                               'bg-gray-800 border border-gray-600 hover:border-gray-500'
                             }`}
                           >
@@ -2747,12 +2722,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             <div className="text-right">
                               <p className="text-white text-sm font-bold">
                                 {formatCurrency(position.position_value_usd)}
-                              </p>
-                              <p className={`text-xs font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                                {isPositive ? '+' : ''}{formatCurrency(position.current_pnl)}
-                              </p>
-                              <p className={`text-xs ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                                ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
                               </p>
                             </div>
                           </div>

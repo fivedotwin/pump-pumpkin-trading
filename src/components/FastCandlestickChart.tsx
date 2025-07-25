@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import businessPlanPriceService from '../services/businessPlanPriceService';
+import priceService from '../services/businessPlanPriceService';
 import { fetchTokenDetailCached } from '../services/birdeyeApi';
 
 interface CandleData {
@@ -83,7 +83,7 @@ export default function FastCandlestickChart({
 
     console.log(`⚡ FAST CHART: Starting BLAZING FAST 20Hz updates for ${tokenSymbol}`);
     
-    const unsubscribe = businessPlanPriceService.subscribeToPrice(tokenAddress, (newPrice: number) => {
+    const unsubscribe = priceService.subscribeToPrice(tokenAddress, (newPrice: number) => {
       if (!newPrice || newPrice <= 0) return;
       
       const now = Date.now();

@@ -40,8 +40,8 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
   };
 
   const formatPrice = (price: number) => {
-    if (price < 0.01) {
-      return `$${price.toFixed(6)}`;
+    if (price < 0.0001) {
+      return '$0.00';
     } else if (price < 1) {
       return `$${price.toFixed(4)}`;
     } else {

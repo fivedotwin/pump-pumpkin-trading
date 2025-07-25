@@ -1,6 +1,8 @@
-import { supabase } from './supabaseClient';
-import { fetchTokenDetailCached, fetchTokenPriceCached, fetchSOLPrice } from './birdeyeApi';
-import { userProfileService } from './supabaseClient'; // Import userProfileService
+import { supabase, userProfileService } from './supabaseClient';
+import { fetchTokenDetailCached, fetchSOLPrice } from './birdeyeApi';
+
+// Add crypto for request hash generation
+const crypto = typeof window !== 'undefined' ? window.crypto : require('crypto');
 
 export interface TradingPosition {
   id: number;
@@ -66,7 +68,34 @@ export interface MarginCallAlert {
   shortfall: number;
 }
 
+// Request hash generation for deduplication
+function generateRequestHash(data: CreatePositionData, timestamp: number): string {
+  const requestData = {
+    wallet_address: data.wallet_address,
+    token_address: data.token_address,
+    direction: data.direction,
+    order_type: data.order_type,
+    amount: data.amount,
+    leverage: data.leverage,
+    // Round timestamp to 5-second window to allow minor timing differences
+    time_window: Math.floor(timestamp / 5000) * 5000
+  };
+  
+  const jsonString = JSON.stringify(requestData);
+  
+  if (typeof window !== 'undefined') {
+    // Browser environment
+    const encoder = new TextEncoder();
+    const data = encoder.encode(jsonString);
+    return btoa(String.fromCharCode(...new Uint8Array(data))).slice(0, 32);
+  } else {
+    // Node environment
+    return crypto.createHash('sha256').update(jsonString).digest('hex').slice(0, 32);
+  }
+}
+
 class PositionService {
+  private activeDelayedOperations = new Map<number, NodeJS.Timeout>();
   
   // Position size limits based on leverage
   private getMaxPositionSize(leverage: number): number {
@@ -139,14 +168,14 @@ class PositionService {
       const leverage = position.leverage;
       
       // Calculate P&L in USD
-      // FIXED: Don't multiply by leverage - amount already represents the leveraged position
+      // CRITICAL FIX: amount is the raw token amount, must multiply by leverage for correct P&L
       let pnl_usd = 0;
       if (position.direction === 'Long') {
         // Long: Profit when price goes up
-        pnl_usd = (current_price - entry_price) * amount;
+        pnl_usd = (current_price - entry_price) * amount * leverage;
       } else {
         // Short: Profit when price goes down
-        pnl_usd = (entry_price - current_price) * amount;
+        pnl_usd = (entry_price - current_price) * amount * leverage;
       }
       
       // Calculate margin ratio in SOL terms (FIXED)
@@ -170,247 +199,140 @@ class PositionService {
     }
   }
 
-  // Create a new trading position
+  // Create a new trading position using atomic database function
   async createPosition(data: CreatePositionData): Promise<TradingPosition> {
     try {
-      console.log('🏦🏦🏦 BACKEND POSITION CREATION STARTED 🏦🏦🏦');
+      console.log('🔒 SECURE POSITION CREATION STARTED (ATOMIC) 🔒');
       console.log('📥 RECEIVED DATA FROM FRONTEND:', data);
       
-      // STEP 1: Get current user profile to check SOL balance
-      console.log('📊 BACKEND STEP 1: FETCHING USER PROFILE');
-      const userProfile = await userProfileService.getProfile(data.wallet_address);
-      if (!userProfile) {
-        throw new Error('User profile not found. Please create a profile first.');
-      }
-      console.log('👤 USER PROFILE:', {
-        wallet_address: userProfile.wallet_address,
-        username: userProfile.username,
-        sol_balance: userProfile.sol_balance
-      });
-
-      // Get current token price for market orders - USE FRESH PRICE FROM FRONTEND IF PROVIDED
-      console.log('📊 BACKEND STEP 2: DETERMINING ENTRY PRICE');
+      // Generate request hash for deduplication
+      const timestamp = Date.now();
+      const requestHash = generateRequestHash(data, timestamp);
+      console.log('🔑 Request hash generated:', requestHash);
+      
+      // Get current token price for market orders
+      console.log('📊 STEP 1: DETERMINING ENTRY PRICE');
       let entry_price = data.target_price || 0;
       
       if (data.order_type === 'Market Order') {
         if (data.fresh_market_price) {
-          // USE THE ULTRA-FRESH PRICE FROM FRONTEND (Birdeye WebSocket/REST)
           entry_price = data.fresh_market_price;
-          console.log('💰 MARKET ORDER - USING ULTRA-FRESH PRICE FROM FRONTEND:', entry_price);
-          console.log('⚡ This price was just fetched from Birdeye WebSocket/REST in frontend for maximum accuracy');
+          console.log('💰 MARKET ORDER - USING FRESH PRICE FROM FRONTEND:', entry_price);
         } else {
-          // Fallback to backend API call if fresh price not provided
           const tokenData = await fetchTokenDetailCached(data.token_address);
           if (!tokenData) {
             throw new Error(`Failed to fetch token data for ${data.token_address}`);
           }
           entry_price = tokenData.price;
-          console.log('💰 MARKET ORDER - FALLBACK ENTRY PRICE FROM BACKEND API:', entry_price);
+          console.log('💰 MARKET ORDER - FALLBACK ENTRY PRICE FROM API:', entry_price);
         }
       } else {
         console.log('🎯 LIMIT ORDER - ENTRY PRICE FROM USER:', entry_price);
       }
       
-      // Get current SOL price for collateral calculation
-      console.log('📊 BACKEND STEP 3: FETCHING SOL PRICE');
+      // Get SOL price for calculations
+      console.log('📊 STEP 2: FETCHING SOL PRICE');
       const sol_price = await fetchSOLPrice();
-      console.log('💰 SOL PRICE FROM API:', sol_price);
+      console.log('💰 SOL PRICE:', sol_price);
       
-      // FIXED: Calculate position value correctly (without leverage multiplication)
-      console.log('📊 BACKEND STEP 4: CALCULATING POSITION VALUES');
-      const position_value_usd = data.amount * entry_price; // Base position value in USD
-      console.log('🔢 BASE POSITION VALUE CALCULATION:', {
-        token_amount: data.amount,
-        entry_price: entry_price,
-        position_value_usd: position_value_usd,
-        'FORMULA': 'token_amount × entry_price = position_value_usd'
-      });
-      
-      // Validate position size (check leveraged exposure)
+      // Calculate position values
+      console.log('📊 STEP 3: CALCULATING POSITION VALUES');
+      const position_value_usd = data.amount * entry_price;
       const leveraged_exposure = position_value_usd * data.leverage;
-      console.log('🔢 LEVERAGED EXPOSURE CALCULATION:', {
-        position_value_usd: position_value_usd,
-        leverage: data.leverage,
-        leveraged_exposure: leveraged_exposure,
-        'FORMULA': 'position_value_usd × leverage = leveraged_exposure'
-      });
       
+      // Validate position size
       if (!this.validatePositionSize(leveraged_exposure, data.leverage)) {
         throw new Error(`Position size ${leveraged_exposure.toFixed(0)} exceeds limit for ${data.leverage}x leverage`);
       }
       
-      // FIXED: Calculate required collateral in SOL
-      console.log('📊 BACKEND STEP 5: CALCULATING COLLATERAL REQUIREMENTS');
-      const collateral_usd = position_value_usd / data.leverage; // Collateral needed in USD
-      const collateral_sol = collateral_usd / sol_price; // Convert to SOL
-      
-      console.log('🔢 COLLATERAL CALCULATION:', {
-        position_value_usd: position_value_usd,
-        leverage: data.leverage,
-        collateral_usd: collateral_usd,
-        sol_price: sol_price,
-        collateral_sol: collateral_sol,
-        'FORMULA_1': 'position_value_usd ÷ leverage = collateral_usd',
-        'FORMULA_2': 'collateral_usd ÷ sol_price = collateral_sol'
-      });
-
-      // REMOVED: Calculate trading fee on base position value (matches frontend)
-      // console.log('📊 BACKEND STEP 6: CALCULATING HIDDEN TRADING FEES');
-      // const tradingFee = this.calculateTradingFee(data.leverage, position_value_usd, sol_price);
-      // console.log('💰 HIDDEN TRADING FEE CALCULATION:', {
-      //   leverage: data.leverage,
-      //   position_value_usd: position_value_usd,
-      //   fee_percentage: `${(tradingFee.fee_percentage * 100).toFixed(1)}%`,
-      //   fee_usd: tradingFee.fee_usd,
-      //   fee_sol: tradingFee.fee_sol,
-      //   'NOTE': 'FEE CALCULATED ON BASE POSITION VALUE AND HIDDEN FROM USERS'
-      // });
-      
-      // Total SOL requirement = Collateral + Trading Fee (hidden from user)
-      // const total_required_sol = collateral_sol + tradingFee.fee_sol;
-      // console.log('🔢 TOTAL SOL REQUIREMENT CALCULATION:', {
-      //   collateral_sol: collateral_sol,
-      //   trading_fee_sol: tradingFee.fee_sol,
-      //   total_required_sol: total_required_sol,
-      //   'FORMULA': 'collateral_sol + trading_fee_sol = total_required_sol'
-      // });
-
-      // STEP 2: Check if user has sufficient SOL balance for collateral + fee
-      console.log('📊 BACKEND STEP 7: VALIDATING SOL BALANCE');
-      console.log('🔍 BACKEND SOL-BASED VALIDATION:', {
-        wallet_address: data.wallet_address,
-        token: data.token_symbol,
-        base_position_value_usd: position_value_usd,
-        leveraged_exposure_usd: leveraged_exposure,
-        db_sol_balance: userProfile.sol_balance,
-        collateral_sol: collateral_sol,
-        // trading_fee_sol: tradingFee.fee_sol, // Hidden from UI
-        // total_required_sol: total_required_sol,
-        validation_will_pass: userProfile.sol_balance >= collateral_sol, // Only collateral is required
-        shortfall: Math.max(0, collateral_sol - userProfile.sol_balance),
-        sol_price: sol_price
-      });
-      
-      if (userProfile.sol_balance < collateral_sol) {
-        const shortfall = collateral_sol - userProfile.sol_balance;
-        console.log('❌ VALIDATION FAILED - INSUFFICIENT SOL BALANCE');
-        // User sees this as "insufficient collateral" without knowing about fees
-        throw new Error(`Insufficient SOL balance. Need ${collateral_sol.toFixed(4)} SOL collateral, but only have ${userProfile.sol_balance.toFixed(4)} SOL. Shortfall: ${shortfall.toFixed(4)} SOL`);
-      }
-      console.log('✅ VALIDATION PASSED - SUFFICIENT SOL BALANCE');
-      
-      // Calculate liquidation and margin call prices
-      console.log('📊 BACKEND STEP 8: CALCULATING LIQUIDATION PRICES');
+      // Calculate collateral and prices
+      const collateral_usd = position_value_usd / data.leverage;
+      const collateral_sol = collateral_usd / sol_price;
       const liquidation_price = this.calculateLiquidationPrice(entry_price, data.direction, data.leverage);
       const margin_call_price = this.calculateMarginCallPrice(entry_price, liquidation_price, data.direction);
       
-      console.log('⚠️ LIQUIDATION PRICE CALCULATION:', {
-        entry_price: entry_price,
-        direction: data.direction,
-        leverage: data.leverage,
-        liquidation_price: liquidation_price,
-        margin_call_price: margin_call_price
-      });
-
-      // STEP 3: Create position in database first
-      console.log('📊 BACKEND STEP 9: INSERTING POSITION INTO DATABASE');
-      const positionDbData = {
-        wallet_address: data.wallet_address,
-        token_address: data.token_address,
-        token_symbol: data.token_symbol,
-        direction: data.direction,
-        order_type: data.order_type,
-        entry_price,
-        target_price: data.target_price,
-        amount: data.amount,
-        leverage: data.leverage,
-        collateral_sol,
-        position_value_usd,
-        // REMOVED: Store trading fee information (not exposed to users)
-        // trading_fee_usd: tradingFee.fee_usd,
-        // trading_fee_sol: tradingFee.fee_sol,
-        // trading_fee_percentage: tradingFee.fee_percentage,
-        stop_loss: data.stop_loss,
-        take_profit: data.take_profit,
-        status: data.order_type === 'Market Order' ? 'opening' : 'pending',
-        liquidation_price,
-        margin_call_price
-      };
-      
-      console.log('📤 EXACT DATABASE INSERT DATA:', positionDbData);
-      
-      const { data: position, error } = await supabase
-        .from('trading_positions')
-        .insert(positionDbData)
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('💥 DATABASE ERROR CREATING POSITION:', error);
-        throw new Error(`Failed to create position: ${error.message}`);
-      }
-      
-      console.log('✅ POSITION SUCCESSFULLY INSERTED INTO DATABASE:', {
-        position_id: position.id,
-        database_record: position
-      });
-
-      // STEP 4: Deduct collateral from user's SOL balance
-      console.log('📊 BACKEND STEP 10: UPDATING USER SOL BALANCE');
-      const newSOLBalance = userProfile.sol_balance - collateral_sol;
-      
-      console.log('💰 SOL BALANCE UPDATE CALCULATION:', {
-        previous_balance: userProfile.sol_balance,
-        total_deduction: collateral_sol,
-        new_balance: newSOLBalance,
-        'FORMULA': 'previous_balance - total_deduction = new_balance'
-      });
-      
-      const balanceUpdated = await userProfileService.updateSOLBalance(data.wallet_address, newSOLBalance);
-      
-      if (!balanceUpdated) {
-        // ROLLBACK: If balance update fails, delete the position we just created
-        console.error('❌ FAILED TO UPDATE SOL BALANCE - ROLLING BACK POSITION');
-        await supabase
-          .from('trading_positions')
-          .delete()
-          .eq('id', position.id);
-        
-        throw new Error('Failed to deduct collateral from SOL balance. Position creation cancelled.');
-      }
-
-      console.log('✅ SOL BALANCE SUCCESSFULLY UPDATED');
-      
-      // STEP 5: Start delayed opening for Market Orders
-      if (data.order_type === 'Market Order') {
-        console.log(`⏳ Starting 10-second delayed opening for Market Order ${position.id} - Anti-Gaming Protection Active`);
-        this.startDelayedOpening(position.id);
-      }
-      
-      console.log('🎉🎉🎉 BACKEND POSITION CREATION COMPLETED 🎉🎉🎉');
-      console.log('📊 FINAL SUMMARY:', {
-        position_id: position.id,
+      console.log('🔒 CALLING ATOMIC DATABASE FUNCTION');
+      console.log('📊 Parameters:', {
+        wallet: data.wallet_address,
         token: data.token_symbol,
         direction: data.direction,
-        leverage: `${data.leverage}x`,
-        entry_price: entry_price,
-        position_value_usd: position_value_usd,
         collateral_sol: collateral_sol,
-        // trading_fee_sol: tradingFee.fee_sol,
-        total_deducted_sol: collateral_sol,
-        new_sol_balance: newSOLBalance,
-        status: position.status
+        position_value_usd: position_value_usd,
+        request_hash: requestHash
       });
       
+      // Call atomic database function
+      const { data: result, error } = await supabase.rpc('create_position_atomic', {
+        p_wallet_address: data.wallet_address,
+        p_token_address: data.token_address,
+        p_token_symbol: data.token_symbol,
+        p_direction: data.direction,
+        p_order_type: data.order_type,
+        p_entry_price: entry_price,
+        p_target_price: data.target_price || null,
+        p_amount: data.amount,
+        p_leverage: data.leverage,
+        p_collateral_sol: collateral_sol,
+        p_position_value_usd: position_value_usd,
+        p_stop_loss: data.stop_loss || null,
+        p_take_profit: data.take_profit || null,
+        p_liquidation_price: liquidation_price,
+        p_margin_call_price: margin_call_price,
+        p_request_hash: requestHash
+      });
+      
+      if (error) {
+        console.error('💥 ATOMIC FUNCTION ERROR:', error);
+        
+        // Handle specific error types
+        if (error.message?.includes('Duplicate request detected')) {
+          throw new Error('Request already in progress. Please wait before retrying.');
+        } else if (error.message?.includes('already have an active position')) {
+          throw new Error('You already have an active position for this token. Please close it first.');
+        } else if (error.message?.includes('Insufficient SOL balance')) {
+          throw new Error(error.message);
+        } else {
+          throw new Error(`Failed to create position: ${error.message}`);
+        }
+      }
+      
+      if (!result || !result.success) {
+        throw new Error('Position creation failed - invalid response from database');
+      }
+      
+      const positionId = result.position_id;
+      console.log('✅ POSITION CREATED ATOMICALLY:', {
+        position_id: positionId,
+        previous_balance: result.previous_balance,
+        new_balance: result.new_balance,
+        collateral_deducted: result.collateral_deducted
+      });
+      
+      // Fetch the created position
+      const { data: position, error: fetchError } = await supabase
+        .from('trading_positions')
+        .select('*')
+        .eq('id', positionId)
+        .single();
+      
+      if (fetchError || !position) {
+        console.error('💥 ERROR FETCHING CREATED POSITION:', fetchError);
+        throw new Error('Position created but failed to fetch details');
+      }
+      
+      // Start delayed opening for Market Orders
+      if (data.order_type === 'Market Order') {
+        console.log(`⏳ Starting 10-second delayed opening for Market Order ${positionId} - Anti-Gaming Protection Active`);
+        this.startDelayedOpening(positionId);
+      }
+      
+      console.log('🎉 SECURE POSITION CREATION COMPLETED 🎉');
       return position;
       
     } catch (error) {
-      console.error('💥💥💥 BACKEND POSITION CREATION ERROR 💥💥💥');
-      console.error('Error type:', typeof error);
+      console.error('💥 SECURE POSITION CREATION ERROR 💥');
       console.error('Error message:', (error as any)?.message);
       console.error('Error details:', error);
-      console.error('Stack trace:', (error as any)?.stack);
-      console.log('🏁 BACKEND POSITION CREATION PROCESS ENDED WITH ERROR 🏁');
       throw error;
     }
   }
@@ -602,27 +524,43 @@ class PositionService {
   }
 
   // Check for liquidations
-  async checkLiquidations(): Promise<void> {
+  async checkLiquidations(): Promise<{ liquidatedCount: number; checkedCount: number }> {
     try {
       const openPositions = await this.getOpenPositions();
+      let liquidatedCount = 0;
+      
+      console.log(`🔍 Checking ${openPositions.length} open positions for liquidation...`);
       
       for (const position of openPositions) {
-        const { margin_ratio, current_price } = await this.calculatePositionPnL(position);
-        
-        // Liquidate at 100% margin ratio
-        if (margin_ratio >= 1.0) {
-          await this.liquidatePosition(position.id, current_price);
+        try {
+          const { margin_ratio, current_price } = await this.calculatePositionPnL(position);
           
-          console.log(`🔥 Position liquidated:`, {
-            id: position.id,
-            token: position.token_symbol,
-            direction: position.direction,
-            entry_price: position.entry_price,
-            liquidation_price: current_price,
-            loss: position.collateral_sol
-          });
+          // Liquidate at 100% margin ratio
+          if (margin_ratio >= 1.0) {
+            await this.liquidatePosition(position.id, current_price);
+            liquidatedCount++;
+            
+            console.log(`🔥 AUTOMATIC LIQUIDATION:`, {
+              id: position.id,
+              token: position.token_symbol,
+              direction: position.direction,
+              entry_price: position.entry_price,
+              liquidation_price: current_price,
+              margin_ratio: `${(margin_ratio * 100).toFixed(1)}%`,
+              collateral_lost: `${position.collateral_sol.toFixed(4)} SOL`
+            });
+          }
+        } catch (error) {
+          console.error(`Error checking position ${position.id} for liquidation:`, error);
+          // Continue checking other positions
         }
       }
+      
+      if (liquidatedCount > 0) {
+        console.log(`🚨 LIQUIDATION SUMMARY: ${liquidatedCount} positions liquidated out of ${openPositions.length} checked`);
+      }
+      
+      return { liquidatedCount, checkedCount: openPositions.length };
       
     } catch (error) {
       console.error('Error checking liquidations:', error);

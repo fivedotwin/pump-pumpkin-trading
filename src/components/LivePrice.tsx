@@ -39,8 +39,12 @@ export default function LivePrice({
       return `$${value.toFixed(2)}`;
     } else if (value >= 0.01) {
       return `$${value.toFixed(4)}`;
+    } else if (value >= 0.0001) {
+      return `$${value.toFixed(4)}`;
+    } else if (value > 0) {
+      return '$0.00';
     } else {
-      return `$${value.toFixed(8)}`;
+      return '$0.00';
     }
   };
 
