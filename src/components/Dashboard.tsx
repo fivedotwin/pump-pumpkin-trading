@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock } from 'lucide-react';
+import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
@@ -3102,12 +3102,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       {/* Enhanced Mobile Header */}
       <div className="sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-md border-b border-gray-800/50">
         <div className="relative flex items-center justify-between p-4">
-          {/* Left Side - Settings with Quick Access - Hidden on mobile, shown on desktop */}
+          {/* Left Side - Settings with Quick Access */}
           <div className="relative">
-            {/* Invisible spacer for mobile to maintain layout */}
-            <div className="md:hidden w-8 h-8"></div>
-            {/* Settings button for desktop */}
-            <div className="hidden md:block">
+            {/* Settings button for all screens */}
+            <div>
             <button 
               onClick={() => {
                 setShowSettings(!showSettings);
@@ -3143,6 +3141,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <User className="w-5 h-5" />
                   <span className="text-sm">Edit Profile</span>
                 </button>
+                
+                <a
+                  href="https://t.me/YonatanBad1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setShowSettings(false)}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span className="text-sm">Contact Support</span>
+                </a>
                 
                 <button
                   onClick={() => {
