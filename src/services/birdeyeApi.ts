@@ -716,7 +716,8 @@ const retryWithBackoff = async <T>(
 };
 
 /**
- * FIXED token description fetching using correct Birdeye v3 API endpoints
+ * DEPRECATED: Token description fetching - not used in UI anymore
+ * Keeping function for backward compatibility but not called
  */
 export const fetchTokenDescription = async (tokenAddress: string): Promise<string> => {
   try {
@@ -1212,17 +1213,9 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
     const tokenData = overviewResponse.data.data;
     console.log('📋 Token overview fields:', Object.keys(tokenData));
 
-    // Fetch token description using enhanced strategy
-    console.log('📝 Starting enhanced description fetch...');
-    let description = '';
-    
-    try {
-      description = await fetchTokenDescription(cleanAddress);
-      console.log('✅ Description fetch completed:', description ? 'Success' : 'Failed');
-    } catch (descriptionError) {
-      console.error('💥 Description fetch failed:', descriptionError);
-      description = `${tokenData.name || tokenData.symbol || 'This token'} is available for trading on Pump Pumpkin. Conduct your own research before trading.`;
-    }
+    // Skip description fetching - not used in UI anymore
+    console.log('⚡ Skipping description fetch for faster loading');
+    const description = ''; // Empty since not displayed
 
     // Fetch additional metadata for social links using correct v3 endpoint
     let socialLinks = { website: '', twitter: '', telegram: '' };

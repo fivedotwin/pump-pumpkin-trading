@@ -1278,7 +1278,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Minimal data for immediate display
       marketCap: 0,
       volume24h: 0,
-      description: 'Loading token details...',
+      description: '', // Not displayed in UI
       socialLinks: { website: '', twitter: '', telegram: '' },
       isLoading: true // Add loading flag
     });
@@ -1956,7 +1956,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Minimal data for immediate display
       marketCap: 0,
       volume24h: 0,
-      description: 'Loading token details...',
+      description: '', // Not displayed in UI
       socialLinks: { website: '', twitter: '', telegram: '' },
       isLoading: true // Add loading flag
     });
