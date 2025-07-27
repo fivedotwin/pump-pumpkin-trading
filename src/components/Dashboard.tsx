@@ -1264,18 +1264,38 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   };
 
   const handleTokenClick = async (token: TrendingToken) => {
-    // Go directly to trading modal
+    // Immediate UI feedback
     soundManager.playClick();
     hapticFeedback.light();
     
+    // Show modal immediately with loading state
+    setSelectedTokenData({
+      address: token.address,
+      symbol: token.symbol,
+      name: token.name,
+      price: token.price,
+      priceChange24h: token.priceChange24h,
+      // Minimal data for immediate display
+      marketCap: 0,
+      volume24h: 0,
+      description: 'Loading token details...',
+      socialLinks: { website: '', twitter: '', telegram: '' },
+      isLoading: true // Add loading flag
+    });
+    setShowTradingModal(true);
+    
+    // Load full token data in background
     try {
       const tokenData = await fetchTokenDetailCached(token.address);
       if (tokenData) {
-        setSelectedTokenData(tokenData);
-        setShowTradingModal(true);
+        setSelectedTokenData({
+          ...tokenData,
+          isLoading: false
+        });
       }
     } catch (error) {
-      console.error('Error loading token for trading:', error);
+      console.error('Error loading full token data:', error);
+      // Keep the modal open with basic data if full load fails
     }
   };
 
@@ -1926,15 +1946,34 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setShowSearchResults(false);
     setSearchResults([]);
     
-    // Fetch token data and open trading modal directly
+    // Show modal immediately with loading state
+    setSelectedTokenData({
+      address: result.address,
+      symbol: result.symbol,
+      name: result.name,
+      price: result.price || 0,
+      priceChange24h: 0,
+      // Minimal data for immediate display
+      marketCap: 0,
+      volume24h: 0,
+      description: 'Loading token details...',
+      socialLinks: { website: '', twitter: '', telegram: '' },
+      isLoading: true // Add loading flag
+    });
+    setShowTradingModal(true);
+    
+    // Load full token data in background
     try {
       const tokenData = await fetchTokenDetailCached(result.address);
       if (tokenData) {
-        setSelectedTokenData(tokenData);
-        setShowTradingModal(true);
+        setSelectedTokenData({
+          ...tokenData,
+          isLoading: false
+        });
       }
     } catch (error) {
-      console.error('Error loading token for trading:', error);
+      console.error('Error loading full token data:', error);
+      // Keep the modal open with basic data if full load fails
     }
   };
 

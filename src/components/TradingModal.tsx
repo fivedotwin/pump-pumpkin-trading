@@ -967,7 +967,12 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               
               <div>
                 <h2 className="text-2xl font-bold">{tokenData.symbol}</h2>
-                <p className="text-gray-400 text-lg">{formatPrice(tokenData.price)}</p>
+                <div className="flex items-center space-x-2">
+                  <p className="text-gray-400 text-lg">{formatPrice(tokenData.price)}</p>
+                  {tokenData.isLoading && (
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                  )}
+                </div>
               </div>
             </div>
             

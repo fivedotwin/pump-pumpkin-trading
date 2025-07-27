@@ -93,6 +93,8 @@ export interface TokenDetailData {
   telegram?: string;
   liquidity: number;
   fdv: number;
+  socialLinks?: { website?: string; twitter?: string; telegram?: string; }; // Add social links object
+  isLoading?: boolean; // Add loading state for immediate modal display
 }
 
 export interface BirdeyeTrendingResponse {
@@ -729,7 +731,7 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
         params: { 
           address: cleanAddress
         },
-        timeout: 15000,
+        timeout: 2000, // Reduced from 15s to 2s for faster trading
       });
 
       if (metaResponse.data?.success && metaResponse.data?.data) {
@@ -766,7 +768,7 @@ export const fetchTokenDescription = async (tokenAddress: string): Promise<strin
       
       const overviewResponse = await birdeyeApi.get('/defi/token_overview', {
         params: { address: cleanAddress },
-        timeout: 15000,
+        timeout: 2000, // Reduced from 15s to 2s for faster trading
       });
 
       console.log('📊 Token overview response:', {
@@ -1193,7 +1195,7 @@ export const fetchTokenDetail = async (tokenAddress: string): Promise<TokenDetai
       params: {
         address: cleanAddress,
       },
-      timeout: 20000,
+      timeout: 3000, // Reduced from 20s to 3s for faster trading
     });
 
     console.log('📊 Token overview response:', {
