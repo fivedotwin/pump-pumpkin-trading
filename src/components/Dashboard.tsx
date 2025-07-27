@@ -957,13 +957,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
     
     // Calculate P&L in USD
-    // CRITICAL FIX: amount is the raw token amount, must multiply by leverage for correct P&L
+    // FIXED: Remove leverage double-counting - amount is position size, leverage affects collateral only
     let pnl_usd = 0;
     if (position.direction === 'Long') {
-      pnl_usd = (current_price - entry_price) * amount * leverage;
+      pnl_usd = (current_price - entry_price) * amount; // No leverage multiplication!
     } else {
-      pnl_usd = (entry_price - current_price) * amount * leverage;
+      pnl_usd = (entry_price - current_price) * amount; // No leverage multiplication!
     }
+    
+    console.log(`🧮 FRONTEND P&L Debug for Position ${position.id}:`, {
+      token: position.token_symbol,
+      amount: amount,
+      entry_price: entry_price,
+      current_price: current_price,
+      price_diff: (current_price - entry_price).toFixed(8),
+      direction: position.direction,
+      leverage: leverage,
+      pnl_usd_FIXED: pnl_usd.toFixed(2)
+    });
     
     // Calculate margin ratio in SOL terms (CORRECT WAY)
     const max_loss_sol = position.collateral_sol; // Keep max loss in SOL

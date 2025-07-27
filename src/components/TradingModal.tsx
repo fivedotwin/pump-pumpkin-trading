@@ -229,15 +229,15 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     
     if (tradeDirection === 'Long') {
       // Long: Loss when price goes down
-      // CORRECT: P&L amount with leverage multiplication
-      pnlAmount = (slPrice - entryPrice) * tokenAmount * leverage;
+      // FIXED: Remove leverage multiplication - it's already in position sizing
+      pnlAmount = (slPrice - entryPrice) * tokenAmount; // No leverage!
     } else {
       // Short: Loss when price goes up
-      // CORRECT: P&L amount with leverage multiplication
-      pnlAmount = (entryPrice - slPrice) * tokenAmount * leverage;
+      // FIXED: Remove leverage multiplication - it's already in position sizing
+      pnlAmount = (entryPrice - slPrice) * tokenAmount; // No leverage!
     }
     
-    console.log(`💰 FRONTEND Stop Loss P&L Result: $${pnlAmount.toFixed(2)} USD`);
+    console.log(`💰 FRONTEND Stop Loss P&L Result (FIXED): $${pnlAmount.toFixed(2)} USD`);
 
     // Calculate percentage based on leveraged trade size
     const pnlPercentage = (pnlAmount / tradeSize) * 100;
@@ -273,15 +273,15 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     
     if (tradeDirection === 'Long') {
       // Long: Profit when price goes up
-      // CORRECT: P&L amount with leverage multiplication
-      pnlAmount = (tpPrice - entryPrice) * tokenAmount * leverage;
+      // FIXED: Remove leverage multiplication - it's already in position sizing
+      pnlAmount = (tpPrice - entryPrice) * tokenAmount; // No leverage!
     } else {
       // Short: Profit when price goes down
-      // CORRECT: P&L amount with leverage multiplication
-      pnlAmount = (entryPrice - tpPrice) * tokenAmount * leverage;
+      // FIXED: Remove leverage multiplication - it's already in position sizing
+      pnlAmount = (entryPrice - tpPrice) * tokenAmount; // No leverage!
     }
     
-    console.log(`💰 FRONTEND Take Profit P&L Result: $${pnlAmount.toFixed(2)} USD`);
+    console.log(`💰 FRONTEND Take Profit P&L Result (FIXED): $${pnlAmount.toFixed(2)} USD`);
 
     // Calculate percentage based on leveraged trade size
     const pnlPercentage = (pnlAmount / tradeSize) * 100;
