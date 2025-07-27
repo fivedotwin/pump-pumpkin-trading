@@ -1719,21 +1719,29 @@ export const formatPrice = (price: number): string => {
     return `$${price.toFixed(4)}`;
   } else if (price > 0) {
     // For extremely small values, show exactly 4 non-zero digits
+    console.log(`🔍 Formatting tiny price: ${price}`);
+    
     // Use toPrecision(4) to get exactly 4 significant digits
     const precision4 = price.toPrecision(4);
+    console.log(`📊 Precision 4: ${precision4}`);
     
     // Convert scientific notation to decimal if needed
     const asNumber = parseFloat(precision4);
+    console.log(`🔢 As number: ${asNumber}`);
     
     // Find how many decimal places we need to show these 4 digits
     if (asNumber >= 0.0001) {
       // If the 4-digit precision number is >= 0.0001, we can show it normally
-      return `$${asNumber}`;
+      const result = `$${asNumber}`;
+      console.log(`✅ Final result: ${result}`);
+      return result;
     } else {
       // For smaller numbers, calculate exact decimal places needed
       const magnitude = Math.floor(Math.log10(asNumber));
       const decimalPlaces = Math.abs(magnitude) + 3; // 3 because toPrecision(4) gives us 4 digits
-      return `$${asNumber.toFixed(decimalPlaces)}`;
+      const result = `$${asNumber.toFixed(decimalPlaces)}`;
+      console.log(`✅ Final result (with decimals): ${result}`);
+      return result;
     }
   } else {
     return '$0.00';

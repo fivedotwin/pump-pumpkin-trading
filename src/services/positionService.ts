@@ -168,8 +168,19 @@ class PositionService {
       const leverage = position.leverage;
       
       // Calculate P&L in USD
-      // CRITICAL FIX: amount is the raw token amount, must multiply by leverage for correct P&L
+      // amount = base token amount from user input
+      // For leveraged trading, P&L should be calculated on the full leveraged exposure
       let pnl_usd = 0;
+      
+      console.log(`🧮 P&L DEBUG for position ${position.id}:`, {
+        token: position.token_symbol,
+        amount: amount,
+        leverage: leverage, 
+        entry_price: entry_price,
+        current_price: current_price,
+        direction: position.direction
+      });
+      
       if (position.direction === 'Long') {
         // Long: Profit when price goes up
         pnl_usd = (current_price - entry_price) * amount * leverage;
@@ -177,6 +188,8 @@ class PositionService {
         // Short: Profit when price goes down
         pnl_usd = (entry_price - current_price) * amount * leverage;
       }
+      
+      console.log(`💰 P&L Result: $${pnl_usd.toFixed(2)} USD`);
       
       // Calculate margin ratio in SOL terms (FIXED)
       const max_loss_sol = position.collateral_sol; // Max loss is the collateral in SOL

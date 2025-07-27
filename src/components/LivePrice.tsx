@@ -45,16 +45,21 @@ export default function LivePrice({
       return `$${value.toFixed(4)}`;
     } else if (value > 0) {
       // For extremely small values, show exactly 4 non-zero digits
+      console.log(`🔍 LivePrice formatting tiny price: ${value}`);
       const precision4 = value.toPrecision(4);
       const asNumber = parseFloat(precision4);
       
       if (asNumber >= 0.0001) {
-        return `$${asNumber}`;
+        const result = `$${asNumber}`;
+        console.log(`✅ LivePrice result: ${result}`);
+        return result;
       } else {
         // Calculate exact decimal places needed for 4 digits
         const magnitude = Math.floor(Math.log10(asNumber));
         const decimalPlaces = Math.abs(magnitude) + 3;
-        return `$${asNumber.toFixed(decimalPlaces)}`;
+        const result = `$${asNumber.toFixed(decimalPlaces)}`;
+        console.log(`✅ LivePrice result (with decimals): ${result}`);
+        return result;
       }
     } else {
       return '$0.00';

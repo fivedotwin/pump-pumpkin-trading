@@ -219,6 +219,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
 
     let pnlAmount = 0;
     
+    console.log(`🧮 FRONTEND Stop Loss P&L Debug:`, {
+      tokenAmount,
+      leverage,
+      entryPrice,
+      slPrice,
+      direction: tradeDirection
+    });
+    
     if (tradeDirection === 'Long') {
       // Long: Loss when price goes down
       // CORRECT: P&L amount with leverage multiplication
@@ -228,6 +236,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (entryPrice - slPrice) * tokenAmount * leverage;
     }
+    
+    console.log(`💰 FRONTEND Stop Loss P&L Result: $${pnlAmount.toFixed(2)} USD`);
 
     // Calculate percentage based on leveraged trade size
     const pnlPercentage = (pnlAmount / tradeSize) * 100;
@@ -253,6 +263,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
 
     let pnlAmount = 0;
     
+    console.log(`🧮 FRONTEND Take Profit P&L Debug:`, {
+      tokenAmount,
+      leverage,
+      entryPrice,
+      tpPrice,
+      direction: tradeDirection
+    });
+    
     if (tradeDirection === 'Long') {
       // Long: Profit when price goes up
       // CORRECT: P&L amount with leverage multiplication
@@ -262,6 +280,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       // CORRECT: P&L amount with leverage multiplication
       pnlAmount = (entryPrice - tpPrice) * tokenAmount * leverage;
     }
+    
+    console.log(`💰 FRONTEND Take Profit P&L Result: $${pnlAmount.toFixed(2)} USD`);
 
     // Calculate percentage based on leveraged trade size
     const pnlPercentage = (pnlAmount / tradeSize) * 100;
