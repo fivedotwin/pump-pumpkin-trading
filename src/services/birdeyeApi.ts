@@ -1718,20 +1718,22 @@ export const formatPrice = (price: number): string => {
   } else if (price >= 0.0001) {
     return `$${price.toFixed(4)}`;
   } else if (price > 0) {
-    // For extremely small values, show 4 significant digits minimum
-    // Simple approach: use enough decimal places to show meaningful digits
-    const str = price.toString();
+    // For extremely small values, show exactly 4 non-zero digits
+    // Use toPrecision(4) to get exactly 4 significant digits
+    const precision4 = price.toPrecision(4);
     
-    if (str.includes('e')) {
-      // Handle scientific notation by showing full precision
-      const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
-      return `$${price.toFixed(Math.min(decimalPlaces, 15))}`;
+    // Convert scientific notation to decimal if needed
+    const asNumber = parseFloat(precision4);
+    
+    // Find how many decimal places we need to show these 4 digits
+    if (asNumber >= 0.0001) {
+      // If the 4-digit precision number is >= 0.0001, we can show it normally
+      return `$${asNumber}`;
     } else {
-      // For regular decimals, show enough places for 4 significant digits
-      const afterDecimal = str.split('.')[1] || '';
-      const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
-      const neededPlaces = leadingZeros + 4;
-      return `$${price.toFixed(Math.min(neededPlaces, 15))}`;
+      // For smaller numbers, calculate exact decimal places needed
+      const magnitude = Math.floor(Math.log10(asNumber));
+      const decimalPlaces = Math.abs(magnitude) + 3; // 3 because toPrecision(4) gives us 4 digits
+      return `$${asNumber.toFixed(decimalPlaces)}`;
     }
   } else {
     return '$0.00';

@@ -47,17 +47,16 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
     } else if (price >= 0.0001) {
       return `$${price.toFixed(4)}`;
     } else if (price > 0) {
-      // For extremely small values, show 4 significant digits minimum
-      const str = price.toString();
+      // For extremely small values, show exactly 4 non-zero digits
+      const precision4 = price.toPrecision(4);
+      const asNumber = parseFloat(precision4);
       
-      if (str.includes('e')) {
-        const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
-        return `$${price.toFixed(Math.min(decimalPlaces, 15))}`;
+      if (asNumber >= 0.0001) {
+        return `$${asNumber}`;
       } else {
-        const afterDecimal = str.split('.')[1] || '';
-        const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
-        const neededPlaces = leadingZeros + 4;
-        return `$${price.toFixed(Math.min(neededPlaces, 15))}`;
+        const magnitude = Math.floor(Math.log10(asNumber));
+        const decimalPlaces = Math.abs(magnitude) + 3;
+        return `$${asNumber.toFixed(decimalPlaces)}`;
       }
     } else {
       return '$0.00';

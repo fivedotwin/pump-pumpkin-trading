@@ -44,19 +44,17 @@ export default function LivePrice({
     } else if (value >= 0.0001) {
       return `$${value.toFixed(4)}`;
     } else if (value > 0) {
-      // For extremely small values, show 4 significant digits minimum
-      const str = value.toString();
+      // For extremely small values, show exactly 4 non-zero digits
+      const precision4 = value.toPrecision(4);
+      const asNumber = parseFloat(precision4);
       
-      if (str.includes('e')) {
-        // Handle scientific notation by showing full precision
-        const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
-        return `$${value.toFixed(Math.min(decimalPlaces, 15))}`;
+      if (asNumber >= 0.0001) {
+        return `$${asNumber}`;
       } else {
-        // For regular decimals, show enough places for 4 significant digits
-        const afterDecimal = str.split('.')[1] || '';
-        const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
-        const neededPlaces = leadingZeros + 4;
-        return `$${value.toFixed(Math.min(neededPlaces, 15))}`;
+        // Calculate exact decimal places needed for 4 digits
+        const magnitude = Math.floor(Math.log10(asNumber));
+        const decimalPlaces = Math.abs(magnitude) + 3;
+        return `$${asNumber.toFixed(decimalPlaces)}`;
       }
     } else {
       return '$0.00';
