@@ -62,12 +62,12 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     const amount = position.amount;
     const leverage = position.leverage;
     
-    // Calculate P&L in USD
+    // Calculate P&L in USD - FIXED: Remove leverage double-counting
     let pnl_usd = 0;
     if (position.direction === 'Long') {
-      pnl_usd = (currentPrice - entry_price) * amount * leverage;
+      pnl_usd = (currentPrice - entry_price) * amount; // No leverage multiplication!
     } else {
-      pnl_usd = (entry_price - currentPrice) * amount * leverage;
+      pnl_usd = (entry_price - currentPrice) * amount; // No leverage multiplication!
     }
     
     // Calculate margin ratio
