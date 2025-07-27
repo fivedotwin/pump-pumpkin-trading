@@ -216,20 +216,25 @@ export default function FastCandlestickChart({
 
   // Format price for display
   const formatPrice = (price: number): string => {
-            if (price >= 1) return `$${price.toFixed(4)}`;
-        if (price >= 0.01) return `$${price.toFixed(6)}`;
-        if (price >= 0.0001) return `$${price.toFixed(8)}`;
-        
-        // For extremely small values, show exactly 4 non-zero digits
-        const precision4 = price.toPrecision(4);
-        const asNumber = parseFloat(precision4);
-        
-        if (asNumber >= 0.0001) {
-          return `$${asNumber}`;
+            // FULL PRECISION: Show complete price data for chart tooltips
+        if (price >= 1000) {
+          return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+        } else if (price >= 1) {
+          return `$${price.toFixed(15)}`.replace(/\.?0+$/, '');
+        } else if (price > 0) {
+          let fullPrecision = price.toFixed(18);
+          fullPrecision = fullPrecision.replace(/\.?0+$/, '');
+          
+          if (!fullPrecision.includes('.')) {
+            fullPrecision += '.00';
+          } else if (fullPrecision.split('.')[1].length < 2) {
+            const decimalPart = fullPrecision.split('.')[1];
+            fullPrecision = fullPrecision.split('.')[0] + '.' + decimalPart.padEnd(2, '0');
+          }
+          
+          return `$${fullPrecision}`;
         } else {
-          const magnitude = Math.floor(Math.log10(asNumber));
-          const decimalPlaces = Math.abs(magnitude) + 3;
-          return `$${asNumber.toFixed(decimalPlaces)}`;
+          return '$0.00';
         }
   };
 

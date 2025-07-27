@@ -37,30 +37,28 @@ export default function LivePrice({
   const formatPrice = (value: number): string => {
     if (value === 0) return '$0.00';
     
-    if (value >= 1) {
-      return `$${value.toFixed(2)}`;
-    } else if (value >= 0.01) {
-      return `$${value.toFixed(4)}`;
-    } else if (value >= 0.0001) {
-      return `$${value.toFixed(4)}`;
+    // FULL PRECISION: Match the main formatPrice function for consistency
+    if (value >= 1000) {
+      return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+    } else if (value >= 1) {
+      // Medium prices: Show up to 15 decimal places (removes trailing zeros)
+      return `$${value.toFixed(15)}`.replace(/\.?0+$/, '');
     } else if (value > 0) {
-      // For extremely small values, show exactly 4 non-zero digits
-      console.log(`🔍 LivePrice formatting tiny price: ${value}`);
-      const precision4 = value.toPrecision(4);
-      const asNumber = parseFloat(precision4);
+      // Small prices: Show full precision up to 18 decimal places
+      let fullPrecision = value.toFixed(18);
       
-      if (asNumber >= 0.0001) {
-        const result = `$${asNumber}`;
-        console.log(`✅ LivePrice result: ${result}`);
-        return result;
-      } else {
-        // Calculate exact decimal places needed for 4 digits
-        const magnitude = Math.floor(Math.log10(asNumber));
-        const decimalPlaces = Math.abs(magnitude) + 3;
-        const result = `$${asNumber.toFixed(decimalPlaces)}`;
-        console.log(`✅ LivePrice result (with decimals): ${result}`);
-        return result;
+      // Remove trailing zeros but keep at least 2 decimal places
+      fullPrecision = fullPrecision.replace(/\.?0+$/, '');
+      
+      // Ensure we have at least 2 decimal places for readability
+      if (!fullPrecision.includes('.')) {
+        fullPrecision += '.00';
+      } else if (fullPrecision.split('.')[1].length < 2) {
+        const decimalPart = fullPrecision.split('.')[1];
+        fullPrecision = fullPrecision.split('.')[0] + '.' + decimalPart.padEnd(2, '0');
       }
+      
+      return `$${fullPrecision}`;
     } else {
       return '$0.00';
     }
