@@ -40,12 +40,27 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
   };
 
   const formatPrice = (price: number) => {
-    if (price < 0.0001) {
-      return '$0.00';
-    } else if (price < 1) {
-      return `$${price.toFixed(4)}`;
-    } else {
+    if (price === 0) return '$0.00';
+    
+    if (price >= 1) {
       return `$${price.toFixed(2)}`;
+    } else if (price >= 0.0001) {
+      return `$${price.toFixed(4)}`;
+    } else if (price > 0) {
+      // For extremely small values, show 4 significant digits minimum
+      const str = price.toString();
+      
+      if (str.includes('e')) {
+        const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
+        return `$${price.toFixed(Math.min(decimalPlaces, 15))}`;
+      } else {
+        const afterDecimal = str.split('.')[1] || '';
+        const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
+        const neededPlaces = leadingZeros + 4;
+        return `$${price.toFixed(Math.min(neededPlaces, 15))}`;
+      }
+    } else {
+      return '$0.00';
     }
   };
 

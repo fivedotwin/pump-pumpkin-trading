@@ -35,6 +35,8 @@ export default function LivePrice({
   }, [price, previousPrice, numericPrice, numericPrevious]);
 
   const formatPrice = (value: number): string => {
+    if (value === 0) return '$0.00';
+    
     if (value >= 1) {
       return `$${value.toFixed(2)}`;
     } else if (value >= 0.01) {
@@ -42,7 +44,20 @@ export default function LivePrice({
     } else if (value >= 0.0001) {
       return `$${value.toFixed(4)}`;
     } else if (value > 0) {
-      return '$0.00';
+      // For extremely small values, show 4 significant digits minimum
+      const str = value.toString();
+      
+      if (str.includes('e')) {
+        // Handle scientific notation by showing full precision
+        const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
+        return `$${value.toFixed(Math.min(decimalPlaces, 15))}`;
+      } else {
+        // For regular decimals, show enough places for 4 significant digits
+        const afterDecimal = str.split('.')[1] || '';
+        const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
+        const neededPlaces = leadingZeros + 4;
+        return `$${value.toFixed(Math.min(neededPlaces, 15))}`;
+      }
     } else {
       return '$0.00';
     }

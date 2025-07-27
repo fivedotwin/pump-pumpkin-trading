@@ -216,9 +216,21 @@ export default function FastCandlestickChart({
 
   // Format price for display
   const formatPrice = (price: number): string => {
-    if (price >= 1) return `$${price.toFixed(4)}`;
-    if (price >= 0.01) return `$${price.toFixed(6)}`;
-    return `$${price.toFixed(8)}`;
+            if (price >= 1) return `$${price.toFixed(4)}`;
+        if (price >= 0.01) return `$${price.toFixed(6)}`;
+        if (price >= 0.0001) return `$${price.toFixed(8)}`;
+        
+        // For extremely small values, show 4 significant digits minimum
+        const str = price.toString();
+        if (str.includes('e')) {
+          const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
+          return `$${price.toFixed(Math.min(decimalPlaces, 15))}`;
+        } else {
+          const afterDecimal = str.split('.')[1] || '';
+          const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
+          const neededPlaces = leadingZeros + 4;
+          return `$${price.toFixed(Math.min(neededPlaces, 15))}`;
+        }
   };
 
   return (

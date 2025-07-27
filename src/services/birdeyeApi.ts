@@ -1718,8 +1718,21 @@ export const formatPrice = (price: number): string => {
   } else if (price >= 0.0001) {
     return `$${price.toFixed(4)}`;
   } else if (price > 0) {
-    // For extremely small values, show as ~$0.00 instead of many zeros
-    return '$0.00';
+    // For extremely small values, show 4 significant digits minimum
+    // Simple approach: use enough decimal places to show meaningful digits
+    const str = price.toString();
+    
+    if (str.includes('e')) {
+      // Handle scientific notation by showing full precision
+      const decimalPlaces = Math.abs(parseInt(str.split('e-')[1]) || 0) + 4;
+      return `$${price.toFixed(Math.min(decimalPlaces, 15))}`;
+    } else {
+      // For regular decimals, show enough places for 4 significant digits
+      const afterDecimal = str.split('.')[1] || '';
+      const leadingZeros = (afterDecimal.match(/^0*/)?.[0] || '').length;
+      const neededPlaces = leadingZeros + 4;
+      return `$${price.toFixed(Math.min(neededPlaces, 15))}`;
+    }
   } else {
     return '$0.00';
   }
