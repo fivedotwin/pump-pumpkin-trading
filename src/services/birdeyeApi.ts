@@ -2101,24 +2101,23 @@ export const searchTokens = async (query: string): Promise<SearchResult[]> => {
         .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore) // Sort by relevance
         .slice(0, 3); // Limit to 3 most relevant results
       
-      // Fetch token images and security data, filter out honeypots
-      const secureTokens: any[] = [];
+      // SPEED FIX: Fetch token security and details in parallel!
+      console.log(`⚡ SPEED OPTIMIZATION: Checking security for ${filteredTokens.length} tokens in parallel...`);
       
-      for (const result of filteredTokens) {
+      const securityPromises = filteredTokens.map(async (result) => {
         try {
-          // Check security first to block honeypots
-          const securityData = await fetchTokenSecurity(result.address);
+          const [securityData, tokenDetail] = await Promise.all([
+            fetchTokenSecurity(result.address),
+            fetchTokenDetailCached(result.address)
+          ]);
           
-          // BLOCK HONEYPOT TOKENS - Don't include in results
+          // BLOCK HONEYPOT TOKENS
           if (securityData?.honeypotRisk) {
             console.log(`🚫 BLOCKED HONEYPOT: ${result.symbol} (${result.address.slice(0, 8)}...)`);
-            continue; // Skip this token completely
+            return null; // Mark as blocked
           }
           
-          // If not a honeypot, get token image and add to results
-          const tokenDetail = await fetchTokenDetailCached(result.address);
-          
-          secureTokens.push({
+          return {
             address: result.address,
             symbol: result.symbol,
             name: result.name,
@@ -2126,19 +2125,21 @@ export const searchTokens = async (query: string): Promise<SearchResult[]> => {
             price: result.price,
             type: result.type,
             chain: result.chain
-          });
-          
-          // Stop once we have 3 safe tokens
-          if (secureTokens.length >= 3) {
-            break;
-          }
+          };
           
         } catch (error) {
           console.error(`Error checking security for ${result.symbol}:`, error);
-          // If security check fails, be safe and skip the token
-          continue;
+          return null; // Skip if error
         }
-      }
+      });
+      
+      // Wait for all security checks to complete in parallel
+      const securityResults = await Promise.all(securityPromises);
+      
+      // Filter out nulls (honeypots and errors) and take first 3
+      const secureTokens = securityResults
+        .filter(result => result !== null)
+        .slice(0, 3);
       
       const searchResults: SearchResult[] = secureTokens;
 
