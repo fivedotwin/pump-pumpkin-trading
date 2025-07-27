@@ -42,23 +42,22 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
   const formatPrice = (price: number) => {
     if (price === 0) return '$0.00';
     
-    // FULL PRECISION: Show complete price data for trade results
+    // Show exactly 4 significant digits for trade results
     if (price >= 1000) {
-      return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+      return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     } else if (price >= 1) {
-      return `$${price.toFixed(15)}`.replace(/\.?0+$/, '');
+      return `$${price.toPrecision(4)}`;
     } else if (price > 0) {
-      let fullPrecision = price.toFixed(18);
-      fullPrecision = fullPrecision.replace(/\.?0+$/, '');
+      const precision4 = price.toPrecision(4);
+      const asNumber = parseFloat(precision4);
       
-      if (!fullPrecision.includes('.')) {
-        fullPrecision += '.00';
-      } else if (fullPrecision.split('.')[1].length < 2) {
-        const decimalPart = fullPrecision.split('.')[1];
-        fullPrecision = fullPrecision.split('.')[0] + '.' + decimalPart.padEnd(2, '0');
+      if (asNumber >= 0.0001) {
+        return `$${asNumber}`;
+      } else {
+        const magnitude = Math.floor(Math.log10(asNumber));
+        const decimalPlaces = Math.abs(magnitude) + 3;
+        return `$${asNumber.toFixed(decimalPlaces)}`;
       }
-      
-      return `$${fullPrecision}`;
     } else {
       return '$0.00';
     }

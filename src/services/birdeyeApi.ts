@@ -1709,29 +1709,25 @@ export const fetchTokenPriceHistory = async (
 export const formatPrice = (price: number): string => {
   if (price === 0) return '$0.00';
   
-  // FULL PRECISION: Show complete price data for all ranges
   if (price >= 1000) {
-    // For large numbers, still use locale formatting but with more precision
-    return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+    return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   } else if (price >= 1) {
-    // Medium prices: Show up to 15 decimal places (removes trailing zeros)
-    return `$${price.toFixed(15)}`.replace(/\.?0+$/, '');
+    // For prices >= $1, show 4 significant digits
+    return `$${price.toPrecision(4)}`;
   } else if (price > 0) {
-    // Small prices: Show full precision up to 18 decimal places
-    let fullPrecision = price.toFixed(18);
+    // For small prices, show exactly 4 significant digits
+    const precision4 = price.toPrecision(4);
+    const asNumber = parseFloat(precision4);
     
-    // Remove trailing zeros but keep at least 2 decimal places
-    fullPrecision = fullPrecision.replace(/\.?0+$/, '');
-    
-    // Ensure we have at least 2 decimal places for readability
-    if (!fullPrecision.includes('.')) {
-      fullPrecision += '.00';
-    } else if (fullPrecision.split('.')[1].length < 2) {
-      const decimalPart = fullPrecision.split('.')[1];
-      fullPrecision = fullPrecision.split('.')[0] + '.' + decimalPart.padEnd(2, '0');
+    // Convert to decimal notation (avoid scientific notation)
+    if (asNumber >= 0.0001) {
+      return `$${asNumber}`;
+    } else {
+      // For very small numbers, calculate exact decimal places needed
+      const magnitude = Math.floor(Math.log10(asNumber));
+      const decimalPlaces = Math.abs(magnitude) + 3;
+      return `$${asNumber.toFixed(decimalPlaces)}`;
     }
-    
-    return `$${fullPrecision}`;
   } else {
     return '$0.00';
   }
