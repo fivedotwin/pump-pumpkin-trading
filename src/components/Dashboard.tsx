@@ -1653,18 +1653,27 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             console.log('📊 Found closed position with real P&L:', closedPosition);
             
             // Calculate REAL P&L using actual entry and exit prices
-            const entryPrice = closedPosition.entry_price;
-            const exitPrice = closedPosition.close_price || closedPosition.current_price;
-            const amount = closedPosition.amount;
-            const leverage = closedPosition.leverage;
+            const entryPrice = parseFloat(closedPosition.entry_price) || 0;
+            const exitPrice = parseFloat(closedPosition.close_price || closedPosition.current_price) || entryPrice;
+            const amount = parseFloat(closedPosition.amount) || 0;
+            const leverage = parseInt(closedPosition.leverage) || 1;
             const direction = closedPosition.direction;
             
             // Calculate real P&L (same logic as in positionService)
             let realPnL = 0;
-            if (direction === 'Long') {
-              realPnL = (exitPrice - entryPrice) * amount;
+            
+            // Try to use stored current_pnl first (most accurate)
+            if (closedPosition.current_pnl !== null && closedPosition.current_pnl !== undefined) {
+              realPnL = parseFloat(closedPosition.current_pnl);
+              console.log('🎯 Using stored current_pnl:', realPnL);
             } else {
-              realPnL = (entryPrice - exitPrice) * amount;
+              // Fallback: calculate from prices
+              if (direction === 'Long') {
+                realPnL = (exitPrice - entryPrice) * amount;
+              } else {
+                realPnL = (entryPrice - exitPrice) * amount;
+              }
+              console.log('🧮 Calculated P&L from prices:', { entryPrice, exitPrice, amount, realPnL });
             }
             
             const realTradeData = {
@@ -1686,7 +1695,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               amount,
               direction,
               realPnL,
-              percentage: realTradeData.pnlPercentage
+              percentage: realTradeData.pnlPercentage,
+              closedPosition: closedPosition
             });
             
             setTradeResultsData(realTradeData);
@@ -1701,19 +1711,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             // Fallback: use position data if available
             const position = tradingPositions.find(p => p.id === positionId);
             if (position) {
+              console.log('📋 Using fallback position data:', position);
+              
+              const fallbackPnL = typeof position.current_pnl === 'number' ? position.current_pnl : parseFloat(position.current_pnl || '0');
+              const collateralSol = typeof position.collateral_sol === 'number' ? position.collateral_sol : parseFloat(position.collateral_sol || '0');
               const fallbackData = {
                 tokenSymbol: position.token_symbol,
                 direction: position.direction,
                 leverage: position.leverage,
-                entryPrice: position.entry_price,
-                exitPrice: position.current_price || position.entry_price,
-                positionSize: position.amount,
-                collateralAmount: position.collateral_sol,
-                finalPnL: position.current_pnl || 0,
-                pnlPercentage: ((position.current_pnl || 0) / position.collateral_sol) * 100,
-                totalReturn: position.collateral_sol + (position.current_pnl || 0)
+                entryPrice: typeof position.entry_price === 'number' ? position.entry_price : parseFloat(position.entry_price || '0'),
+                exitPrice: typeof position.current_price === 'number' ? position.current_price : parseFloat(String(position.current_price || position.entry_price || '0')),
+                positionSize: typeof position.amount === 'number' ? position.amount : parseFloat(position.amount || '0'),
+                collateralAmount: collateralSol,
+                finalPnL: fallbackPnL,
+                pnlPercentage: fallbackPnL !== 0 ? (fallbackPnL / collateralSol) * 100 : 0,
+                totalReturn: collateralSol + fallbackPnL
               };
               
+              console.log('📋 Fallback P&L data:', fallbackData);
               setTradeResultsData(fallbackData);
               setTimeout(() => {
                 setShowShareGainsPopup(true);
