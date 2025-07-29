@@ -95,11 +95,10 @@ export const shareTradeResults = async (tradeData: TradeShareData, walletAddress
     
     // Create clean share text for X/Twitter (no emojis, no hashtags)
     const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
-    const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
     
     const shareText = isProfit 
-      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinio!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pumppumpkin.io`
-      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinio\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pumppumpkin.io`;
+      ? `Just scored ${pnlText} trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinio!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pumppumpkin.io`
+      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} with ${tradeData.leverage}x leverage on @PumpPumpkinio\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pumppumpkin.io`;
 
     const encodedText = encodeURIComponent(shareText);
     
@@ -152,9 +151,8 @@ export const shareTradeResults = async (tradeData: TradeShareData, walletAddress
     try {
       const isProfit = tradeData.finalPnL >= 0;
       const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
-      const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
       
-      const fallbackText = `Just traded ${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pumppumpkin.io`;
+      const fallbackText = `Just traded ${tradeData.tokenSymbol}: ${pnlText} with ${tradeData.leverage}x leverage! Start trading at https://pumppumpkin.io`;
       
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(fallbackText);
