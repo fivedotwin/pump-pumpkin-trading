@@ -136,8 +136,8 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
     const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
     
     const shareText = isProfit 
-      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinApp!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com`
-      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinApp\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com`;
+      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinio!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com`
+      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinio\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com`;
 
     // Automatically download the image
     const link = document.createElement('a');
