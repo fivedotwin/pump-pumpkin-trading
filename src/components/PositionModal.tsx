@@ -103,8 +103,8 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     
     // Subscribe to price updates for this token
     const unsubscribe = priceService.subscribeToPrice(position.token_address, (newPrice: number) => {
-      console.log(`PositionModal: Price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
-      setRealtimePrice(newPrice);
+        console.log(`PositionModal: Price update for ${position.token_symbol}: $${newPrice.toFixed(6)}`);
+        setRealtimePrice(newPrice);
     });
     
     return () => {

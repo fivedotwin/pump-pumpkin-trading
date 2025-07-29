@@ -58,7 +58,7 @@ class SimplifiedPriceService {
       }
     };
   }
-
+  
   // Subscribe to multiple tokens at once
   subscribeToMultiplePrices(
     subscriptionId: string,
@@ -141,27 +141,27 @@ class SimplifiedPriceService {
           });
           
           // Notify callbacks
-          const callbacks = this.priceCallbacks.get(tokenAddress);
+            const callbacks = this.priceCallbacks.get(tokenAddress);
           if (callbacks) {
-            callbacks.forEach(callback => {
-              try {
+              callbacks.forEach(callback => {
+                try {
                 callback(tokenData.price);
               } catch (error) {
                 console.error('Error in price callback:', error);
-              }
-            });
+                }
+              });
           }
-        }
-        
+            }
+          
         // Small delay between API calls to be respectful
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error: any) {
         console.error(`❌ Error fetching price for ${tokenAddress.slice(0,8)}:`, error.message);
+        }
       }
-    }
   }
-  
+    
   // Get current cached price
   getCachedPrice(tokenAddress: string): number | null {
     const cached = this.priceCache.get(tokenAddress);

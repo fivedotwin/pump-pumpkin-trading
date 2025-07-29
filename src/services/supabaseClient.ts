@@ -231,6 +231,54 @@ export class UserProfileService {
   }
 
   /**
+   * Credit SOL sharing reward to user's balance (0.01 SOL)
+   */
+  async creditSharingReward(walletAddress: string): Promise<boolean> {
+    try {
+      console.log('🎁 Crediting sharing reward (0.01 SOL) to:', walletAddress);
+      
+      await this.setCurrentWalletAddress(walletAddress);
+      
+      // Get current profile to calculate new balance
+      const profile = await this.getProfile(walletAddress);
+      if (!profile) {
+        console.error('❌ Profile not found for sharing reward');
+        return false;
+      }
+      
+      const rewardAmount = 0.01;
+      const newSOLBalance = profile.sol_balance + rewardAmount;
+      
+      const { data: updateResult, error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ 
+          sol_balance: newSOLBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('wallet_address', walletAddress)
+        .select('id, wallet_address, sol_balance');
+
+      if (updateError) {
+        console.error('❌ Sharing reward credit FAILED:', updateError);
+        return false;
+      }
+
+      if (!updateResult || updateResult.length === 0) {
+        console.error('❌ SHARING REWARD UPDATE MATCHED ZERO ROWS!');
+        return false;
+      }
+      
+      console.log('✅ Sharing reward credited successfully');
+      console.log(`📊 SOL balance: ${profile.sol_balance} → ${newSOLBalance} (+${rewardAmount})`);
+      return true;
+      
+    } catch (error: any) {
+      console.error('💥 Error crediting sharing reward:', error);
+      return false;
+    }
+  }
+
+  /**
    * Update both USD and SOL balances
    */
   async updateBalances(

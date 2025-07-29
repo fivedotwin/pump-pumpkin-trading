@@ -48,7 +48,7 @@ class SimpleWebSocketService {
       this.ws.onclose = () => {
         console.log('🔌 WebSocket disconnected');
         this.isConnected = false;
-        
+
         // Simple reconnect after 5 seconds
         setTimeout(() => {
           console.log('🔄 Attempting to reconnect...');
@@ -74,7 +74,7 @@ class SimpleWebSocketService {
       if (address && typeof price === 'number') {
         this.notifyPriceSubscribers(address, price);
       }
-    }
+                }
   }
 
   private notifyPriceSubscribers(tokenAddress: string, price: number): void {
@@ -96,7 +96,7 @@ class SimpleWebSocketService {
     tokens.forEach(tokenAddress => {
       this.subscribeToToken(tokenAddress);
     });
-  }
+    }
 
   private subscribeToToken(tokenAddress: string): void {
     if (!this.isConnected || !this.ws) return;
@@ -128,21 +128,21 @@ class SimpleWebSocketService {
 
     // Return unsubscribe function
     return () => {
-      const callbacks = this.priceSubscribers.get(tokenAddress);
-      if (callbacks) {
-        callbacks.delete(callback);
-        
-        if (callbacks.size === 0) {
-          this.priceSubscribers.delete(tokenAddress);
+    const callbacks = this.priceSubscribers.get(tokenAddress);
+    if (callbacks) {
+      callbacks.delete(callback);
+      
+      if (callbacks.size === 0) {
+        this.priceSubscribers.delete(tokenAddress);
           // Could add unsubscribe message to WebSocket here if needed
-        }
+            }
       }
     };
   }
 
   isWebSocketConnected(): boolean {
     return this.isConnected;
-  }
+    }
 
   disconnect(): void {
     if (this.ws) {

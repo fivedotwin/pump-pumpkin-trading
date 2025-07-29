@@ -524,7 +524,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     console.log('🔒 REQUEST AUTHORIZED - PROCEEDING WITH TRADE EXECUTION');
     console.log('🔑 Request hash:', requestHash);
     console.log('⏰ Request time:', currentTime);
-
+    
     // Trade execution is now silent for better UX
     
     // 🚨 CRITICAL: Get FRESH price from Birdeye WebSocket for maximum accuracy
@@ -658,7 +658,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       
       const position = await positionService.createPosition(positionData);
       
-      console.log('BACKEND RESPONSE:', {
+              console.log('BACKEND RESPONSE:', {
         'POSITION_CREATED': position,
         'POSITION_ID': position.id,
         'STATUS': position.status
@@ -988,7 +988,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               <div>
                 <h2 className="text-2xl font-bold">{tokenData.symbol}</h2>
                 <div className="flex items-center space-x-2">
-                  <p className="text-gray-400 text-lg">{formatPrice(tokenData.price)}</p>
+                <p className="text-gray-400 text-lg">{formatPrice(tokenData.price)}</p>
                   {tokenData.isLoading && (
                     <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
                   )}

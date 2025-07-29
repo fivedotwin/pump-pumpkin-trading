@@ -222,7 +222,7 @@ class PositionService {
       const timestamp = Date.now();
       const requestHash = generateRequestHash(data, timestamp);
       console.log('🔑 Request hash generated:', requestHash);
-      
+
       // Get current token price for market orders
       console.log('📊 STEP 1: DETERMINING ENTRY PRICE');
       let entry_price = data.target_price || 0;
@@ -305,8 +305,8 @@ class PositionService {
         } else if (error.message?.includes('Insufficient SOL balance')) {
           throw new Error(error.message);
         } else {
-          throw new Error(`Failed to create position: ${error.message}`);
-        }
+        throw new Error(`Failed to create position: ${error.message}`);
+      }
       }
       
       if (!result || !result.success) {
@@ -323,16 +323,16 @@ class PositionService {
       
       // Fetch the created position
       const { data: position, error: fetchError } = await supabase
-        .from('trading_positions')
+          .from('trading_positions')
         .select('*')
         .eq('id', positionId)
         .single();
-      
+        
       if (fetchError || !position) {
         console.error('💥 ERROR FETCHING CREATED POSITION:', fetchError);
         throw new Error('Position created but failed to fetch details');
       }
-      
+
       // Start delayed opening for Market Orders
       if (data.order_type === 'Market Order') {
         console.log(`⏳ Starting 10-second delayed opening for Market Order ${positionId} - Anti-Gaming Protection Active`);
@@ -546,23 +546,23 @@ class PositionService {
       
       for (const position of openPositions) {
         try {
-          const { margin_ratio, current_price } = await this.calculatePositionPnL(position);
-          
-          // Liquidate at 100% margin ratio
-          if (margin_ratio >= 1.0) {
-            await this.liquidatePosition(position.id, current_price);
+        const { margin_ratio, current_price } = await this.calculatePositionPnL(position);
+        
+        // Liquidate at 100% margin ratio
+        if (margin_ratio >= 1.0) {
+          await this.liquidatePosition(position.id, current_price);
             liquidatedCount++;
-            
+          
             console.log(`🔥 AUTOMATIC LIQUIDATION:`, {
-              id: position.id,
-              token: position.token_symbol,
-              direction: position.direction,
-              entry_price: position.entry_price,
-              liquidation_price: current_price,
+            id: position.id,
+            token: position.token_symbol,
+            direction: position.direction,
+            entry_price: position.entry_price,
+            liquidation_price: current_price,
               margin_ratio: `${(margin_ratio * 100).toFixed(1)}%`,
               collateral_lost: `${position.collateral_sol.toFixed(4)} SOL`
-            });
-          }
+          });
+        }
         } catch (error) {
           console.error(`Error checking position ${position.id} for liquidation:`, error);
           // Continue checking other positions

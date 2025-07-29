@@ -4325,7 +4325,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         onShare={async () => {
           if (tradeResultsData) {
             try {
-              await shareTradeResults(tradeResultsData);
+              await shareTradeResults(tradeResultsData, walletAddress);
             } catch (error) {
               console.error('Error sharing trade results:', error);
             }

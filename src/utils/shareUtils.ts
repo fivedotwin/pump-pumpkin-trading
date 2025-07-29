@@ -53,8 +53,41 @@ const isMobile = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
+// Handle sharing reward credit
+const handleSharingReward = async (tradeData: TradeShareData, walletAddress?: string) => {
+  try {
+    // Check if conditions are met for reward
+    if (!walletAddress) {
+      console.log('ℹ️ No wallet address provided for sharing reward');
+      return;
+    }
+    
+    if (tradeData.collateralAmount <= 0.1) {
+      console.log('ℹ️ Trade collateral too small for sharing reward:', tradeData.collateralAmount);
+      return;
+    }
+    
+    console.log('🎁 Conditions met for sharing reward - crediting 0.01 SOL');
+    
+    // Import userProfileService dynamically to avoid circular dependencies
+    const { userProfileService } = await import('../services/supabaseClient');
+    
+    const success = await userProfileService.creditSharingReward(walletAddress);
+    
+    if (success) {
+      console.log('✅ Sharing reward credited successfully!');
+      // You could show a toast notification here in the future
+    } else {
+      console.error('❌ Failed to credit sharing reward');
+    }
+    
+  } catch (error) {
+    console.error('💥 Error handling sharing reward:', error);
+  }
+};
+
 // Handle sharing trade results to X (Twitter) - text only
-export const shareTradeResults = async (tradeData: TradeShareData) => {
+export const shareTradeResults = async (tradeData: TradeShareData, walletAddress?: string) => {
   try {
     const isProfit = tradeData.finalPnL >= 0;
     
@@ -85,6 +118,9 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
         }
       }, 2000);
       
+      // Credit sharing reward for mobile users
+      await handleSharingReward(tradeData, walletAddress);
+      
       return; // Exit early for mobile
     } else {
       // Desktop: Use web intent
@@ -103,6 +139,9 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
         prompt('X popup blocked - copy this text to share on X:', shareText);
       }
     }
+    
+    // Credit sharing reward if conditions are met
+    await handleSharingReward(tradeData, walletAddress);
     
   } catch (error) {
     console.error('Error sharing to X:', error);
