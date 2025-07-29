@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, X, TrendingUp, Sparkles, Users, Trophy } from 'lucide-react';
+import { Share2, X, TrendingUp, Sparkles, Trophy } from 'lucide-react';
 
 interface ShareGainsPopupProps {
   isOpen: boolean;
@@ -87,7 +87,7 @@ export default function ShareGainsPopup({
 
         {/* Main message */}
         <h2 className={`text-2xl font-bold mb-3 ${isProfit ? 'text-green-400' : 'text-blue-400'}`}>
-          {isProfit ? '🚀 SICK GAINS!' : '📈 Nice Trade!'}
+          {isProfit ? 'SICK GAINS!' : 'Nice Trade!'}
         </h2>
 
         <p className="text-gray-300 text-lg mb-2">
@@ -109,28 +109,12 @@ export default function ShareGainsPopup({
         {/* Call to action */}
         <p className="text-gray-300 text-base mb-6">
           {isProfit 
-            ? "Time to flex those gains! Show the world your winning trade 💪" 
-            : "Share your trading journey and inspire others! 🌟"
+            ? "Time to flex those gains! Show the world your winning trade" 
+            : "Share your trade with the community"
           }
         </p>
 
-        {/* Share benefits */}
-        <div className="bg-gray-800/50 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-center space-x-6 text-sm text-gray-400">
-            <div className="flex items-center space-x-1">
-              <Users className="w-4 h-4" />
-              <span>Build rep</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <TrendingUp className="w-4 h-4" />
-              <span>Inspire others</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Trophy className="w-4 h-4" />
-              <span>Show skills</span>
-            </div>
-          </div>
-        </div>
+
 
         {/* Action buttons */}
         <div className="space-y-3">
@@ -144,7 +128,7 @@ export default function ShareGainsPopup({
             }`}
           >
             <Share2 className="w-6 h-6" />
-            <span>{isProfit ? 'Share My Gains! 🔥' : 'Share My Trade! 📊'}</span>
+            <span>{isProfit ? 'Share My Gains!' : 'Share My Trade!'}</span>
           </button>
 
           {/* Skip button */}
@@ -159,8 +143,8 @@ export default function ShareGainsPopup({
         {/* Small encouragement text */}
         <p className="text-gray-500 text-xs mt-4">
           {isProfit 
-            ? "Every winning trade deserves to be celebrated! 🎉" 
-            : "Every trade is a learning experience worth sharing! 📚"
+            ? "Every winning trade deserves to be celebrated!" 
+            : "Share your trading experience with others"
           }
         </p>
       </div>
