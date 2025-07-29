@@ -5,6 +5,7 @@ import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } f
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
 import { jupiterSwapService, SwapDirection } from '../services/jupiterApi';
 import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
+import { shareTradeResults, TradeShareData } from '../utils/shareUtils';
 import { userProfileService, WithdrawalRequest, supabase, ppaLocksService, PPALock } from '../services/supabaseClient';
 
 import EditProfile from './EditProfile';
@@ -19,6 +20,7 @@ import TradingModal from './TradingModal';
 import LockingModal from './LockingModal';
 import UnlockModal from './UnlockModal';
 import WelcomePopup from './WelcomePopup';
+import ShareGainsPopup from './ShareGainsPopup';
 import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
 
@@ -212,6 +214,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     pnlPercentage: number;
     totalReturn: number;
   } | null>(null);
+  
+  // Share gains popup state
+  const [showShareGainsPopup, setShowShareGainsPopup] = useState(false);
   
   // Mock data for PnL (in production, this would come from database) - SET TO 0 BY DEFAULT
   const pnl = 0; // Always 0 by default
@@ -4194,8 +4199,20 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <TradeResultsModal
         isOpen={showTradeResults}
         onClose={() => {
+          // Check if it's a profitable trade to show share popup
+          const shouldShowSharePopup = tradeResultsData && tradeResultsData.finalPnL > 0;
+          
           setShowTradeResults(false);
-          setTradeResultsData(null);
+          
+          // Show share gains popup for profitable trades
+          if (shouldShowSharePopup) {
+            // Small delay for smooth transition
+            setTimeout(() => {
+              setShowShareGainsPopup(true);
+            }, 300);
+          } else {
+            setTradeResultsData(null);
+          }
           
           // Reload positions to reflect changes
           if (activeTab === 'positions') {
@@ -4203,6 +4220,29 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           }
         }}
         tradeData={tradeResultsData}
+      />
+
+      {/* Share Gains Popup */}
+      <ShareGainsPopup
+        isOpen={showShareGainsPopup}
+        onClose={() => {
+          setShowShareGainsPopup(false);
+          setTradeResultsData(null);
+        }}
+        onShare={async () => {
+          if (tradeResultsData) {
+            try {
+              await shareTradeResults(tradeResultsData);
+            } catch (error) {
+              console.error('Error sharing trade results:', error);
+            }
+          }
+        }}
+        isProfit={tradeResultsData ? tradeResultsData.finalPnL > 0 : false}
+        pnlAmount={tradeResultsData ? tradeResultsData.finalPnL : 0}
+        tokenSymbol={tradeResultsData ? tradeResultsData.tokenSymbol : ''}
+        leverage={tradeResultsData ? tradeResultsData.leverage : 1}
+        direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
       />
 
       {/* Trading Modal */}
