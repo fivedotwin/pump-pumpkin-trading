@@ -125,58 +125,57 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   return canvas.toDataURL('image/png', 0.9);
 };
 
-// Handle sharing trade results
+// Handle sharing trade results to X (Twitter)
 export const shareTradeResults = async (tradeData: TradeShareData) => {
   try {
-    const imageDataUrl = await generateTradeShareImage(tradeData);
     const isProfit = tradeData.finalPnL >= 0;
     
-    // Convert data URL to blob
-    const response = await fetch(imageDataUrl);
-    const blob = await response.blob();
+    // Create compelling share text for X/Twitter
+    const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
+    const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
     
     const shareText = isProfit 
-      ? `Just scored massive gains trading ${tradeData.tokenSymbol}! Check out my sick gains\n\nStart your own trading journey:`
-      : `Took a hit on ${tradeData.tokenSymbol} but learning every day!\n\nJoin the action:`;
-    
-    const shareUrl = 'https://pump-pumpkin.com';
+      ? `💰 Just scored ${pnlText} (${percentText}) trading $${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinApp!\n\n🚀 ${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com\n\n#Trading #Crypto #Gains #Leverage`
+      : `📊 Closed my $${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinApp\n\n💪 ${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com\n\n#Trading #Crypto #Learning #Leverage`;
 
-    if (navigator.share && navigator.canShare) {
-      // Use native sharing if available
-      const file = new File([blob], 'trade-results.png', { type: 'image/png' });
-      
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: 'Pump Pumpkin Trading Results',
-          text: shareText,
-          url: shareUrl,
-          files: [file]
-        });
+    // Open X (Twitter) share intent
+    const encodedText = encodeURIComponent(shareText);
+    const xShareUrl = `https://twitter.com/intent/tweet?text=${encodedText}`;
+    
+    // Open X in a new window/tab
+    const newWindow = window.open(xShareUrl, '_blank', 'noopener,noreferrer');
+    
+    if (!newWindow) {
+      // Fallback if popup was blocked - copy to clipboard
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        alert('X sharing popup was blocked, but your share text has been copied to clipboard!');
       } else {
-        // Fallback to text sharing
-        await navigator.share({
-          title: 'Pump Pumpkin Trading Results',
-          text: `${shareText}\n${shareUrl}`
-        });
+        // Ultimate fallback - show the text
+        prompt('Copy this text to share on X:', shareText);
       }
-    } else {
-      // Fallback: Copy to clipboard and download image
-      const shareContent = `${shareText}\n${shareUrl}`;
+    }
+    
+  } catch (error) {
+    console.error('Error sharing to X:', error);
+    
+    // Fallback: copy to clipboard
+    try {
+      const isProfit = tradeData.finalPnL >= 0;
+      const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
+      const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
+      
+      const fallbackText = `Just traded $${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pump-pumpkin.com`;
       
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareContent);
+        await navigator.clipboard.writeText(fallbackText);
+        alert('Sharing failed, but your trade text has been copied to clipboard!');
+      } else {
+        prompt('Sharing failed - copy this text manually:', fallbackText);
       }
-      
-      // Trigger image download
-      const link = document.createElement('a');
-      link.download = 'pump-pumpkin-trade-results.png';
-      link.href = imageDataUrl;
-      link.click();
-      
-      alert('Share text copied to clipboard and image downloaded!');
+    } catch (clipboardError) {
+      console.error('Clipboard fallback failed:', clipboardError);
+      alert('Sharing failed. Please share your results manually!');
     }
-  } catch (error) {
-    console.error('Error sharing:', error);
-    alert('Sharing failed, but your results look amazing!');
   }
 }; 
