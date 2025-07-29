@@ -51,7 +51,7 @@ export default function ShareGainsPopup({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-[60]">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
       <div className={`bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full p-6 text-center transform transition-all duration-500 ${
         showAnimation ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
       }`}>
@@ -60,7 +60,7 @@ export default function ShareGainsPopup({
         <div className="flex justify-end mb-2">
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-gray-800"
+            className="p-2 text-gray-400 hover:text-white transition-colors hover:bg-gray-800 rounded-lg"
           >
             <X className="w-5 h-5" />
           </button>
@@ -68,23 +68,23 @@ export default function ShareGainsPopup({
 
         {/* Icon */}
         <div className="mb-6">
-          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center bg-gray-800 border border-gray-600">
-            <TrendingUp className="w-10 h-10 text-blue-400" />
+          <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-blue-600">
+            <TrendingUp className="w-8 h-8 text-white" />
           </div>
         </div>
 
         {/* Main message */}
-        <h2 className="text-2xl font-bold mb-3 text-blue-400">
+        <h2 className="text-xl font-bold mb-3 text-white">
           Trade Complete
         </h2>
 
-        <p className="text-gray-300 text-lg mb-2">
+        <p className="text-gray-300 text-sm mb-4">
           Share your trading results
         </p>
 
         {/* Trade details */}
-        <div className="inline-block px-4 py-2 rounded-lg mb-4 bg-gray-800 border border-gray-600">
-          <p className="text-2xl font-bold text-blue-400">
+        <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
+          <p className={`text-xl font-bold mb-1 ${pnlAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {pnlAmount >= 0 ? '+' : ''}{formatCurrency(pnlAmount)}
           </p>
           <p className="text-gray-400 text-sm">
@@ -93,7 +93,7 @@ export default function ShareGainsPopup({
         </div>
 
         {/* Call to action */}
-        <p className="text-gray-300 text-base mb-6">
+        <p className="text-gray-300 text-sm mb-6">
           Share your trading results
         </p>
 
@@ -104,32 +104,37 @@ export default function ShareGainsPopup({
           {/* Share button */}
           <button
             onClick={handleShareClick}
-            className={`w-full py-4 px-6 rounded-xl text-lg font-bold transition-all duration-300 flex items-center justify-center space-x-3 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] ${
-              collateralAmount > 0.1 
-                ? 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-500 hover:to-blue-500 border border-green-500/30' 
-                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border border-blue-500/30'
-            }`}
+            className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition-colors"
+            style={{ backgroundColor: '#1e7cfa' }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+            }}
           >
-            <Share2 className="w-6 h-6 drop-shadow-sm" />
-            <span className="drop-shadow-sm">
-              {collateralAmount > 0.1 
-                ? `Share to X and get ${(collateralAmount * 0.05).toFixed(4)} SOL`
-                : 'Share My Trade'
-              }
-            </span>
+            <div className="flex items-center justify-center space-x-2">
+              <Share2 className="w-5 h-5" />
+              <span>
+                {collateralAmount > 0.1 
+                  ? `Share to X and get ${(collateralAmount * 0.05).toFixed(4)} SOL`
+                  : 'Share My Trade'
+                }
+              </span>
+            </div>
           </button>
 
           {/* Skip button */}
           <button
             onClick={onClose}
-            className="w-full py-3 px-6 rounded-xl text-gray-400 hover:text-white transition-colors border border-gray-600 hover:border-gray-500 bg-transparent"
+            className="w-full py-2 px-4 bg-gray-700 text-gray-300 font-medium rounded-lg hover:bg-gray-600 hover:text-white transition-colors"
           >
             Maybe Later
           </button>
         </div>
 
         {/* Small encouragement text */}
-        <p className="text-gray-500 text-xs mt-4">
+        <p className="text-gray-400 text-xs mt-4">
           Share your trading experience with others
         </p>
       </div>
