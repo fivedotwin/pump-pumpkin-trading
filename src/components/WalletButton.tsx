@@ -18,7 +18,7 @@ export default function WalletButton({ onConnect }: WalletButtonProps) {
     return (
         <div className="flex justify-center px-4">
             <div 
-                className="w-full max-w-[280px]"
+                className="w-full"
                 onMouseEnter={(e) => {
                     const button = e.currentTarget.querySelector('button');
                     if (button) {
@@ -36,7 +36,7 @@ export default function WalletButton({ onConnect }: WalletButtonProps) {
                     className="
                         !bg-blue-600 
                         hover:!bg-blue-700 
-                        !text-white 
+                        !text-black 
                         !border-0 
                         !rounded-xl 
                         !px-6 
@@ -45,6 +45,7 @@ export default function WalletButton({ onConnect }: WalletButtonProps) {
                         !font-medium
                         !min-h-[56px]
                         !w-full
+                        !max-w-[280px]
                         transition-all 
                         duration-200 
                         !shadow-lg
