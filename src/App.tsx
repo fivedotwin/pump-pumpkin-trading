@@ -48,6 +48,27 @@ function AppContent() {
     }
   };
 
+  const handleConnectWithoutWallet = () => {
+    console.log('👀 Connecting without wallet - guest mode');
+    setWalletAddress('guest');
+    setIsConnected(false);
+    
+    // Create a guest profile
+    const guestProfile = {
+      id: 'guest',
+      wallet_address: 'guest',
+      username: 'Guest User',
+      profile_image: undefined,
+      balance: 0,
+      sol_balance: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    setUserProfile(guestProfile);
+    setCurrentState('dashboard');
+  };
+
   const handleShowTerms = () => {
     setCurrentState('terms');
   };
@@ -264,6 +285,16 @@ function AppContent() {
         
         {/* Wallet Connection Button */}
         <WalletButton onConnect={handleWalletConnect} />
+        
+        {/* Connect Without Wallet Button */}
+        <div className="flex justify-center px-4 mt-4">
+          <button
+            onClick={handleConnectWithoutWallet}
+            className="w-full max-w-[280px] py-3 px-6 bg-gray-700 text-gray-300 font-medium rounded-xl hover:bg-gray-600 hover:text-white transition-colors border border-gray-600 hover:border-gray-500"
+          >
+            Browse Without Wallet
+          </button>
+        </div>
         
         {/* Terms - Larger text for mobile */}
         <p className="text-gray-600 text-sm mt-6">
