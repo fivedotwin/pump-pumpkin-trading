@@ -4199,15 +4199,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <TradeResultsModal
         isOpen={showTradeResults}
         onClose={() => {
-          // Check if it's a profitable trade to show share popup
-          const shouldShowSharePopup = tradeResultsData && tradeResultsData.finalPnL > 0;
+          // For testing: Show popup for ALL trades (not just profitable)
+          const shouldShowSharePopup = tradeResultsData !== null;
+          
+          console.log('🚀 TradeResultsModal closing:', {
+            tradeResultsData,
+            shouldShowSharePopup,
+            finalPnL: tradeResultsData?.finalPnL
+          });
           
           setShowTradeResults(false);
           
-          // Show share gains popup for profitable trades
+          // Show share gains popup for all trades (for testing)
           if (shouldShowSharePopup) {
+            console.log('🎯 Showing ShareGainsPopup in 300ms...');
             // Small delay for smooth transition
             setTimeout(() => {
+              console.log('🎪 Setting showShareGainsPopup to true');
               setShowShareGainsPopup(true);
             }, 300);
           } else {
@@ -4226,6 +4234,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <ShareGainsPopup
         isOpen={showShareGainsPopup}
         onClose={() => {
+          console.log('🔒 Closing ShareGainsPopup');
           setShowShareGainsPopup(false);
           setTradeResultsData(null);
         }}
@@ -4244,6 +4253,32 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         leverage={tradeResultsData ? tradeResultsData.leverage : 1}
         direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
       />
+
+      {/* DEBUG: Test button for ShareGainsPopup */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => {
+            console.log('🧪 Testing ShareGainsPopup manually');
+            setTradeResultsData({
+              tokenSymbol: 'TEST',
+              direction: 'Long',
+              leverage: 10,
+              entryPrice: 1.0,
+              exitPrice: 1.5,
+              positionSize: 100,
+              collateralAmount: 10,
+              finalPnL: 50,
+              pnlPercentage: 25,
+              totalReturn: 60
+            });
+            setShowShareGainsPopup(true);
+          }}
+          className="fixed bottom-4 right-4 bg-red-600 text-white p-2 rounded z-50 text-sm"
+          style={{ fontSize: '10px' }}
+        >
+          TEST SHARE
+        </button>
+      )}
 
       {/* Trading Modal */}
       {showTradingModal && selectedTokenData && (

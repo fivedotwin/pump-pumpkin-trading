@@ -25,6 +25,7 @@ export default function ShareGainsPopup({
   const [showAnimation, setShowAnimation] = useState(false);
 
   useEffect(() => {
+    console.log('🎨 ShareGainsPopup state changed:', { isOpen, isProfit, pnlAmount, tokenSymbol });
     if (isOpen) {
       setShowAnimation(true);
     } else {
@@ -32,7 +33,12 @@ export default function ShareGainsPopup({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    console.log('🚫 ShareGainsPopup not rendering - isOpen is false');
+    return null;
+  }
+  
+  console.log('✅ ShareGainsPopup is rendering!');
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -49,7 +55,7 @@ export default function ShareGainsPopup({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-[60]">
       <div className={`bg-gradient-to-br from-gray-900 to-black border-2 rounded-2xl max-w-md w-full p-6 text-center transform transition-all duration-500 ${
         showAnimation ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
       } ${isProfit ? 'border-green-500/50' : 'border-blue-500/50'}`}>
