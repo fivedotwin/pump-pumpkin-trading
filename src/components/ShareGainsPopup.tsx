@@ -10,6 +10,7 @@ interface ShareGainsPopupProps {
   tokenSymbol: string;
   leverage: number;
   direction: 'Long' | 'Short';
+  collateralAmount: number;
 }
 
 export default function ShareGainsPopup({ 
@@ -20,7 +21,8 @@ export default function ShareGainsPopup({
   pnlAmount, 
   tokenSymbol, 
   leverage, 
-  direction 
+  direction,
+  collateralAmount
 }: ShareGainsPopupProps) {
   const [showAnimation, setShowAnimation] = useState(false);
 
@@ -90,9 +92,24 @@ export default function ShareGainsPopup({
           </p>
         </div>
 
+        {/* Reward info */}
+        {collateralAmount > 0.1 && (
+          <div className="mb-4 p-3 rounded-lg bg-green-900/20 border border-green-600/30">
+            <p className="text-green-400 font-semibold text-sm mb-1">
+              🎁 Sharing Reward
+            </p>
+            <p className="text-green-300 text-lg font-bold">
+              +{(collateralAmount * 0.05).toFixed(4)} SOL
+            </p>
+            <p className="text-green-400 text-xs">
+              5% of your {collateralAmount.toFixed(3)} SOL collateral
+            </p>
+          </div>
+        )}
+
         {/* Call to action */}
         <p className="text-gray-300 text-base mb-6">
-          Share your trade with the community
+          {collateralAmount > 0.1 ? 'Share and earn SOL rewards!' : 'Share your trade with the community'}
         </p>
 
 

@@ -67,12 +67,14 @@ const handleSharingReward = async (tradeData: TradeShareData, walletAddress?: st
       return;
     }
     
-    console.log('🎁 Conditions met for sharing reward - crediting 0.01 SOL');
+    // Calculate 5% of collateral as reward
+    const rewardAmount = tradeData.collateralAmount * 0.05;
+    console.log(`🎁 Conditions met for sharing reward - crediting ${rewardAmount} SOL (5% of ${tradeData.collateralAmount} SOL)`);
     
     // Import userProfileService dynamically to avoid circular dependencies
     const { userProfileService } = await import('../services/supabaseClient');
     
-    const success = await userProfileService.creditSharingReward(walletAddress);
+    const success = await userProfileService.creditSharingReward(walletAddress, rewardAmount);
     
     if (success) {
       console.log('✅ Sharing reward credited successfully!');

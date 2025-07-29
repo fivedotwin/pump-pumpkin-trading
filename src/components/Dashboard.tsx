@@ -4336,6 +4336,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         tokenSymbol={tradeResultsData ? tradeResultsData.tokenSymbol : ''}
         leverage={tradeResultsData ? tradeResultsData.leverage : 1}
         direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
+        collateralAmount={tradeResultsData ? tradeResultsData.collateralAmount : 0}
       />
       
 

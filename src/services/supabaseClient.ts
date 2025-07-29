@@ -231,11 +231,11 @@ export class UserProfileService {
   }
 
   /**
-   * Credit SOL sharing reward to user's balance (0.01 SOL)
+   * Credit SOL sharing reward to user's balance (5% of collateral)
    */
-  async creditSharingReward(walletAddress: string): Promise<boolean> {
+  async creditSharingReward(walletAddress: string, rewardAmount: number): Promise<boolean> {
     try {
-      console.log('🎁 Crediting sharing reward (0.01 SOL) to:', walletAddress);
+      console.log(`🎁 Crediting sharing reward (${rewardAmount} SOL) to:`, walletAddress);
       
       await this.setCurrentWalletAddress(walletAddress);
       
@@ -246,7 +246,6 @@ export class UserProfileService {
         return false;
       }
       
-      const rewardAmount = 0.01;
       const newSOLBalance = profile.sol_balance + rewardAmount;
       
       const { data: updateResult, error: updateError } = await supabase
