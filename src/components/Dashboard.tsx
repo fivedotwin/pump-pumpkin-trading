@@ -1534,7 +1534,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setViewState('edit-profile');
   };
 
-  const handleDisconnectWallet = async () => {
+    const handleDisconnectWallet = async () => {
     try {
     setShowSettings(false);
       
@@ -1561,11 +1561,25 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       }, 500);
       
     } catch (error) {
-              console.error('Error disconnecting wallet:', error);
+            console.error('Error disconnecting wallet:', error);
       // Force reload even if disconnect fails
       setTimeout(() => {
         window.location.reload();
       }, 1000);
+    }
+  };
+
+  const handleConnectWalletFromGuest = async () => {
+    try {
+      setShowSettings(false);
+      console.log('🔄 Switching from guest mode to wallet connection');
+      
+      // Force page reload to return to login screen
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('Error switching to wallet connection:', error);
+      window.location.reload();
     }
   };
 
@@ -3498,16 +3512,29 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     <span className="text-sm">Terms of Service</span>
                   </button>
                   
-                                    <button
-                    onClick={() => {
-                      handleDisconnectWallet();
-                      setShowSettings(false);
-                    }}
-                    className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-colors text-left"
-                  >
-                    <LogOut className="w-5 h-5" />
-                    <span className="text-sm">Disconnect Wallet</span>
-                  </button>
+                                    {walletAddress === 'guest' ? (
+                    <button
+                      onClick={() => {
+                        handleConnectWalletFromGuest();
+                        setShowSettings(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 transition-colors text-left"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      <span className="text-sm">Connect Wallet</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleDisconnectWallet();
+                        setShowSettings(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-colors text-left"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      <span className="text-sm">Disconnect Wallet</span>
+                    </button>
+                  )}
                 </div>
                 
                 {/* Social Media Links Section */}

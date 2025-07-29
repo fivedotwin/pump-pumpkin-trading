@@ -286,13 +286,20 @@ function AppContent() {
         {/* Wallet Connection Button */}
         <WalletButton onConnect={handleWalletConnect} />
         
-        {/* Connect Without Wallet Button */}
+        {/* Without Wallet Button */}
         <div className="flex justify-center px-4 mt-4">
           <button
             onClick={handleConnectWithoutWallet}
-            className="w-full max-w-[280px] py-3 px-6 bg-gray-700 text-gray-300 font-medium rounded-xl hover:bg-gray-600 hover:text-white transition-colors border border-gray-600 hover:border-gray-500"
+            className="w-full max-w-[280px] py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-xl text-base font-medium min-h-[56px] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            style={{ backgroundColor: '#1e7cfa' }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+            }}
           >
-            Browse Without Wallet
+            Without Wallet
           </button>
         </div>
         
