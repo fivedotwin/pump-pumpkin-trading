@@ -1797,6 +1797,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         
         setTradeResultsData(tradeResults);
         setShowTradeResults(true);
+        console.log('📊 TradeResultsModal triggered with data:', tradeResults);
         
         // Clear trade results from database after displaying
         await supabase
@@ -4253,6 +4254,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         leverage={tradeResultsData ? tradeResultsData.leverage : 1}
         direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
       />
+      
+      {/* DEBUG: Show current state */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 left-4 bg-black text-white p-2 text-xs z-50 max-w-xs">
+          <div>showTradeResults: {showTradeResults.toString()}</div>
+          <div>showShareGainsPopup: {showShareGainsPopup.toString()}</div>
+          <div>tradeResultsData: {tradeResultsData ? 'EXISTS' : 'NULL'}</div>
+          {tradeResultsData && <div>PnL: {tradeResultsData.finalPnL}</div>}
+        </div>
+      )}
 
       {/* Trading Modal */}
       {showTradingModal && selectedTokenData && (

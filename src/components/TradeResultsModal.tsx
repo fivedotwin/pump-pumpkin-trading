@@ -203,7 +203,10 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
         {/* Close button */}
         <div className="flex justify-end mb-4">
           <button
-            onClick={onClose}
+            onClick={() => {
+              console.log('❌ X button clicked - calling onClose');
+              onClose();
+            }}
             className="p-1 text-gray-400 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -344,7 +347,10 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
 
         {/* Close button */}
         <button
-          onClick={onClose}
+          onClick={() => {
+            console.log('🔄 Continue Trading button clicked - calling onClose');
+            onClose();
+          }}
           className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors"
           style={{ backgroundColor: '#1e7cfa' }}
           onMouseEnter={(e) => {
