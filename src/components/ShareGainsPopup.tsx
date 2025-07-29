@@ -104,10 +104,14 @@ export default function ShareGainsPopup({
           {/* Share button */}
           <button
             onClick={handleShareClick}
-            className="w-full py-4 px-6 rounded-lg text-lg font-bold transition-colors flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white"
+            className={`w-full py-4 px-6 rounded-xl text-lg font-bold transition-all duration-300 flex items-center justify-center space-x-3 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] ${
+              collateralAmount > 0.1 
+                ? 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-500 hover:to-blue-500 border border-green-500/30' 
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border border-blue-500/30'
+            }`}
           >
-            <Share2 className="w-6 h-6" />
-            <span>
+            <Share2 className="w-6 h-6 drop-shadow-sm" />
+            <span className="drop-shadow-sm">
               {collateralAmount > 0.1 
                 ? `Share to X and get ${(collateralAmount * 0.05).toFixed(4)} SOL`
                 : 'Share My Trade'
