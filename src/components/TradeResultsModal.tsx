@@ -136,7 +136,7 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
     // Call to action
     ctx.fillStyle = '#1e7cfa';
     ctx.font = 'bold 32px Arial';
-    ctx.fillText('Start Trading at pump-pumpkin.com', 600, 520);
+    ctx.fillText('Start Trading at pumppumpkin.io', 600, 520);
 
     // Convert canvas to data URL
     return canvas.toDataURL('image/png', 0.9);
@@ -155,7 +155,7 @@ export default function TradeResultsModal({ isOpen, onClose, tradeData }: TradeR
         ? `Just scored massive gains trading ${tradeData.tokenSymbol}! Check out my sick gains\n\nStart your own trading journey:`
         : `Took a hit on ${tradeData.tokenSymbol} but learning every day!\n\nJoin the action:`;
       
-      const shareUrl = 'https://pump-pumpkin.com';
+      const shareUrl = 'https://pumppumpkin.io';
 
       if (navigator.share && navigator.canShare) {
         // Use native sharing if available

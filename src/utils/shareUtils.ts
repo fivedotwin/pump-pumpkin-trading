@@ -117,7 +117,7 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   // Call to action
   ctx.fillStyle = '#1e7cfa';
   ctx.font = 'bold 32px Arial';
-  ctx.fillText('Start Trading at pump-pumpkin.com', 600, 520);
+  ctx.fillText('Start Trading at pumppumpkin.io', 600, 520);
 
   // Convert canvas to data URL
   return canvas.toDataURL('image/png', 0.9);
@@ -136,8 +136,8 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
     const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
     
     const shareText = isProfit 
-      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinio!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com`
-      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinio\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com`;
+      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinio!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pumppumpkin.io`
+      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinio\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pumppumpkin.io`;
 
     // Automatically download the image
     const link = document.createElement('a');
@@ -180,7 +180,7 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
       const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
       const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
       
-      const fallbackText = `Just traded ${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pump-pumpkin.com`;
+      const fallbackText = `Just traded ${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pumppumpkin.io`;
       
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(fallbackText);
