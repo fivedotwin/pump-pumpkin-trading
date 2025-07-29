@@ -1634,31 +1634,94 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         // Check for trade results after closing modal
         await checkForTradeResults(positionId);
         
-        // FORCE: Show ShareGainsPopup after trade completion (regardless of TradeResultsModal)
+        // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
         console.log('🎯 FORCING ShareGainsPopup after trade completion');
-        const position = tradingPositions.find(p => p.id === positionId);
-        if (position) {
-          // Create mock trade data for the popup
-          const mockTradeData = {
-            tokenSymbol: position.token_symbol,
-            direction: position.direction,
-            leverage: position.leverage,
-            entryPrice: position.entry_price,
-            exitPrice: position.current_price || position.entry_price,
-            positionSize: position.amount,
-            collateralAmount: position.collateral_sol,
-            finalPnL: position.current_pnl || 0,
-            pnlPercentage: ((position.current_pnl || 0) / position.collateral_sol) * 100,
-            totalReturn: position.collateral_sol + (position.current_pnl || 0)
-          };
-          
-          setTradeResultsData(mockTradeData);
-          
-          // Small delay then show ShareGainsPopup
-          setTimeout(() => {
-            console.log('🚀 Showing ShareGainsPopup with trade data:', mockTradeData);
-            setShowShareGainsPopup(true);
-          }, 500);
+        
+        // Reload positions first to get updated data
+        await loadTradingPositions();
+        
+        // Try to get the real trade results data from the closed position
+        try {
+          const { data: closedPosition, error } = await supabase
+            .from('trading_positions')
+            .select('*')
+            .eq('id', positionId)
+            .eq('status', 'closed')
+            .single();
+            
+          if (closedPosition && !error) {
+            console.log('📊 Found closed position with real P&L:', closedPosition);
+            
+            // Calculate REAL P&L using actual entry and exit prices
+            const entryPrice = closedPosition.entry_price;
+            const exitPrice = closedPosition.close_price || closedPosition.current_price;
+            const amount = closedPosition.amount;
+            const leverage = closedPosition.leverage;
+            const direction = closedPosition.direction;
+            
+            // Calculate real P&L (same logic as in positionService)
+            let realPnL = 0;
+            if (direction === 'Long') {
+              realPnL = (exitPrice - entryPrice) * amount;
+            } else {
+              realPnL = (entryPrice - exitPrice) * amount;
+            }
+            
+            const realTradeData = {
+              tokenSymbol: closedPosition.token_symbol,
+              direction: closedPosition.direction,
+              leverage: closedPosition.leverage,
+              entryPrice: entryPrice,
+              exitPrice: exitPrice,
+              positionSize: closedPosition.amount,
+              collateralAmount: closedPosition.collateral_sol,
+              finalPnL: realPnL,
+              pnlPercentage: (realPnL / closedPosition.collateral_sol) * 100,
+              totalReturn: closedPosition.collateral_sol + realPnL
+            };
+            
+            console.log('💰 Real P&L calculated:', {
+              entryPrice,
+              exitPrice,
+              amount,
+              direction,
+              realPnL,
+              percentage: realTradeData.pnlPercentage
+            });
+            
+            setTradeResultsData(realTradeData);
+            
+            // Small delay then show ShareGainsPopup
+            setTimeout(() => {
+              console.log('🚀 Showing ShareGainsPopup with REAL trade data:', realTradeData);
+              setShowShareGainsPopup(true);
+            }, 500);
+          } else {
+            console.log('⚠️ Could not find closed position, using fallback data');
+            // Fallback: use position data if available
+            const position = tradingPositions.find(p => p.id === positionId);
+            if (position) {
+              const fallbackData = {
+                tokenSymbol: position.token_symbol,
+                direction: position.direction,
+                leverage: position.leverage,
+                entryPrice: position.entry_price,
+                exitPrice: position.current_price || position.entry_price,
+                positionSize: position.amount,
+                collateralAmount: position.collateral_sol,
+                finalPnL: position.current_pnl || 0,
+                pnlPercentage: ((position.current_pnl || 0) / position.collateral_sol) * 100,
+                totalReturn: position.collateral_sol + (position.current_pnl || 0)
+              };
+              
+              setTradeResultsData(fallbackData);
+              setTimeout(() => {
+                setShowShareGainsPopup(true);
+              }, 500);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching closed position:', error);
         }
       }, 12000);
     }
