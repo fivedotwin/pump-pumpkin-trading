@@ -92,24 +92,9 @@ export default function ShareGainsPopup({
           </p>
         </div>
 
-        {/* Reward info */}
-        {collateralAmount > 0.1 && (
-          <div className="mb-4 p-3 rounded-lg bg-green-900/20 border border-green-600/30">
-            <p className="text-green-400 font-semibold text-sm mb-1">
-              🎁 Sharing Reward
-            </p>
-            <p className="text-green-300 text-lg font-bold">
-              +{(collateralAmount * 0.05).toFixed(4)} SOL
-            </p>
-            <p className="text-green-400 text-xs">
-              5% of your {collateralAmount.toFixed(3)} SOL collateral
-            </p>
-          </div>
-        )}
-
         {/* Call to action */}
         <p className="text-gray-300 text-base mb-6">
-          {collateralAmount > 0.1 ? 'Share and earn SOL rewards!' : 'Share your trade with the community'}
+          Share your trading results
         </p>
 
 
@@ -122,7 +107,12 @@ export default function ShareGainsPopup({
             className="w-full py-4 px-6 rounded-lg text-lg font-bold transition-colors flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white"
           >
             <Share2 className="w-6 h-6" />
-            <span>Share My Trade</span>
+            <span>
+              {collateralAmount > 0.1 
+                ? `Share to X and get ${(collateralAmount * 0.05).toFixed(4)} SOL`
+                : 'Share My Trade'
+              }
+            </span>
           </button>
 
           {/* Skip button */}
