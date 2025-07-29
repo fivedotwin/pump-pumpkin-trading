@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle, CreditCard, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle, ArrowUpRight } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
@@ -3170,13 +3170,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               )}
             </div>
 
-            {/* Withdrawal & Deposit History Section */}
+            {/* Withdrawal History Section */}
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4 mt-6">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <CreditCard className="w-5 h-5 text-blue-400" />
-                  <h3 className="text-lg font-semibold text-white">Withdrawal & Deposit History</h3>
+                  <ArrowUpRight className="w-5 h-5 text-red-400" />
+                  <h3 className="text-lg font-semibold text-white">Withdrawal History</h3>
                 </div>
               </div>
 
@@ -3263,10 +3263,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               ) : (
                 <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-6 text-center">
                   <div className="w-12 h-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <CreditCard className="w-6 h-6 text-gray-500" />
+                    <ArrowUpRight className="w-6 h-6 text-gray-500" />
                   </div>
-                  <h4 className="text-white font-semibold text-sm mb-1">No Transaction History</h4>
-                  <p className="text-gray-400 text-xs">Your deposits and withdrawals will appear here</p>
+                  <h4 className="text-white font-semibold text-sm mb-1">No Withdrawal History</h4>
+                  <p className="text-gray-400 text-xs">Your withdrawals will appear here</p>
                 </div>
               )}
             </div>
