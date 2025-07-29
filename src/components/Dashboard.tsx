@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle } from 'lucide-react';
+import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle, CreditCard, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
@@ -103,6 +103,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Trade History state
   const [tradeHistory, setTradeHistory] = useState<TradingPosition[]>([]);
   const [isLoadingTradeHistory, setIsLoadingTradeHistory] = useState(false);
+  
+  // Withdrawal History state
+  const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequest[]>([]);
   
   // Local SOL balance state for immediate UI updates
   const [currentSOLBalance, setCurrentSOLBalance] = useState(solBalance);
@@ -444,6 +447,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (activeTab === 'orders') {
       loadPendingOrders();
       loadTradeHistory();
+      loadWithdrawalHistory();
     }
   }, [activeTab]);
 
@@ -938,6 +942,32 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       setTradeHistory([]);
     } finally {
       setIsLoadingTradeHistory(false);
+    }
+  };
+
+  // Load withdrawal history
+  const loadWithdrawalHistory = async () => {
+    if (!walletAddress) return;
+    
+    setIsLoadingWithdrawals(true);
+    try {
+      console.log('Loading withdrawal history...');
+      const withdrawals = await userProfileService.getWithdrawalRequests(walletAddress);
+      
+      // Sort by created date, most recent first
+      const sortedWithdrawals = withdrawals.sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setWithdrawalHistory(sortedWithdrawals.slice(0, 10)); // Show last 10 withdrawals
+      console.log(`Loaded ${sortedWithdrawals.length} withdrawal records`);
+    } catch (error) {
+      console.error('Error loading withdrawal history:', error);
+      setWithdrawalHistory([]);
+    } finally {
+      setIsLoadingWithdrawals(false);
     }
   };
 
@@ -3136,6 +3166,107 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   >
                     Start Trading
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Withdrawal & Deposit History Section */}
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4 mt-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <CreditCard className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-lg font-semibold text-white">Withdrawal & Deposit History</h3>
+                </div>
+              </div>
+
+              {/* Transaction List */}
+              {isLoadingWithdrawals ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="bg-gray-800 border border-gray-600 rounded-lg p-3 animate-pulse">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gray-700 rounded-full"></div>
+                          <div>
+                            <div className="w-16 h-3 bg-gray-700 rounded mb-1"></div>
+                            <div className="w-12 h-2 bg-gray-600 rounded"></div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-16 h-3 bg-gray-700 rounded mb-1"></div>
+                          <div className="w-12 h-2 bg-gray-600 rounded"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : withdrawalHistory.length > 0 ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                  {withdrawalHistory.map((withdrawal, index) => {
+                    // Format date - more compact for mobile
+                    const withdrawalDate = new Date(withdrawal.created_at);
+                    const now = new Date();
+                    const diffTime = Math.abs(now.getTime() - withdrawalDate.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    let timeAgo = '';
+                    if (diffDays === 1) {
+                      timeAgo = 'Today';
+                    } else if (diffDays === 2) {
+                      timeAgo = 'Yesterday';
+                    } else if (diffDays <= 7) {
+                      timeAgo = `${diffDays}d ago`;
+                    } else {
+                      timeAgo = withdrawalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
+
+                    // Status styling
+                    const getStatusStyle = (status: string) => {
+                      switch (status) {
+                        case 'completed':
+                          return 'text-green-400';
+                        case 'pending':
+                          return 'text-yellow-400';
+                        case 'approved':
+                          return 'text-blue-400';
+                        case 'rejected':
+                          return 'text-red-400';
+                        default:
+                          return 'text-gray-400';
+                      }
+                    };
+
+                    return (
+                      <div key={withdrawal.id} className="bg-gray-800 border border-gray-600 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center">
+                              <ArrowUpRight className="w-4 h-4 text-red-400" />
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm">Withdrawal</p>
+                              <p className="text-gray-400 text-xs">{timeAgo}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-red-400 font-bold">-{withdrawal.amount.toFixed(3)} SOL</p>
+                            <p className={`text-xs capitalize ${getStatusStyle(withdrawal.status)}`}>
+                              {withdrawal.status}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-6 text-center">
+                  <div className="w-12 h-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <CreditCard className="w-6 h-6 text-gray-500" />
+                  </div>
+                  <h4 className="text-white font-semibold text-sm mb-1">No Transaction History</h4>
+                  <p className="text-gray-400 text-xs">Your deposits and withdrawals will appear here</p>
                 </div>
               )}
             </div>
