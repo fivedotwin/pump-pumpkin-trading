@@ -52,8 +52,6 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas context not available');
 
-  const isProfit = tradeData.finalPnL >= 0;
-
   // Set canvas size for social media (1200x630 for optimal sharing)
   canvas.width = 1200;
   canvas.height = 630;
@@ -65,7 +63,7 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1200, 630);
 
-  // Add subtle pattern overlay
+  // Add subtle blue pattern overlay
   ctx.fillStyle = 'rgba(30, 124, 250, 0.05)';
   for (let i = 0; i < 1200; i += 40) {
     for (let j = 0; j < 630; j += 40) {
@@ -73,8 +71,8 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
     }
   }
 
-  // Main content area with border
-  ctx.strokeStyle = isProfit ? '#10b981' : '#ef4444';
+  // Main content area with border (always blue theme)
+  ctx.strokeStyle = '#1e7cfa';
   ctx.lineWidth = 4;
   ctx.strokeRect(40, 40, 1120, 550);
 
@@ -88,16 +86,16 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   ctx.font = '24px Arial';
   ctx.fillText('Leveraged Trading Platform', 80, 150);
 
-  // Main P&L display (center)
+  // Main P&L display (center) - always blue theme
   ctx.textAlign = 'center';
-  ctx.fillStyle = isProfit ? '#10b981' : '#ef4444';
+  ctx.fillStyle = '#1e7cfa';
   ctx.font = 'bold 72px Arial';
-  const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
+  const pnlText = `${tradeData.finalPnL >= 0 ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
   ctx.fillText(pnlText, 600, 280);
 
   // Percentage
   ctx.font = 'bold 48px Arial';
-  const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
+  const percentText = `${tradeData.finalPnL >= 0 ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
   ctx.fillText(percentText, 600, 340);
 
   // Trade details
@@ -113,7 +111,7 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   ctx.fillStyle = '#9ca3af';
   ctx.font = '28px Arial';
   ctx.textAlign = 'center';
-  const message = isProfit ? 'SICK GAINS!' : 'NEXT TIME!';
+  const message = tradeData.finalPnL >= 0 ? 'PROFITABLE TRADE' : 'LEARNING EXPERIENCE';
   ctx.fillText(message, 600, 440);
 
   // Call to action
@@ -125,36 +123,53 @@ export const generateTradeShareImage = async (tradeData: TradeShareData): Promis
   return canvas.toDataURL('image/png', 0.9);
 };
 
-// Handle sharing trade results to X (Twitter)
+// Handle sharing trade results to X (Twitter) with image
 export const shareTradeResults = async (tradeData: TradeShareData) => {
   try {
     const isProfit = tradeData.finalPnL >= 0;
     
-    // Create compelling share text for X/Twitter
+    // Generate the trade image first
+    const imageDataUrl = await generateTradeShareImage(tradeData);
+    
+    // Create clean share text for X/Twitter (no emojis, no hashtags)
     const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
     const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
     
     const shareText = isProfit 
-      ? `💰 Just scored ${pnlText} (${percentText}) trading $${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinApp!\n\n🚀 ${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com\n\n#Trading #Crypto #Gains #Leverage`
-      : `📊 Closed my $${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinApp\n\n💪 ${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com\n\n#Trading #Crypto #Learning #Leverage`;
+      ? `Just scored ${pnlText} (${percentText}) trading ${tradeData.tokenSymbol} with ${tradeData.leverage}x leverage on @PumpPumpkinApp!\n\n${tradeData.direction} position from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)}\n\nStart your trading journey: https://pump-pumpkin.com`
+      : `Closed my ${tradeData.tokenSymbol} trade: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage on @PumpPumpkinApp\n\n${tradeData.direction} from ${formatPrice(tradeData.entryPrice)} to ${formatPrice(tradeData.exitPrice)} - Every trade is a learning experience!\n\nJoin the action: https://pump-pumpkin.com`;
 
-    // Open X (Twitter) share intent
+    // Automatically download the image
+    const link = document.createElement('a');
+    link.download = `pump-pumpkin-trade-${tradeData.tokenSymbol}-${Date.now()}.png`;
+    link.href = imageDataUrl;
+    link.click();
+    
+    // Open X (Twitter) share intent with clean text
     const encodedText = encodeURIComponent(shareText);
     const xShareUrl = `https://twitter.com/intent/tweet?text=${encodedText}`;
     
-    // Open X in a new window/tab
-    const newWindow = window.open(xShareUrl, '_blank', 'noopener,noreferrer');
-    
-    if (!newWindow) {
-      // Fallback if popup was blocked - copy to clipboard
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
-        alert('X sharing popup was blocked, but your share text has been copied to clipboard!');
+    // Small delay to ensure download starts first
+    setTimeout(() => {
+      const newWindow = window.open(xShareUrl, '_blank', 'noopener,noreferrer');
+      
+      if (!newWindow) {
+        // Fallback if popup was blocked - copy to clipboard
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(shareText);
+          alert('X sharing popup was blocked, but your share text has been copied to clipboard and image downloaded!');
+        } else {
+          prompt('X popup blocked - copy this text to share on X (image also downloaded):', shareText);
+        }
       } else {
-        // Ultimate fallback - show the text
-        prompt('Copy this text to share on X:', shareText);
+        // Success - show brief instruction
+        setTimeout(() => {
+          if (!newWindow.closed) {
+            console.log('X opened successfully - image downloaded for manual upload');
+          }
+        }, 1000);
       }
-    }
+    }, 500);
     
   } catch (error) {
     console.error('Error sharing to X:', error);
@@ -165,7 +180,7 @@ export const shareTradeResults = async (tradeData: TradeShareData) => {
       const pnlText = `${isProfit ? '+' : ''}${formatCurrency(tradeData.finalPnL)}`;
       const percentText = `${isProfit ? '+' : ''}${tradeData.pnlPercentage.toFixed(1)}%`;
       
-      const fallbackText = `Just traded $${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pump-pumpkin.com`;
+      const fallbackText = `Just traded ${tradeData.tokenSymbol}: ${pnlText} (${percentText}) with ${tradeData.leverage}x leverage! Start trading at https://pump-pumpkin.com`;
       
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(fallbackText);
