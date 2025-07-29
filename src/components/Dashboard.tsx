@@ -21,6 +21,7 @@ import LockingModal from './LockingModal';
 import UnlockModal from './UnlockModal';
 import WelcomePopup from './WelcomePopup';
 import ShareGainsPopup from './ShareGainsPopup';
+import GuestDepositModal from './GuestDepositModal';
 import { soundManager } from '../services/soundManager';
 import { hapticFeedback } from '../utils/animations';
 
@@ -64,6 +65,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showGuestDepositModal, setShowGuestDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [swapSuccessData, setSwapSuccessData] = useState<SwapSuccessData | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('positions');
@@ -2698,7 +2700,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <div className="flex space-x-3 mb-6">
                 <button
                   onClick={() => {
-                    setShowDepositModal(true);
+                    if (walletAddress === 'guest') {
+                      setShowGuestDepositModal(true);
+                    } else {
+                      setShowDepositModal(true);
+                    }
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
@@ -4427,6 +4433,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         isOpen={showWelcomePopup}
         onClose={handleWelcomeClose}
         onOpenDeposit={() => setShowDepositModal(true)}
+      />
+
+      {/* Guest Deposit Modal */}
+      <GuestDepositModal
+        isOpen={showGuestDepositModal}
+        onClose={() => setShowGuestDepositModal(false)}
       />
 
     </div>
