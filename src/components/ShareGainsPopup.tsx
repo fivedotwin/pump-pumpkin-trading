@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, X, TrendingUp, Sparkles, Trophy } from 'lucide-react';
+import { Share2, X, TrendingUp } from 'lucide-react';
 
 interface ShareGainsPopupProps {
   isOpen: boolean;
@@ -50,9 +50,9 @@ export default function ShareGainsPopup({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-[60]">
-      <div className={`bg-gradient-to-br from-gray-900 to-black border-2 rounded-2xl max-w-md w-full p-6 text-center transform transition-all duration-500 ${
+      <div className={`bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full p-6 text-center transform transition-all duration-500 ${
         showAnimation ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-      } ${isProfit ? 'border-green-500/50' : 'border-blue-500/50'}`}>
+      }`}>
         
         {/* Close button */}
         <div className="flex justify-end mb-2">
@@ -64,42 +64,26 @@ export default function ShareGainsPopup({
           </button>
         </div>
 
-        {/* Animated icon */}
-        <div className="mb-6 relative">
-          <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center relative ${
-            isProfit ? 'bg-green-600/20 border-2 border-green-500/50' : 'bg-blue-600/20 border-2 border-blue-500/50'
-          }`}>
-            {isProfit ? (
-              <Trophy className="w-10 h-10 text-green-400 animate-bounce" />
-            ) : (
-              <TrendingUp className="w-10 h-10 text-blue-400" />
-            )}
-            
-            {/* Sparkle effects for profits */}
-            {isProfit && (
-              <>
-                <Sparkles className="w-4 h-4 text-yellow-400 absolute -top-2 -right-2 animate-pulse" />
-                <Sparkles className="w-3 h-3 text-yellow-400 absolute -bottom-1 -left-1 animate-pulse delay-300" />
-              </>
-            )}
+        {/* Icon */}
+        <div className="mb-6">
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center bg-gray-800 border border-gray-600">
+            <TrendingUp className="w-10 h-10 text-blue-400" />
           </div>
         </div>
 
         {/* Main message */}
-        <h2 className={`text-2xl font-bold mb-3 ${isProfit ? 'text-green-400' : 'text-blue-400'}`}>
-          {isProfit ? 'SICK GAINS!' : 'Nice Trade!'}
+        <h2 className="text-2xl font-bold mb-3 text-blue-400">
+          Trade Complete
         </h2>
 
         <p className="text-gray-300 text-lg mb-2">
-          {isProfit ? 'You just scored' : 'You just completed'}
+          Share your trading results
         </p>
 
         {/* Trade details */}
-        <div className={`inline-block px-4 py-2 rounded-xl mb-4 ${
-          isProfit ? 'bg-green-900/30 border border-green-700/50' : 'bg-blue-900/30 border border-blue-700/50'
-        }`}>
-          <p className={`text-2xl font-bold ${isProfit ? 'text-green-400' : 'text-blue-400'}`}>
-            {isProfit ? '+' : ''}{formatCurrency(pnlAmount)}
+        <div className="inline-block px-4 py-2 rounded-lg mb-4 bg-gray-800 border border-gray-600">
+          <p className="text-2xl font-bold text-blue-400">
+            {pnlAmount >= 0 ? '+' : ''}{formatCurrency(pnlAmount)}
           </p>
           <p className="text-gray-400 text-sm">
             {tokenSymbol} • {leverage}x {direction}
@@ -108,10 +92,7 @@ export default function ShareGainsPopup({
 
         {/* Call to action */}
         <p className="text-gray-300 text-base mb-6">
-          {isProfit 
-            ? "Time to flex those gains! Show the world your winning trade" 
-            : "Share your trade with the community"
-          }
+          Share your trade with the community
         </p>
 
 
@@ -121,14 +102,10 @@ export default function ShareGainsPopup({
           {/* Share button */}
           <button
             onClick={handleShareClick}
-            className={`w-full py-4 px-6 rounded-xl text-lg font-bold transition-all duration-200 flex items-center justify-center space-x-3 transform hover:scale-105 ${
-              isProfit 
-                ? 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white shadow-lg shadow-green-500/25' 
-                : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/25'
-            }`}
+            className="w-full py-4 px-6 rounded-lg text-lg font-bold transition-colors flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white"
           >
             <Share2 className="w-6 h-6" />
-            <span>{isProfit ? 'Share My Gains!' : 'Share My Trade!'}</span>
+            <span>Share My Trade</span>
           </button>
 
           {/* Skip button */}
@@ -142,10 +119,7 @@ export default function ShareGainsPopup({
 
         {/* Small encouragement text */}
         <p className="text-gray-500 text-xs mt-4">
-          {isProfit 
-            ? "Every winning trade deserves to be celebrated!" 
-            : "Share your trading experience with others"
-          }
+          Share your trading experience with others
         </p>
       </div>
     </div>
