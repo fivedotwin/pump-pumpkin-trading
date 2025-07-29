@@ -4254,32 +4254,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
       />
 
-      {/* DEBUG: Test button for ShareGainsPopup */}
-      {process.env.NODE_ENV === 'development' && (
-        <button
-          onClick={() => {
-            console.log('🧪 Testing ShareGainsPopup manually');
-            setTradeResultsData({
-              tokenSymbol: 'TEST',
-              direction: 'Long',
-              leverage: 10,
-              entryPrice: 1.0,
-              exitPrice: 1.5,
-              positionSize: 100,
-              collateralAmount: 10,
-              finalPnL: 50,
-              pnlPercentage: 25,
-              totalReturn: 60
-            });
-            setShowShareGainsPopup(true);
-          }}
-          className="fixed bottom-4 right-4 bg-red-600 text-white p-2 rounded z-50 text-sm"
-          style={{ fontSize: '10px' }}
-        >
-          TEST SHARE
-        </button>
-      )}
-
       {/* Trading Modal */}
       {showTradingModal && selectedTokenData && (
         <TradingModal
