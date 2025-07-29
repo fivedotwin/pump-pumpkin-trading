@@ -1633,6 +1633,33 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         
         // Check for trade results after closing modal
         await checkForTradeResults(positionId);
+        
+        // FORCE: Show ShareGainsPopup after trade completion (regardless of TradeResultsModal)
+        console.log('🎯 FORCING ShareGainsPopup after trade completion');
+        const position = tradingPositions.find(p => p.id === positionId);
+        if (position) {
+          // Create mock trade data for the popup
+          const mockTradeData = {
+            tokenSymbol: position.token_symbol,
+            direction: position.direction,
+            leverage: position.leverage,
+            entryPrice: position.entry_price,
+            exitPrice: position.current_price || position.entry_price,
+            positionSize: position.amount,
+            collateralAmount: position.collateral_sol,
+            finalPnL: position.current_pnl || 0,
+            pnlPercentage: ((position.current_pnl || 0) / position.collateral_sol) * 100,
+            totalReturn: position.collateral_sol + (position.current_pnl || 0)
+          };
+          
+          setTradeResultsData(mockTradeData);
+          
+          // Small delay then show ShareGainsPopup
+          setTimeout(() => {
+            console.log('🚀 Showing ShareGainsPopup with trade data:', mockTradeData);
+            setShowShareGainsPopup(true);
+          }, 500);
+        }
       }, 12000);
     }
     
@@ -1797,7 +1824,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         
         setTradeResultsData(tradeResults);
         setShowTradeResults(true);
-        console.log('📊 TradeResultsModal triggered with data:', tradeResults);
         
         // Clear trade results from database after displaying
         await supabase
@@ -4200,28 +4226,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <TradeResultsModal
         isOpen={showTradeResults}
         onClose={() => {
-          // For testing: Show popup for ALL trades (not just profitable)
-          const shouldShowSharePopup = tradeResultsData !== null;
-          
-          console.log('🚀 TradeResultsModal closing:', {
-            tradeResultsData,
-            shouldShowSharePopup,
-            finalPnL: tradeResultsData?.finalPnL
-          });
-          
           setShowTradeResults(false);
-          
-          // Show share gains popup for all trades (for testing)
-          if (shouldShowSharePopup) {
-            console.log('🎯 Showing ShareGainsPopup in 300ms...');
-            // Small delay for smooth transition
-            setTimeout(() => {
-              console.log('🎪 Setting showShareGainsPopup to true');
-              setShowShareGainsPopup(true);
-            }, 300);
-          } else {
-            setTradeResultsData(null);
-          }
+          setTradeResultsData(null);
           
           // Reload positions to reflect changes
           if (activeTab === 'positions') {
@@ -4235,7 +4241,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       <ShareGainsPopup
         isOpen={showShareGainsPopup}
         onClose={() => {
-          console.log('🔒 Closing ShareGainsPopup');
           setShowShareGainsPopup(false);
           setTradeResultsData(null);
         }}
@@ -4255,15 +4260,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
       />
       
-      {/* DEBUG: Show current state */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-4 left-4 bg-black text-white p-2 text-xs z-50 max-w-xs">
-          <div>showTradeResults: {showTradeResults.toString()}</div>
-          <div>showShareGainsPopup: {showShareGainsPopup.toString()}</div>
-          <div>tradeResultsData: {tradeResultsData ? 'EXISTS' : 'NULL'}</div>
-          {tradeResultsData && <div>PnL: {tradeResultsData.finalPnL}</div>}
-        </div>
-      )}
+
 
       {/* Trading Modal */}
       {showTradingModal && selectedTokenData && (
