@@ -3221,38 +3221,56 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       timeAgo = withdrawalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }
 
-                    // Status styling
-                    const getStatusStyle = (status: string) => {
-                      switch (status) {
-                        case 'completed':
-                          return 'text-green-400';
-                        case 'pending':
-                          return 'text-yellow-400';
-                        case 'approved':
-                          return 'text-blue-400';
-                        case 'rejected':
-                          return 'text-red-400';
-                        default:
-                          return 'text-gray-400';
-                      }
-                    };
-
                     return (
-                      <div key={withdrawal.id} className="bg-gray-800 border border-gray-600 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center">
-                              <ArrowUpRight className="w-4 h-4 text-red-400" />
-                            </div>
-                            <div>
-                              <p className="text-white font-medium text-sm">Withdrawal</p>
-                              <p className="text-gray-400 text-xs">{timeAgo}</p>
+                      <div 
+                        key={withdrawal.id} 
+                        className={`rounded-lg p-3 border transition-all relative overflow-hidden hover:scale-[1.02] hover:shadow-lg ${
+                          withdrawal.status === 'completed' ? 'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50' :
+                          withdrawal.status === 'pending' ? 'bg-yellow-950/30 border-yellow-600/30 hover:border-yellow-500/50' :
+                          withdrawal.status === 'approved' ? 'bg-blue-950/30 border-blue-600/30 hover:border-blue-500/50' :
+                          withdrawal.status === 'rejected' ? 'bg-red-950/50 border-red-600/30 hover:border-red-500/50' :
+                          'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50'
+                        }`}
+                      >
+                        {/* Main withdrawal info */}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center space-x-3 flex-1">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="text-white font-semibold text-sm">SOL Withdrawal</span>
+                                {withdrawal.status === 'pending' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-800/50 text-yellow-300 border border-yellow-600/30 animate-pulse">
+                                    PENDING
+                                  </span>
+                                )}
+                                {withdrawal.status === 'approved' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-800/50 text-blue-300 border border-blue-600/30">
+                                    APPROVED
+                                  </span>
+                                )}
+                                {withdrawal.status === 'rejected' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-red-100 font-bold">
+                                    REJECTED
+                                  </span>
+                                )}
+                                {withdrawal.status === 'completed' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-800/50 text-green-300 border border-green-600/30">
+                                    COMPLETED
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Withdrawal details */}
+                              <div className="flex items-center space-x-3 text-xs text-gray-400">
+                                <span>{timeAgo}</span>
+                              </div>
                             </div>
                           </div>
+                          
+                          {/* Amount Display */}
                           <div className="text-right">
-                            <p className="text-red-400 font-bold">-{withdrawal.amount.toFixed(3)} SOL</p>
-                            <p className={`text-xs capitalize ${getStatusStyle(withdrawal.status)}`}>
-                              {withdrawal.status}
+                            <p className="text-red-400 text-lg font-bold">
+                              -{withdrawal.amount.toFixed(3)} SOL
                             </p>
                           </div>
                         </div>
@@ -3261,12 +3279,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   })}
                 </div>
               ) : (
-                <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-6 text-center">
-                  <div className="w-12 h-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <ArrowUpRight className="w-6 h-6 text-gray-500" />
+                <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <ArrowUpRight className="w-8 h-8 text-gray-500" />
                   </div>
-                  <h4 className="text-white font-semibold text-sm mb-1">No Withdrawal History</h4>
-                  <p className="text-gray-400 text-xs">Your withdrawals will appear here</p>
+                  <h4 className="text-white font-semibold text-lg mb-2">No Withdrawal History</h4>
+                  <p className="text-gray-400 text-sm mb-4">Your SOL withdrawals will appear here once requested</p>
                 </div>
               )}
             </div>
