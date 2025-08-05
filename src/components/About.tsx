@@ -10,9 +10,9 @@ import {
   Layers,
   Linkedin,
   Twitter,
-  Github,
   CheckCircle2,
   TrendingUp,
+  Send,
 } from "lucide-react";
 import yonatanbadash from "../assets/yonatanbadash.png";
 
@@ -421,19 +421,19 @@ const About: React.FC = () => {
               </div>
               <div className="absolute top-4 right-4 flex items-center space-x-3">
                 <a
-                  href="YOUR_LINKEDIN_URL"
+                  href="https://www.linkedin.com/in/yonatan-badash-a19aa1279/"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
                 >
                   <Linkedin className="w-4 h-4 text-gray-400 hover:text-blue-400" />
                 </a>
                 <a
-                  href="YOUR_GITHUB_URL"
+                  href="YOUR_TELEGRAM_LINK"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
                 >
-                  <Github className="w-4 h-4 text-gray-400 hover:text-blue-400" />
+                  <Send className="w-4 h-4 text-gray-400 hover:text-blue-400" />
                 </a>
                 <a
-                  href="YOUR_TWITTER_URL"
+                  href="https://x.com/yonatanbadash1"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-500/20 transition-colors border border-gray-700/50"
                 >
                   <Twitter className="w-4 h-4 text-gray-400 hover:text-blue-500" />
