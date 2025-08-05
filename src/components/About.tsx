@@ -421,18 +421,24 @@ const About: React.FC = () => {
               </div>
               <div className="absolute top-4 right-4 flex items-center space-x-3">
                 <a
-                  href="https://www.linkedin.com/in/yonatan-badash-a19aa1279/"
+                  href="https://www.linkedin.com/in/yonatan-badash-a19aa1279"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
                 >
                   <Linkedin className="w-4 h-4 text-gray-400 hover:text-blue-400" />
                 </a>
                 <a
-                  href="YOUR_TELEGRAM_LINK"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://t.me/YonatanBad1"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
                 >
                   <Send className="w-4 h-4 text-gray-400 hover:text-blue-400" />
                 </a>
                 <a
+                  target="_blank"
+                  rel="noopener noreferrer"
                   href="https://x.com/yonatanbadash1"
                   className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-500/20 transition-colors border border-gray-700/50"
                 >
