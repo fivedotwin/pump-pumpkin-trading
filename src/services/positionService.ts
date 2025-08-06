@@ -610,21 +610,20 @@ class PositionService {
       let actualReturnAmount: number;
       let platformFeeSOL = 0;
       
-      if (pnlSOL > 0) {
-        // User made profit - take 20% fee on profit only
-        platformFeeSOL = pnlSOL * 0.20;
-        actualReturnAmount = position.collateral_sol + (pnlSOL - platformFeeSOL);
+      if (close_reason === 'liquidation' || position.status === 'liquidated') {
+        // No fee on liquidations (user already loses everything)
+        actualReturnAmount = Math.max(0, totalReturnSOL);
+        platformFeeSOL = 0;
       } else {
-        // User made loss - take 20% fee on loss unless it's liquidation
-        if (close_reason === 'liquidation' || position.status === 'liquidated') {
-          // No fee on liquidations (user already loses everything)
-          actualReturnAmount = Math.max(0, totalReturnSOL);
-          platformFeeSOL = 0;
+        // Take 20% fee on the TOTAL RETURN AMOUNT (as per Terms of Service)
+        // This applies to both profits and losses
+        if (totalReturnSOL > 0) {
+          platformFeeSOL = totalReturnSOL * 0.20;
+          actualReturnAmount = totalReturnSOL - platformFeeSOL;
         } else {
-          // Take 20% fee on losses for manual/stop_loss/take_profit closes
-          const lossAmountSOL = Math.abs(pnlSOL); // Convert negative to positive
-          platformFeeSOL = lossAmountSOL * 0.20;
-          actualReturnAmount = Math.max(0, totalReturnSOL - platformFeeSOL);
+          // No return amount, no fee
+          platformFeeSOL = 0;
+          actualReturnAmount = 0;
         }
       }
       
