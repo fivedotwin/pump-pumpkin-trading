@@ -31,8 +31,6 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   // Removed TP/SL and limit order states - only Market Orders supported
   const [isMaxUsed, setIsMaxUsed] = useState(false); // Track if MAX has been used
   const [validationErrors, setValidationErrors] = useState<{
-    stopLoss?: string;
-    takeProfit?: string;
     position?: string;
   }>({});
   const [isExecutingTrade, setIsExecutingTrade] = useState(false);
@@ -438,8 +436,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       leverage: leverage,
       user_sol_balance: userSOLBalance,
       sol_price: solPrice,
-      stop_loss: stopLoss || 'None',
-      take_profit: takeProfit || 'None'
+      // TP/SL removed from API
     });
 
     if (!isFormValid()) {
@@ -448,7 +445,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     }
     
     // Final validation before execution
-    if (!validateTpSl()) {
+    if (!validatePosition()) {
               console.log('TP/SL validation failed');
       return;
     }
@@ -494,8 +491,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         fresh_market_price: orderType === 'Market Order' ? freshPrice : undefined, // PASS THE ULTRA-FRESH PRICE
         amount: parseFloat(amount),
         leverage: leverage,
-        stop_loss: stopLoss ? parseFloat(stopLoss) : undefined,
-        take_profit: takeProfit ? parseFloat(takeProfit) : undefined,
+        // TP/SL removed
       };
       
       console.log('📤 EXACT DATA BEING SENT TO DATABASE:', {
