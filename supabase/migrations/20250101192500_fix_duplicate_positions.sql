@@ -184,7 +184,7 @@ BEGIN
     p_position_value_usd,
     p_stop_loss,
     p_take_profit,
-    CASE WHEN p_order_type = 'Market Order' THEN 'opening' ELSE 'pending' END,
+    CASE WHEN p_order_type = 'Market Order' THEN 'open' ELSE 'pending' END,
     p_liquidation_price,
     p_margin_call_price
   ) RETURNING id INTO v_position_id;

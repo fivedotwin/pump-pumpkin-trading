@@ -95,7 +95,6 @@ function generateRequestHash(data: CreatePositionData, timestamp: number): strin
 }
 
 class PositionService {
-  private activeDelayedOperations = new Map<number, NodeJS.Timeout>();
   
   // Position size limits based on leverage
   private getMaxPositionSize(leverage: number): number {
@@ -333,12 +332,6 @@ class PositionService {
         throw new Error('Position created but failed to fetch details');
       }
 
-      // Start delayed opening for Market Orders
-      if (data.order_type === 'Market Order') {
-        console.log(`⏳ Starting 10-second delayed opening for Market Order ${positionId} - Anti-Gaming Protection Active`);
-        this.startDelayedOpening(positionId);
-      }
-      
       console.log('🎉 SECURE POSITION CREATION COMPLETED 🎉');
       return position;
       
@@ -581,12 +574,12 @@ class PositionService {
     }
   }
 
-  // Initiate position closing (starts 10-second delay with worst-price selection)
+  // Close a position immediately
   async closePosition(position_id: number, close_reason: 'manual' | 'stop_loss' | 'take_profit'): Promise<void> {
     try {
-      console.log(`🔄 INITIATING 10-SECOND DELAYED CLOSE for position ${position_id} - Anti-Gaming Protection Active`);
+      console.log(`🔒 CLOSING POSITION ${position_id} IMMEDIATELY 🔒`);
       
-      // STEP 1: Get the position details first
+      // STEP 1: Get the position details
       const { data: position, error: fetchError } = await supabase
         .from('trading_positions')
         .select('*')
@@ -595,205 +588,39 @@ class PositionService {
       
       if (fetchError) throw fetchError;
       
-      // STEP 2: Set position status to 'closing' and record close initiation time
-      const { error } = await supabase
-        .from('trading_positions')
-        .update({
-          status: 'closing',
-          close_reason,
-          updated_at: new Date().toISOString(),
-          // Store when close was initiated for the 10-second timer
-          close_initiated_at: new Date().toISOString()
-        })
-        .eq('id', position_id);
-      
-      if (error) {
-        console.error('Error initiating position close:', error);
-        throw error;
+      // STEP 2: Get current token price
+      const tokenData = await fetchTokenDetailCached(position.token_address);
+      if (!tokenData) {
+        throw new Error(`Failed to fetch current price for ${position.token_symbol}`);
       }
       
-      console.log(`⏳ Position ${position_id} marked as CLOSING - Will execute in 10 seconds with WORST price to prevent gaming`);
+      const close_price = tokenData.price;
+      console.log(`💰 Closing position at current market price: $${close_price}`);
       
-      // STEP 3: Start the 10-second delayed closing process
-      this.startDelayedClosing(position_id);
-      
-    } catch (error) {
-      console.error('Error initiating position close:', error);
-      throw error;
-    }
-  }
-
-  // Execute delayed closing with worst-price selection (anti-gaming)
-  private async startDelayedClosing(position_id: number): Promise<void> {
-    console.log(`🎯 Starting 10-second price sampling for position ${position_id} - Will pick WORST price for user`);
-    
-    // Get position details
-    const { data: position, error: fetchError } = await supabase
-      .from('trading_positions')
-      .select('*')
-      .eq('id', position_id)
-      .single();
-    
-    if (fetchError || !position) {
-      console.error('Failed to fetch position for delayed closing:', fetchError);
-      return;
-    }
-    
-    const priceSamples: { price: number; timestamp: number }[] = [];
-    const sampleInterval = 2000; // Sample every 2 seconds
-    const totalDuration = 10000; // 10 seconds total
-    
-    // Sample prices every 2 seconds for 10 seconds
-    const samplePrices = async () => {
-      try {
-        const tokenData = await fetchTokenDetailCached(position.token_address);
-        if (tokenData) {
-          const sample = {
-            price: tokenData.price,
-            timestamp: Date.now()
-          };
-          priceSamples.push(sample);
-          
-          console.log(`📊 Price sample ${priceSamples.length}/5 for position ${position_id}: $${sample.price.toFixed(6)}`);
-        }
-      } catch (error) {
-        console.error('Error sampling price:', error);
-      }
-    };
-    
-    // Start sampling immediately
-    await samplePrices();
-    
-    // Continue sampling every 5 seconds
-    const sampleIntervalId = setInterval(samplePrices, sampleInterval);
-    
-    // After 10 seconds, execute the closing with worst price
-    setTimeout(async () => {
-      clearInterval(sampleIntervalId);
-      
-      // Get final sample
-      await samplePrices();
-      
-      if (priceSamples.length === 0) {
-        console.error(`❌ No price samples collected for position ${position_id}, cancelling close`);
-        return;
-      }
-      
-      // Find the WORST price for the user (closest to liquidation)
-      const worstPrice = this.findWorstPriceForUser(position, priceSamples);
-      
-      console.log(`🎯 EXECUTING DELAYED CLOSE for position ${position_id}:`, {
-        samples_collected: priceSamples.length,
-        price_range: `$${Math.min(...priceSamples.map(s => s.price)).toFixed(6)} - $${Math.max(...priceSamples.map(s => s.price)).toFixed(6)}`,
-        worst_price_selected: `$${worstPrice.toFixed(6)}`,
-        reason: 'Anti-gaming protection - worst price selected'
-      });
-      
-      // Execute the actual closing with the worst price
-      await this.executeDelayedClose(position_id, worstPrice);
-      
-    }, totalDuration);
-  }
-
-  // Find the worst price for the user (closest to liquidation)
-  private findWorstPriceForUser(position: any, priceSamples: { price: number; timestamp: number }[]): number {
-    const liquidationPrice = position.liquidation_price;
-    
-    // For Long positions: worst price is the LOWEST price (closest to liquidation)
-    // For Short positions: worst price is the HIGHEST price (closest to liquidation)
-    
-    if (position.direction === 'Long') {
-      // For Long: lower price = worse for user (closer to liquidation)
-      const worstPrice = Math.min(...priceSamples.map(s => s.price));
-      console.log(`📉 Long position - selecting LOWEST price: $${worstPrice.toFixed(6)} (liquidation at $${liquidationPrice.toFixed(6)})`);
-      return worstPrice;
-    } else {
-      // For Short: higher price = worse for user (closer to liquidation)  
-      const worstPrice = Math.max(...priceSamples.map(s => s.price));
-      console.log(`📈 Short position - selecting HIGHEST price: $${worstPrice.toFixed(6)} (liquidation at $${liquidationPrice.toFixed(6)})`);
-      return worstPrice;
-    }
-  }
-
-  // Execute the actual closing with the selected worst price
-  private async executeDelayedClose(position_id: number, close_price: number): Promise<void> {
-    try {
-      // Get fresh position data
-      const { data: position, error: fetchError } = await supabase
-        .from('trading_positions')
-        .select('*')
-        .eq('id', position_id)
-        .single();
-      
-      if (fetchError || !position) {
-        console.error('Failed to fetch position for delayed close execution:', fetchError);
-        return;
-      }
-      
-      // Check if position is still in 'closing' status
-      if (position.status !== 'closing') {
-        console.log(`⚠️ Position ${position_id} is no longer in closing status (${position.status}), skipping delayed close`);
-        return;
-      }
-      
-      // Calculate P&L with the selected worst price
+      // STEP 3: Calculate final P&L
       const finalPnL = await this.calculatePositionPnLWithPrice(position, close_price);
+      
+      // STEP 4: Calculate returns and fees
       const sol_price = await fetchSOLPrice();
+      const grossReturnSOL = position.collateral_sol + (finalPnL.pnl / sol_price);
       
-      // Calculate total return amount (collateral + P&L)
-      const pnl_in_sol = finalPnL.pnl / sol_price;
-      const totalReturnAmount = position.collateral_sol + pnl_in_sol;
+      // Apply 20% platform fee on ALL returns (profits and losses)
+      const platformFeeSOL = grossReturnSOL * 0.20;
+      const actualReturnAmount = Math.max(0, grossReturnSOL - platformFeeSOL);
       
-      // NEW FEE STRUCTURE: 20% fee on ALL returns (profit OR loss)
-      let platformFeeSOL = 0;
-      let actualReturnAmount = 0;
+      const pnlPercentage = ((finalPnL.pnl / sol_price) / position.collateral_sol) * 100;
       
-      if (totalReturnAmount > 0) {
-        // Always charge 20% fee on any positive return amount
-        platformFeeSOL = totalReturnAmount * 0.20;
-        actualReturnAmount = totalReturnAmount - platformFeeSOL;
-        
-        console.log('💰 PLATFORM FEE CALCULATION (20% on all returns):', {
-          collateral_sol: position.collateral_sol.toFixed(4),
-          pnl_sol: pnl_in_sol.toFixed(4),
-          total_return_sol: totalReturnAmount.toFixed(4),
-          platform_fee_sol: platformFeeSOL.toFixed(4),
-          user_receives_sol: actualReturnAmount.toFixed(4),
-          fee_percentage: '20% on ALL returns (profit or loss)'
-        });
-      } else {
-        // If total return is zero or negative, user gets nothing
-        actualReturnAmount = 0;
-        platformFeeSOL = 0;
-        
-        console.log('💰 TOTAL LIQUIDATION - NO RETURN:', {
-          collateral_sol: position.collateral_sol.toFixed(4),
-          pnl_sol: pnl_in_sol.toFixed(4),
-          total_return_sol: totalReturnAmount.toFixed(4),
-          user_receives_sol: '0.0000',
-          platform_fee_sol: '0.0000',
-          note: 'Complete loss - liquidated'
-        });
-      }
-      
-      // Calculate percentage return for display
-      const pnlPercentage = (finalPnL.pnl / (position.collateral_sol * sol_price)) * 100;
-      
-      console.log('🎯 DELAYED CLOSE EXECUTION with new fee structure:', {
-        position_id,
-        token: position.token_symbol,
-        close_reason: position.close_reason,
-        original_collateral: `${position.collateral_sol.toFixed(4)} SOL`,
-        pnl_usd: `$${finalPnL.pnl.toFixed(2)}`,
-        total_return: `${totalReturnAmount.toFixed(4)} SOL`,
-        platform_fee: `${platformFeeSOL.toFixed(4)} SOL`,
-        user_receives: `${actualReturnAmount.toFixed(4)} SOL`,
+      console.log(`💰 Position ${position_id} closing:`, {
+        entry_price: position.entry_price,
         close_price: close_price,
-        fee_note: '20% charged on ALL returns (profit or loss)',
-        worst_price_protection: 'ACTIVE'
+        gross_pnl_usd: finalPnL.pnl,
+        gross_return_sol: grossReturnSOL,
+        platform_fee_sol: platformFeeSOL,
+        net_return_sol: actualReturnAmount,
+        pnl_percentage: pnlPercentage
       });
-
-      // Return amount to user's SOL balance
+      
+      // STEP 5: Update user's SOL balance
       if (actualReturnAmount > 0) {
         const userProfile = await userProfileService.getProfile(position.wallet_address);
         if (userProfile) {
@@ -804,23 +631,25 @@ class PositionService {
         }
       }
 
-      // Update position status to closed
+      // STEP 6: Update position status to closed
       const { error } = await supabase
         .from('trading_positions')
         .update({
           status: 'closed',
           closed_at: new Date().toISOString(),
           close_price: close_price,
-          current_pnl: finalPnL.pnl // Store gross P&L before fees
+          current_pnl: finalPnL.pnl,
+          close_reason,
+          updated_at: new Date().toISOString()
         })
         .eq('id', position_id);
       
       if (error) {
-        console.error('Error finalizing delayed close:', error);
+        console.error('Error finalizing position close:', error);
         throw error;
       }
       
-      // Create trade results for the frontend
+      // STEP 7: Create trade results for the frontend
       const tradeResults = {
         tokenSymbol: position.token_symbol,
         direction: position.direction as 'Long' | 'Short',
@@ -829,14 +658,14 @@ class PositionService {
         exitPrice: close_price,
         positionSize: position.amount,
         collateralAmount: position.collateral_sol,
-        grossPnL: finalPnL.pnl,           // Gross P&L before fees
-        platformFee: platformFeeSOL * sol_price, // Platform fee in USD for display
-        finalPnL: (actualReturnAmount * sol_price) - (position.collateral_sol * sol_price), // Net P&L after fees
+        grossPnL: finalPnL.pnl,
+        platformFee: platformFeeSOL * sol_price,
+        finalPnL: (actualReturnAmount * sol_price) - (position.collateral_sol * sol_price),
         pnlPercentage: pnlPercentage,
         totalReturn: actualReturnAmount
       };
       
-      // Store results in the position record itself for frontend pickup
+      // Store results in the position record
       const { error: resultsError } = await supabase
         .from('trading_positions')
         .update({
@@ -848,162 +677,12 @@ class PositionService {
         console.error('Error storing trade results:', resultsError);
       }
       
-      console.log(`✅ Position ${position_id} closed with new fee structure - 20% on ALL returns`);
-      console.log('📊 Trade Results saved for frontend:', tradeResults);
+      console.log(`✅ Position ${position_id} closed immediately`);
+      console.log('📊 Trade Results:', tradeResults);
       
     } catch (error) {
-      console.error('Error executing delayed close:', error);
-    }
-  }
-
-  // Execute delayed opening with worst-price selection (anti-gaming)
-  private async startDelayedOpening(position_id: number): Promise<void> {
-    console.log(`🎯 Starting 10-second price sampling for opening position ${position_id} - Will pick WORST price for user`);
-    
-    // Get position details
-    const { data: position, error: fetchError } = await supabase
-      .from('trading_positions')
-      .select('*')
-      .eq('id', position_id)
-      .single();
-    
-    if (fetchError || !position) {
-      console.error('Failed to fetch position for delayed opening:', fetchError);
-      return;
-    }
-    
-    const priceSamples: { price: number; timestamp: number }[] = [];
-    const sampleInterval = 2000; // Sample every 2 seconds
-    const totalDuration = 10000; // 10 seconds total
-    
-    // Sample prices every 2 seconds for 10 seconds
-    const samplePrices = async () => {
-      try {
-        const tokenData = await fetchTokenDetailCached(position.token_address);
-        if (tokenData) {
-          const sample = {
-            price: tokenData.price,
-            timestamp: Date.now()
-          };
-          priceSamples.push(sample);
-          
-          console.log(`📊 Opening price sample ${priceSamples.length}/5 for position ${position_id}: $${sample.price.toFixed(6)}`);
-        }
-      } catch (error) {
-        console.error('Error sampling opening price:', error);
-      }
-    };
-    
-    // Start sampling immediately
-    await samplePrices();
-    
-    // Continue sampling every 5 seconds
-    const sampleIntervalId = setInterval(samplePrices, sampleInterval);
-    
-    // After 10 seconds, execute the opening with worst price
-    setTimeout(async () => {
-      clearInterval(sampleIntervalId);
-      
-      // Get final sample
-      await samplePrices();
-      
-      if (priceSamples.length === 0) {
-        console.error(`❌ No price samples collected for opening position ${position_id}, cancelling open`);
-        return;
-      }
-      
-      // Find the WORST price for opening (opposite logic from closing)
-      const worstOpeningPrice = this.findWorstOpeningPrice(position, priceSamples);
-      
-      console.log(`🎯 EXECUTING DELAYED OPENING for position ${position_id}:`, {
-        samples_collected: priceSamples.length,
-        price_range: `$${Math.min(...priceSamples.map(s => s.price)).toFixed(6)} - $${Math.max(...priceSamples.map(s => s.price)).toFixed(6)}`,
-        worst_opening_price: `$${worstOpeningPrice.toFixed(6)}`,
-        reason: 'Anti-gaming protection - worst opening price selected'
-      });
-      
-      // Execute the actual opening with the worst price
-      await this.executeDelayedOpening(position_id, worstOpeningPrice);
-      
-    }, totalDuration);
-  }
-
-  // Find the worst opening price for the user
-  private findWorstOpeningPrice(position: any, priceSamples: { price: number; timestamp: number }[]): number {
-    // For OPENING positions:
-    // Long positions (buying): HIGHEST price is worst for user
-    // Short positions (selling): LOWEST price is worst for user
-    
-    if (position.direction === 'Long') {
-      // For Long opening: higher price = worse for user (paying more to buy)
-      const worstPrice = Math.max(...priceSamples.map(s => s.price));
-      console.log(`📈 Long opening - selecting HIGHEST price: $${worstPrice.toFixed(6)} (user pays more)`);
-      return worstPrice;
-    } else {
-      // For Short opening: lower price = worse for user (receiving less when selling)
-      const worstPrice = Math.min(...priceSamples.map(s => s.price));
-      console.log(`📉 Short opening - selecting LOWEST price: $${worstPrice.toFixed(6)} (user receives less)`);
-      return worstPrice;
-    }
-  }
-
-  // Execute the actual opening with the selected worst price
-  private async executeDelayedOpening(position_id: number, entry_price: number): Promise<void> {
-    try {
-      // Get fresh position data
-      const { data: position, error: fetchError } = await supabase
-        .from('trading_positions')
-        .select('*')
-        .eq('id', position_id)
-        .single();
-      
-      if (fetchError || !position) {
-        console.error('Failed to fetch position for delayed opening execution:', fetchError);
-        return;
-      }
-      
-      // Check if position is still in 'opening' status
-      if (position.status !== 'opening') {
-        console.log(`⚠️ Position ${position_id} is no longer in opening status (${position.status}), skipping delayed opening`);
-        return;
-      }
-      
-      // Recalculate liquidation price with the new entry price
-      const liquidation_price = this.calculateLiquidationPrice(entry_price, position.direction, position.leverage);
-      const margin_call_price = this.calculateMarginCallPrice(entry_price, liquidation_price, position.direction);
-      
-      console.log('🎯 DELAYED OPENING EXECUTION with worst price:', {
-        position_id,
-        token: position.token_symbol,
-        direction: position.direction,
-        leverage: position.leverage,
-        original_entry_price: position.entry_price,
-        final_entry_price: entry_price,
-        liquidation_price: liquidation_price,
-        worst_price_protection: 'ACTIVE'
-      });
-
-      // Update position with final entry price and set to open
-      const { error } = await supabase
-        .from('trading_positions')
-        .update({
-          status: 'open',
-          entry_price: entry_price,
-          liquidation_price: liquidation_price,
-          margin_call_price: margin_call_price,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', position_id);
-      
-      if (error) {
-        console.error('Error finalizing delayed opening:', error);
-        throw error;
-      }
-      
-      console.log(`✅ Position ${position_id} opened with 10-second delay - Anti-gaming protection successful`);
-      
-    } catch (error) {
-      console.error('Error executing delayed opening:', error);
+      console.error('Error closing position:', error);
+      throw error;
     }
   }
 

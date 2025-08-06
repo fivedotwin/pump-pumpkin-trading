@@ -161,21 +161,14 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     }
   };
 
-  const handleClosePosition = () => {
-    // Show closing trade loading modal
-    setShowClosingModal(true);
-    
-    // Auto-close loading modal after 12 seconds, then check for results
-    setTimeout(async () => {
-      setShowClosingModal(false);
-      
-      // Check for trade results
-      await checkForTradeResults(position.id);
-    }, 12000);
-    
+  const handleClosePosition = async () => {
+    // Position closes immediately now
     onClosePosition(position.id);
     setShowCloseConfirm(false);
     onClose();
+    
+    // Check for trade results immediately
+    await checkForTradeResults(position.id);
   };
 
   const formatPnL = (pnl: number) => {

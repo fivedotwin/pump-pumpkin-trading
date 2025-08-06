@@ -698,20 +698,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       
       // Show loading modal for Market Orders (which start in 'opening' status)
       if (orderType === 'Market Order') {
-        setLoadingTradeData({
-          type: 'opening',
-          tokenSymbol: tokenData.symbol,
-          direction: tradeDirection,
-          leverage: leverage
-        });
-        setShowTradeLoading(true);
-        
-        // Auto-close loading modal after 12 seconds and show success modal
-        setTimeout(() => {
-          setShowTradeLoading(false);
-          setLoadingTradeData(null);
-          setShowTradeSuccess(true); // Show success modal instead of closing
-        }, 12000);
+        // Market orders now open immediately - show success modal directly
+        setShowTradeSuccess(true);
       } else {
         // For limit orders, show success message and close normally
         setTradeSuccess(`Limit order placed successfully! Order ID: ${position.id}`);

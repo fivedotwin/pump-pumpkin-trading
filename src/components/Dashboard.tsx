@@ -812,7 +812,35 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       const startTime = Date.now();
       
       // STEP 1: Get basic position data (FAST - no API calls)
-      const positions = await positionService.getUserPositions(walletAddress);
+      let positions = await positionService.getUserPositions(walletAddress);
+      
+      // TEMPORARY FIX: Auto-fix stuck 'opening' positions that are older than 30 seconds
+      const now = new Date();
+      const positionsToFix = positions.filter(p => 
+        p.status === 'opening' && 
+        (now.getTime() - new Date(p.created_at).getTime()) > 30000 // 30 seconds
+      );
+      
+      if (positionsToFix.length > 0) {
+        console.log(`🔧 FIXING ${positionsToFix.length} stuck 'opening' positions...`);
+        
+        // Update stuck positions to 'open' status
+        for (const pos of positionsToFix) {
+          try {
+            await supabase
+              .from('trading_positions')
+              .update({ status: 'open', updated_at: new Date().toISOString() })
+              .eq('id', pos.id);
+            console.log(`✅ Fixed stuck position ${pos.id}: opening → open`);
+          } catch (error) {
+            console.error(`❌ Failed to fix position ${pos.id}:`, error);
+          }
+        }
+        
+        // Reload positions after fixing
+        positions = await positionService.getUserPositions(walletAddress);
+      }
+      
       const openPositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
       
       console.log(`⚡ FAST LOADING: Got ${openPositions.length} positions from database in ${Date.now() - startTime}ms`);
@@ -1630,129 +1658,86 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setIsClosingPosition(true);
     setClosingPositions(prev => new Set(prev).add(positionId));
     
-    // Show closing trade loading modal
+    // Position closes immediately - check for results and reload
     if (position) {
-      setClosingTradeData({
-        tokenSymbol: position.token_symbol,
-        direction: position.direction,
-        leverage: position.leverage,
-        positionId: positionId
-      });
-      setShowClosingModal(true);
+      // Check for trade results immediately
+      await checkForTradeResults(positionId);
       
-      // Auto-close loading modal after 12 seconds, then check for results
-      setTimeout(async () => {
-        setShowClosingModal(false);
-        setClosingTradeData(null);
+      // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
+      console.log('🎯 FORCING ShareGainsPopup after trade completion');
+      
+      // Reload positions to get updated data
+      await loadTradingPositions();
         
-        // Check for trade results after closing modal
-        await checkForTradeResults(positionId);
+      // Try to get the real trade results data from the closed position
+      try {
+        const { data: closedPosition, error } = await supabase
+          .from('trading_positions')
+          .select('*')
+          .eq('id', positionId)
+          .eq('status', 'closed')
+          .single();
         
-        // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
-        console.log('🎯 FORCING ShareGainsPopup after trade completion');
-        
-        // Reload positions first to get updated data
-        await loadTradingPositions();
-        
-        // Try to get the real trade results data from the closed position
-        try {
-          const { data: closedPosition, error } = await supabase
-            .from('trading_positions')
-            .select('*')
-            .eq('id', positionId)
-            .eq('status', 'closed')
-            .single();
-            
-          if (closedPosition && !error) {
-            console.log('📊 Found closed position with real P&L:', closedPosition);
-            
-            // Calculate REAL P&L using actual entry and exit prices
-            const entryPrice = parseFloat(closedPosition.entry_price) || 0;
-            const exitPrice = parseFloat(closedPosition.close_price || closedPosition.current_price) || entryPrice;
-            const amount = parseFloat(closedPosition.amount) || 0;
-            const leverage = parseInt(closedPosition.leverage) || 1;
-            const direction = closedPosition.direction;
-            
-            // Calculate real P&L (same logic as in positionService)
-            let realPnL = 0;
-            
-            // Try to use stored current_pnl first (most accurate)
-            if (closedPosition.current_pnl !== null && closedPosition.current_pnl !== undefined) {
-              realPnL = parseFloat(closedPosition.current_pnl);
-              console.log('🎯 Using stored current_pnl:', realPnL);
-            } else {
-              // Fallback: calculate from prices
-              if (direction === 'Long') {
-                realPnL = (exitPrice - entryPrice) * amount;
-              } else {
-                realPnL = (entryPrice - exitPrice) * amount;
-              }
-              console.log('🧮 Calculated P&L from prices:', { entryPrice, exitPrice, amount, realPnL });
-            }
-            
-            const realTradeData = {
-              tokenSymbol: closedPosition.token_symbol,
-              direction: closedPosition.direction,
-              leverage: closedPosition.leverage,
-              entryPrice: entryPrice,
-              exitPrice: exitPrice,
-              positionSize: closedPosition.amount,
-              collateralAmount: closedPosition.collateral_sol,
-              finalPnL: realPnL,
-              pnlPercentage: (realPnL / closedPosition.collateral_sol) * 100,
-              totalReturn: closedPosition.collateral_sol + realPnL
-            };
-            
-            console.log('💰 Real P&L calculated:', {
-              entryPrice,
-              exitPrice,
-              amount,
-              direction,
-              realPnL,
-              percentage: realTradeData.pnlPercentage,
-              closedPosition: closedPosition
-            });
-            
-            setTradeResultsData(realTradeData);
-            
-            // Small delay then show ShareGainsPopup
-            setTimeout(() => {
-              console.log('🚀 Showing ShareGainsPopup with REAL trade data:', realTradeData);
-              setShowShareGainsPopup(true);
-            }, 500);
+        if (closedPosition && !error) {
+          console.log('📊 Found closed position with real P&L:', closedPosition);
+          
+          // Calculate REAL P&L using actual entry and exit prices
+          const entryPrice = parseFloat(closedPosition.entry_price) || 0;
+          const exitPrice = parseFloat(closedPosition.close_price || closedPosition.current_price) || entryPrice;
+          const amount = parseFloat(closedPosition.amount) || 0;
+          const leverage = parseInt(closedPosition.leverage) || 1;
+          const direction = closedPosition.direction;
+          
+          // Calculate real P&L (same logic as in positionService)
+          let realPnL = 0;
+          
+          // Try to use stored current_pnl first (most accurate)
+          if (closedPosition.current_pnl !== null && closedPosition.current_pnl !== undefined) {
+            realPnL = parseFloat(closedPosition.current_pnl);
+            console.log('🎯 Using stored current_pnl:', realPnL);
           } else {
-            console.log('⚠️ Could not find closed position, using fallback data');
-            // Fallback: use position data if available
-            const position = tradingPositions.find(p => p.id === positionId);
-            if (position) {
-              console.log('📋 Using fallback position data:', position);
-              
-              const fallbackPnL = typeof position.current_pnl === 'number' ? position.current_pnl : parseFloat(position.current_pnl || '0');
-              const collateralSol = typeof position.collateral_sol === 'number' ? position.collateral_sol : parseFloat(position.collateral_sol || '0');
-              const fallbackData = {
-                tokenSymbol: position.token_symbol,
-                direction: position.direction,
-                leverage: position.leverage,
-                entryPrice: typeof position.entry_price === 'number' ? position.entry_price : parseFloat(position.entry_price || '0'),
-                exitPrice: typeof position.current_price === 'number' ? position.current_price : parseFloat(String(position.current_price || position.entry_price || '0')),
-                positionSize: typeof position.amount === 'number' ? position.amount : parseFloat(position.amount || '0'),
-                collateralAmount: collateralSol,
-                finalPnL: fallbackPnL,
-                pnlPercentage: fallbackPnL !== 0 ? (fallbackPnL / collateralSol) * 100 : 0,
-                totalReturn: collateralSol + fallbackPnL
-              };
-              
-              console.log('📋 Fallback P&L data:', fallbackData);
-              setTradeResultsData(fallbackData);
-              setTimeout(() => {
-                setShowShareGainsPopup(true);
-              }, 500);
+            // Fallback calculation
+            if (direction === 'Long') {
+              realPnL = (exitPrice - entryPrice) * amount;
+            } else {
+              realPnL = (entryPrice - exitPrice) * amount;
             }
+            console.log('🎯 Calculated P&L from prices:', realPnL);
           }
-        } catch (error) {
-          console.error('Error fetching closed position:', error);
+          
+          // Calculate return percentage
+          const sol_price = await fetchSOLPrice() || 200; // Fallback SOL price
+          const pnlPercentage = ((realPnL / sol_price) / closedPosition.collateral_sol) * 100;
+          
+          console.log('🎯 Final P&L calculations:', {
+            realPnL,
+            pnlPercentage,
+            entryPrice,
+            exitPrice,
+            amount,
+            leverage,
+            direction
+          });
+          
+          // Show ShareGainsPopup with REAL P&L data
+          console.log('🎯 Position closed with P&L:', {
+            tokenSymbol: closedPosition.token_symbol,
+            direction: direction,
+            leverage: leverage,
+            entryPrice: entryPrice,
+            exitPrice: exitPrice,
+            pnlAmount: realPnL,
+            pnlPercentage: pnlPercentage
+          });
+          setShowShareGainsPopup(true);
+        } else {
+          console.log('❌ Could not fetch closed position data, using fallback');
+          console.log('Position closed successfully! Check your balance.');
         }
-      }, 12000);
+      } catch (error) {
+        console.error('❌ Error fetching trade results:', error);
+        console.log('Position closed successfully! Check your balance.');
+      }
     }
     
     try {
