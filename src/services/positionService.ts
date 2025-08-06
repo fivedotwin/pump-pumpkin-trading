@@ -600,34 +600,51 @@ class PositionService {
       // STEP 3: Calculate final P&L
       const finalPnL = await this.calculatePositionPnLWithPrice(position, close_price);
       
-      // STEP 4: Calculate returns and fees
+      // STEP 4: Calculate returns and fees - FIXED LOGIC
       const sol_price = await fetchSOLPrice();
-      const grossReturnSOL = position.collateral_sol + (finalPnL.pnl / sol_price);
+      const pnlSOL = finalPnL.pnl / sol_price;
       
-      // Apply 20% platform fee on ALL returns (profits and losses)
-      const platformFeeSOL = grossReturnSOL * 0.20;
-      const actualReturnAmount = Math.max(0, grossReturnSOL - platformFeeSOL);
+      // Calculate return amount: original collateral + P&L
+      const totalReturnSOL = position.collateral_sol + pnlSOL;
       
-      const pnlPercentage = ((finalPnL.pnl / sol_price) / position.collateral_sol) * 100;
+      let actualReturnAmount: number;
+      let platformFeeSOL = 0;
+      
+      if (pnlSOL > 0) {
+        // User made profit - take 20% fee on profit only
+        platformFeeSOL = pnlSOL * 0.20;
+        actualReturnAmount = position.collateral_sol + (pnlSOL - platformFeeSOL);
+      } else {
+        // User made loss - no platform fee, return remaining collateral
+        actualReturnAmount = Math.max(0, totalReturnSOL);
+        platformFeeSOL = 0;
+      }
+      
+      const pnlPercentage = (pnlSOL / position.collateral_sol) * 100;
       
       console.log(`💰 Position ${position_id} closing:`, {
         entry_price: position.entry_price,
         close_price: close_price,
-        gross_pnl_usd: finalPnL.pnl,
-        gross_return_sol: grossReturnSOL,
+        pnl_usd: finalPnL.pnl,
+        pnl_sol: pnlSOL,
+        original_collateral: position.collateral_sol,
+        total_return_before_fees: totalReturnSOL,
         platform_fee_sol: platformFeeSOL,
-        net_return_sol: actualReturnAmount,
+        actual_return_sol: actualReturnAmount,
         pnl_percentage: pnlPercentage
       });
       
-      // STEP 5: Update user's SOL balance
-      if (actualReturnAmount > 0) {
-        const userProfile = await userProfileService.getProfile(position.wallet_address);
-        if (userProfile) {
-          const newSOLBalance = userProfile.sol_balance + actualReturnAmount;
-          await userProfileService.updateSOLBalance(position.wallet_address, newSOLBalance);
-          
-          console.log(`💰 Amount returned: ${userProfile.sol_balance.toFixed(4)} + ${actualReturnAmount.toFixed(4)} = ${newSOLBalance.toFixed(4)} SOL`);
+      // STEP 5: Always return remaining balance to user (even if small amount)
+      const userProfile = await userProfileService.getProfile(position.wallet_address);
+      if (userProfile && actualReturnAmount >= 0) {
+        const newSOLBalance = userProfile.sol_balance + actualReturnAmount;
+        const updateSuccess = await userProfileService.updateSOLBalance(position.wallet_address, newSOLBalance);
+        
+        if (updateSuccess) {
+          console.log(`💰 Amount returned: ${userProfile.sol_balance.toFixed(6)} + ${actualReturnAmount.toFixed(6)} = ${newSOLBalance.toFixed(6)} SOL`);
+        } else {
+          console.error(`❌ CRITICAL: Failed to return ${actualReturnAmount.toFixed(6)} SOL to user ${position.wallet_address}`);
+          throw new Error('Balance return failed - position closing aborted');
         }
       }
 
