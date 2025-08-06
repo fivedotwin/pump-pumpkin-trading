@@ -614,7 +614,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       ? amount && parseFloat(amount) > 0
       : amount && price && parseFloat(amount) > 0 && parseFloat(price) > 0;
     
-    const tpSlValidation = !tpSl || (Object.keys(validationErrors).length === 0 || (Object.keys(validationErrors).length === 1 && validationErrors.position));
+    // TP/SL validation removed
     const positionValidation = !validationErrors.position;
     
     // CRITICAL: SOL price must be available for live trading
@@ -623,24 +623,10 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     // Enhanced validation: Check for execution state and cooldown
     const executionValidation = !isExecutingTrade && !requestCooldown;
     
-    return basicValidation && tpSlValidation && positionValidation && priceValidation && executionValidation;
+    return basicValidation && positionValidation && priceValidation && executionValidation;
   };
 
-  const handleStopLossChange = (value: string) => {
-    setStopLoss(value);
-    // Sound for TP/SL adjustments
-    if (value.length > 0) {
-      soundManager.playInputChange();
-    }
-  };
-
-  const handleTakeProfitChange = (value: string) => {
-    setTakeProfit(value);
-    // Sound for TP/SL adjustments
-    if (value.length > 0) {
-      soundManager.playInputChange();
-    }
-  };
+  // TP/SL change handlers removed
 
   const handlePriceChange = (value: string) => {
     setPrice(value);
@@ -786,7 +772,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   const handleOrderTypeChange = (newOrderType: OrderType) => {
     soundManager.playSwitch();
     setOrderType(newOrderType);
-    setShowOrderTypeDropdown(false);
+    // Order type dropdown removed
     
     // If MAX has been used, recalculate max amount for new order type
     if (isMaxUsed) {
@@ -794,9 +780,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     }
   };
 
-  // Get P&L calculations for display
-  const stopLossPnL = calculateStopLossPnL();
-  const takeProfitPnL = calculateTakeProfitPnL();
+  // Get liquidation price calculation for display
   const liquidationPrice = calculateLiquidationPrice();
 
   return (
