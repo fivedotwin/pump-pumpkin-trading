@@ -19,7 +19,7 @@ interface TradingModalProps {
   onNavigateToPositions?: () => void; // Add callback to navigate to positions tab
 }
 
-type OrderType = 'Market Order' | 'Limit Order';
+type OrderType = 'Market Order';
 type TradeDirection = 'Long' | 'Short';
 
 export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, walletAddress, onUpdateSOLBalance, onShowTerms, onNavigateToPositions }: TradingModalProps) {
@@ -28,10 +28,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   const [price, setPrice] = useState(tokenData.price.toString());
   const [amount, setAmount] = useState('');
   const [leverage, setLeverage] = useState(2);
-  const [tpSl, setTpSl] = useState(false);
-  const [stopLoss, setStopLoss] = useState('');
-  const [takeProfit, setTakeProfit] = useState('');
-  const [showOrderTypeDropdown, setShowOrderTypeDropdown] = useState(false);
+  // Removed TP/SL and limit order states - only Market Orders supported
   const [isMaxUsed, setIsMaxUsed] = useState(false); // Track if MAX has been used
   const [validationErrors, setValidationErrors] = useState<{
     stopLoss?: string;
@@ -125,7 +122,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   // Use real USD balance from props
 
 
-  const orderTypes: OrderType[] = ['Market Order', 'Limit Order'];
+  const orderTypes: OrderType[] = ['Market Order'];
 
   // Get the reference price for validation
   const getReferencePrice = (): number => {
@@ -204,93 +201,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     return tradeSize;
   };
 
-  // Calculate P&L for Stop Loss - FIXED to use trade size
-  const calculateStopLossPnL = (): { amount: number; percentage: number } | null => {
-    if (!stopLoss || !amount || isNaN(parseFloat(stopLoss)) || isNaN(parseFloat(amount))) {
-      return null;
-    }
-
-    const entryPrice = getReferencePrice();
-    const slPrice = parseFloat(stopLoss);
-    const tokenAmount = parseFloat(amount);
-    const tradeSize = calculateTradeSize(); // Use leveraged trade size
-
-    if (entryPrice === 0 || tradeSize === 0) return null;
-
-    let pnlAmount = 0;
-    
-    console.log(`🧮 FRONTEND Stop Loss P&L Debug:`, {
-      tokenAmount,
-      leverage,
-      entryPrice,
-      slPrice,
-      direction: tradeDirection
-    });
-    
-    if (tradeDirection === 'Long') {
-      // Long: Loss when price goes down
-      // FIXED: Remove leverage multiplication - it's already in position sizing
-      pnlAmount = (slPrice - entryPrice) * tokenAmount; // No leverage!
-    } else {
-      // Short: Loss when price goes up
-      // FIXED: Remove leverage multiplication - it's already in position sizing
-      pnlAmount = (entryPrice - slPrice) * tokenAmount; // No leverage!
-    }
-    
-    console.log(`💰 FRONTEND Stop Loss P&L Result (FIXED): $${pnlAmount.toFixed(2)} USD`);
-
-    // Calculate percentage based on leveraged trade size
-    const pnlPercentage = (pnlAmount / tradeSize) * 100;
-
-    return {
-      amount: pnlAmount,
-      percentage: pnlPercentage
-    };
-  };
-
-  // Calculate P&L for Take Profit - FIXED to use trade size
-  const calculateTakeProfitPnL = (): { amount: number; percentage: number } | null => {
-    if (!takeProfit || !amount || isNaN(parseFloat(takeProfit)) || isNaN(parseFloat(amount))) {
-      return null;
-    }
-
-    const entryPrice = getReferencePrice();
-    const tpPrice = parseFloat(takeProfit);
-    const tokenAmount = parseFloat(amount);
-    const tradeSize = calculateTradeSize(); // Use leveraged trade size
-
-    if (entryPrice === 0 || tradeSize === 0) return null;
-
-    let pnlAmount = 0;
-    
-    console.log(`🧮 FRONTEND Take Profit P&L Debug:`, {
-      tokenAmount,
-      leverage,
-      entryPrice,
-      tpPrice,
-      direction: tradeDirection
-    });
-    
-    if (tradeDirection === 'Long') {
-      // Long: Profit when price goes up
-      // FIXED: Remove leverage multiplication - it's already in position sizing
-      pnlAmount = (tpPrice - entryPrice) * tokenAmount; // No leverage!
-    } else {
-      // Short: Profit when price goes down
-      // FIXED: Remove leverage multiplication - it's already in position sizing
-      pnlAmount = (entryPrice - tpPrice) * tokenAmount; // No leverage!
-    }
-    
-    console.log(`💰 FRONTEND Take Profit P&L Result (FIXED): $${pnlAmount.toFixed(2)} USD`);
-
-    // Calculate percentage based on leveraged trade size
-    const pnlPercentage = (pnlAmount / tradeSize) * 100;
-
-    return {
-      amount: pnlAmount,
-      percentage: pnlPercentage
-    };
-  };
+  // TP/SL calculation functions removed - simplified trading
 
   // Calculate liquidation price - FIXED to match backend formula
   const calculateLiquidationPrice = (): number | null => {
@@ -332,63 +243,14 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
     return null;
   };
 
-  // Validate stop loss and take profit
-  const validateTpSl = () => {
-    const errors: { stopLoss?: string; takeProfit?: string; position?: string } = {};
-    const refPrice = getReferencePrice();
+  // Validate position size only - TP/SL validation removed
+  const validatePosition = () => {
+    const errors: { position?: string } = {};
 
     // Position size validation
     const positionError = validatePositionSize();
     if (positionError) {
       errors.position = positionError;
-    }
-
-    if (tpSl) {
-      const slValue = parseFloat(stopLoss);
-      const tpValue = parseFloat(takeProfit);
-
-      // Stop Loss validation
-      if (stopLoss && !isNaN(slValue)) {
-        if (tradeDirection === 'Long') {
-          // For Long positions: Stop Loss must be BELOW reference price
-          if (slValue >= refPrice) {
-            errors.stopLoss = `SL must be below ${formatPrice(refPrice)}`;
-          }
-        } else {
-          // For Short positions: Stop Loss must be ABOVE reference price
-          if (slValue <= refPrice) {
-            errors.stopLoss = `SL must be above ${formatPrice(refPrice)}`;
-          }
-        }
-      }
-
-      // Take Profit validation
-      if (takeProfit && !isNaN(tpValue)) {
-        if (tradeDirection === 'Long') {
-          // For Long positions: Take Profit must be ABOVE reference price
-          if (tpValue <= refPrice) {
-            errors.takeProfit = `TP must be above ${formatPrice(refPrice)}`;
-          }
-        } else {
-          // For Short positions: Take Profit must be BELOW reference price
-          if (tpValue >= refPrice) {
-            errors.takeProfit = `TP must be below ${formatPrice(refPrice)}`;
-          }
-        }
-      }
-
-      // Cross validation: Stop Loss and Take Profit shouldn't be on wrong sides
-      if (stopLoss && takeProfit && !isNaN(slValue) && !isNaN(tpValue)) {
-        if (tradeDirection === 'Long') {
-          if (slValue >= tpValue) {
-            errors.stopLoss = 'SL must be below TP';
-          }
-        } else {
-          if (slValue <= tpValue) {
-            errors.stopLoss = 'SL must be above TP';
-          }
-        }
-      }
     }
 
     setValidationErrors(errors);
@@ -409,8 +271,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
 
   // Run validation whenever relevant values change
   useEffect(() => {
-    validateTpSl();
-  }, [tradeDirection, orderType, price, amount, leverage, stopLoss, takeProfit, tpSl, userSOLBalance]);
+    validatePosition();
+  }, [tradeDirection, amount, leverage, userSOLBalance]);
 
   // Generate request hash for deduplication
   const generateRequestHash = (tradeData: any): string => {
@@ -421,7 +283,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       orderType: orderType,
       amount: parseFloat(amount || '0'),
       leverage: leverage,
-      price: orderType === 'Limit Order' ? parseFloat(price) : null,
+      price: null, // Only Market Orders supported
       // Round to 5-second window to prevent minor timing differences
       timeWindow: Math.floor(Date.now() / 5000) * 5000
     };
@@ -628,7 +490,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         token_symbol: tokenData.symbol,
         direction: tradeDirection,
         order_type: orderType,
-        target_price: orderType === 'Limit Order' ? parseFloat(price) : undefined,
+        target_price: undefined, // Only Market Orders supported
         fresh_market_price: orderType === 'Market Order' ? freshPrice : undefined, // PASS THE ULTRA-FRESH PRICE
         amount: parseFloat(amount),
         leverage: leverage,
@@ -791,10 +653,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       soundManager.playInputChange();
     }
     
-    // If MAX has been used and this is a limit order, recalculate max amount for new price
-    if (isMaxUsed && orderType === 'Limit Order') {
-      handlePercentageClick(100); // Use the new dynamic handler for 100%
-    }
+    // Only Market Orders supported now - MAX calculation not affected by order type
   };
 
   const handleAmountChange = (value: string) => {
@@ -1040,34 +899,10 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
 
           {/* Form - Much larger spacing */}
           <div className="space-y-5">
-            {/* Order Type Dropdown - Much larger */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  soundManager.play('dropdown_open', 'ui');
-                  setShowOrderTypeDropdown(!showOrderTypeDropdown);
-                }}
-                onMouseEnter={() => {}}
-                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-4 text-white text-lg text-left flex items-center justify-between hover:border-gray-600 transition-colors"
-              >
-                <span>{orderType}</span>
-                <ChevronDown className={`w-6 h-6 transition-transform ${showOrderTypeDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {showOrderTypeDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl shadow-lg z-10">
-                  {orderTypes.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => handleOrderTypeChange(type)}
-                      onMouseEnter={() => {}}
-                      className="w-full px-4 py-4 text-left text-lg text-white hover:bg-gray-800 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Order Type: Market Order Only */}
+            <div className="text-center bg-gray-900 border border-gray-700 rounded-xl px-4 py-4">
+              <span className="text-white text-lg">Market Order</span>
+              <p className="text-gray-400 text-sm mt-1">Execute immediately at market price</p>
             </div>
 
             {/* Available Balances - Much larger */}
@@ -1081,22 +916,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               </div>
             </div>
 
-            {/* Price Input - Only show for Limit Orders - Much larger */}
-            {orderType === 'Limit Order' && (
-              <div>
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => handlePriceChange(e.target.value)}
-                  placeholder="Price (USD)"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-4 text-white text-lg placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 transition-all text-center"
-                  step="0.000001"
-                />
-                <p className="text-gray-500 text-sm mt-2 text-center">
-                  Market: {formatPrice(tokenData.price)}
-                </p>
-              </div>
-            )}
+            {/* Price Input removed - Only Market Orders supported */}
 
             {/* Quantity Input with Percentage Buttons - Much larger */}
             <div className="">
@@ -1231,125 +1051,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               </div>
             )}
 
-            {/* TP/SL Checkbox - compact */}
-            <div className="space-y-3">
-                              <label className="flex items-center justify-center space-x-2 cursor-pointer">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={tpSl}
-                    onChange={(e) => {
-                      const isChecked = e.target.checked;
-                      setTpSl(isChecked);
-                      // Epic toggle sound!
-                      if (isChecked) {
-                        soundManager.playToggleOn();
-                      } else {
-                        soundManager.playToggleOff();
-                      }
-                    }}
-                    className="sr-only"
-                  />
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    tpSl ? 'bg-green-600 border-green-600' : 'border-gray-600'
-                  }`}>
-                    {tpSl && (
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <span className="text-white text-sm">Take Profit / Stop Loss</span>
-              </label>
-
-              {/* TP/SL Inputs - compact */}
-              {tpSl && (
-                <div className="space-y-2">
-                  {/* Stop Loss Input */}
-                  <div>
-                    <input
-                      type="number"
-                      value={stopLoss}
-                      onChange={(e) => handleStopLossChange(e.target.value)}
-                      placeholder="Stop Loss (USD)"
-                      className={`w-full bg-gray-900 border rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none transition-all text-center ${
-                        validationErrors.stopLoss 
-                          ? 'border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-400' 
-                          : 'border-red-700 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-                      }`}
-                      step="0.000001"
-                    />
-                    {validationErrors.stopLoss && (
-                      <div className="flex items-center mt-1 text-red-400 text-xs">
-                        <AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" />
-                        <span>{validationErrors.stopLoss}</span>
-                      </div>
-                    )}
-                    {/* Stop Loss P&L Display - FIXED to show leveraged amounts */}
-                    {stopLossPnL && !validationErrors.stopLoss && (
-                      <div className="mt-1 bg-red-900 border border-red-700 rounded p-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center">
-                            <Calculator className="w-3 h-3 text-red-400 mr-1" />
-                            <span className="text-red-400">Loss ({leverage}x):</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-red-300 font-medium">
-                              {formatPrice(Math.abs(stopLossPnL.amount))}
-                            </div>
-                            <div className="text-red-400 text-xs">
-                              {Math.abs(stopLossPnL.percentage).toFixed(1)}% of trade
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Take Profit Input */}
-                  <div>
-                    <input
-                      type="number"
-                      value={takeProfit}
-                      onChange={(e) => handleTakeProfitChange(e.target.value)}
-                      placeholder="Take Profit (USD)"
-                      className={`w-full bg-gray-900 border rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none transition-all text-center ${
-                        validationErrors.takeProfit 
-                          ? 'border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-400' 
-                          : 'border-green-700 focus:border-green-400 focus:ring-1 focus:ring-green-400'
-                      }`}
-                      step="0.000001"
-                    />
-                    {validationErrors.takeProfit && (
-                      <div className="flex items-center mt-1 text-red-400 text-xs">
-                        <AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" />
-                        <span>{validationErrors.takeProfit}</span>
-                      </div>
-                    )}
-                    {/* Take Profit P&L Display - FIXED to show leveraged amounts */}
-                    {takeProfitPnL && !validationErrors.takeProfit && (
-                      <div className="mt-1 bg-green-900 border border-green-700 rounded p-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center">
-                            <Calculator className="w-3 h-3 text-green-400 mr-1" />
-                            <span className="text-green-400">Profit ({leverage}x):</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-green-300 font-medium">
-                              +{formatPrice(takeProfitPnL.amount)}
-                            </div>
-                            <div className="text-green-400 text-xs">
-                              +{takeProfitPnL.percentage.toFixed(1)}% of trade
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Take Profit / Stop Loss removed - simplified trading */}
 
             {/* Error Message */}
             {tradeError && (
