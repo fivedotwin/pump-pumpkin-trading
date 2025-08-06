@@ -575,7 +575,7 @@ class PositionService {
   }
 
   // Close a position immediately
-  async closePosition(position_id: number, close_reason: 'manual' | 'stop_loss' | 'take_profit'): Promise<void> {
+  async closePosition(position_id: number, close_reason: 'manual' | 'stop_loss' | 'take_profit' | 'liquidation'): Promise<void> {
     try {
       console.log(`🔒 CLOSING POSITION ${position_id} IMMEDIATELY 🔒`);
       
@@ -615,9 +615,17 @@ class PositionService {
         platformFeeSOL = pnlSOL * 0.20;
         actualReturnAmount = position.collateral_sol + (pnlSOL - platformFeeSOL);
       } else {
-        // User made loss - no platform fee, return remaining collateral
-        actualReturnAmount = Math.max(0, totalReturnSOL);
-        platformFeeSOL = 0;
+        // User made loss - take 20% fee on loss unless it's liquidation
+        if (close_reason === 'liquidation' || position.status === 'liquidated') {
+          // No fee on liquidations (user already loses everything)
+          actualReturnAmount = Math.max(0, totalReturnSOL);
+          platformFeeSOL = 0;
+        } else {
+          // Take 20% fee on losses for manual/stop_loss/take_profit closes
+          const lossAmountSOL = Math.abs(pnlSOL); // Convert negative to positive
+          platformFeeSOL = lossAmountSOL * 0.20;
+          actualReturnAmount = Math.max(0, totalReturnSOL - platformFeeSOL);
+        }
       }
       
       const pnlPercentage = (pnlSOL / position.collateral_sol) * 100;
@@ -631,7 +639,10 @@ class PositionService {
         total_return_before_fees: totalReturnSOL,
         platform_fee_sol: platformFeeSOL,
         actual_return_sol: actualReturnAmount,
-        pnl_percentage: pnlPercentage
+        pnl_percentage: pnlPercentage,
+        close_reason: close_reason,
+        is_liquidation: close_reason === 'liquidation' || position.status === 'liquidated',
+        fee_charged_on_loss: pnlSOL < 0 && close_reason !== 'liquidation' && position.status !== 'liquidated'
       });
       
       // STEP 5: Always return remaining balance to user (even if small amount)
