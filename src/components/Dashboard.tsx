@@ -549,12 +549,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
+  // Track recent deposit to prevent race conditions
+  const [lastDepositTime, setLastDepositTime] = useState<number>(0);
+  
   // IMPROVED: Refresh SOL balance from both database AND wallet to detect real balance
-  const refreshSOLBalance = async () => {
+  const refreshSOLBalance = async (forceUpdate = false) => {
     if (!walletAddress || !publicKey) return;
     
     try {
       console.log('🔄 Refreshing SOL balance from database AND wallet...');
+      
+      // RACE CONDITION FIX: Don't overwrite recent deposits (within 30 seconds)
+      const timeSinceLastDeposit = Date.now() - lastDepositTime;
+      if (!forceUpdate && timeSinceLastDeposit < 30000) {
+        console.log('⏳ Skipping balance refresh - recent deposit in progress (', (30000 - timeSinceLastDeposit) / 1000, 's remaining)');
+        return;
+      }
       
       // Get database balance (deposited SOL)
       const profile = await userProfileService.getProfile(walletAddress);
@@ -568,7 +578,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         deposited_sol_db: dbBalance.toFixed(4),
         wallet_sol_real: walletSOLBalance.toFixed(4),
         ui_balance: currentSOLBalance.toFixed(4),
-        wallet_address: walletAddress.slice(0, 8)
+        wallet_address: walletAddress.slice(0, 8),
+        time_since_deposit: timeSinceLastDeposit / 1000 + 's'
       });
       
       // Update user balances state for wallet operations
@@ -1496,6 +1507,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         // Update local state immediately for UI
         setCurrentSOLBalance(newPlatformSOLBalance);
         
+        // RACE CONDITION FIX: Mark deposit timestamp to prevent refresh from overwriting
+        setLastDepositTime(Date.now());
+        
         // Update database with the new platform SOL balance
         onUpdateSOLBalance(newPlatformSOLBalance);
         
@@ -1537,6 +1551,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         // Update local SOL balance immediately (it's already deducted in the database)
         const newSOLBalance = currentSOLBalance - amount;
         setCurrentSOLBalance(newSOLBalance);
+        
+        // RACE CONDITION FIX: Mark withdrawal timestamp to prevent refresh from overwriting
+        setLastDepositTime(Date.now());
         
         // Update parent component
         onUpdateSOLBalance(newSOLBalance);
