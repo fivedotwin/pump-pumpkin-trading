@@ -96,6 +96,37 @@ function generateRequestHash(data: CreatePositionData, timestamp: number): strin
 
 class PositionService {
   
+  // Apply 0.2% slippage to make fill prices worse for users (realistic trading simulation)
+  private applySlippage(price: number, direction: 'Long' | 'Short', operation: 'open' | 'close'): { 
+    slippedPrice: number, 
+    slippagePercent: number 
+  } {
+    let slippedPrice = price;
+    
+    if (operation === 'open') {
+      // Opening positions: worse entry prices
+      if (direction === 'Long') {
+        slippedPrice = price * 1.002; // Buy 0.2% higher
+      } else {
+        slippedPrice = price * 0.998; // Sell 0.2% lower
+      }
+    } else {
+      // Closing positions: worse exit prices
+      if (direction === 'Long') {
+        slippedPrice = price * 0.998; // Sell 0.2% lower
+      } else {
+        slippedPrice = price * 1.002; // Buy 0.2% higher
+      }
+    }
+    
+    const slippagePercent = ((slippedPrice - price) / price) * 100;
+    
+    return {
+      slippedPrice,
+      slippagePercent
+    };
+  }
+  
   // Position size limits based on leverage
   private getMaxPositionSize(leverage: number): number {
     if (leverage >= 50) return 100_000_000; // $100M for 50x-100x
@@ -242,6 +273,15 @@ class PositionService {
         console.log('🎯 LIMIT ORDER - ENTRY PRICE FROM USER:', entry_price);
       }
       
+      // STEP 1.5: Apply 0.2% slippage (worse fill prices for realistic trading simulation)
+      console.log('📊 STEP 1.5: APPLYING 0.2% OPENING SLIPPAGE');
+      const original_price = entry_price;
+      const slippageResult = this.applySlippage(entry_price, data.direction, 'open');
+      entry_price = slippageResult.slippedPrice;
+      
+      console.log(`📊 ${data.direction} OPENING SLIPPAGE: ${slippageResult.slippagePercent > 0 ? '+' : ''}${slippageResult.slippagePercent.toFixed(3)}%`);
+      console.log(`💰 ENTRY PRICE AFTER SLIPPAGE: ${original_price} → ${entry_price} (${data.direction})`);
+      
       // Get SOL price for calculations
       console.log('📊 STEP 2: FETCHING SOL PRICE');
       const sol_price = await fetchSOLPrice();
@@ -346,6 +386,20 @@ class PositionService {
   // Get user's positions
   async getUserPositions(wallet_address: string): Promise<TradingPosition[]> {
     try {
+      console.log('🔍 DEBUG: Fetching positions for wallet:', wallet_address);
+      
+      // Prevent guest users from querying positions
+      if (wallet_address === 'guest') {
+        console.log('⚠️ WARNING: Guest user cannot have trading positions');
+        return [];
+      }
+      
+      // Validate wallet address format (basic Solana address validation)
+      if (!wallet_address || wallet_address.length < 32 || wallet_address.length > 44) {
+        console.error('❌ Invalid wallet address format:', wallet_address);
+        return [];
+      }
+      
       const { data: positions, error } = await supabase
         .from('trading_positions')
         .select('*')
@@ -353,14 +407,15 @@ class PositionService {
         .order('created_at', { ascending: false });
       
       if (error) {
-        console.error('Error fetching positions:', error);
+        console.error('❌ Error fetching positions:', error);
         throw error;
       }
       
+      console.log('✅ Successfully fetched', positions?.length || 0, 'positions for wallet');
       return positions || [];
       
     } catch (error) {
-      console.error('Error getting user positions:', error);
+      console.error('💥 Error getting user positions:', error);
       throw error;
     }
   }
@@ -594,8 +649,17 @@ class PositionService {
         throw new Error(`Failed to fetch current price for ${position.token_symbol}`);
       }
       
-      const close_price = tokenData.price;
-      console.log(`💰 Closing position at current market price: $${close_price}`);
+      let close_price = tokenData.price;
+      console.log(`💰 Current market price: $${close_price}`);
+      
+      // STEP 2.5: Apply 0.2% slippage (worse fill prices for realistic trading simulation)
+      console.log('📊 APPLYING 0.2% CLOSING SLIPPAGE');
+      const original_close_price = close_price;
+      const closeSlippageResult = this.applySlippage(close_price, position.direction, 'close');
+      close_price = closeSlippageResult.slippedPrice;
+      
+      console.log(`📊 ${position.direction} CLOSING SLIPPAGE: ${closeSlippageResult.slippagePercent > 0 ? '+' : ''}${closeSlippageResult.slippagePercent.toFixed(3)}%`);
+      console.log(`💰 CLOSE PRICE AFTER SLIPPAGE: ${original_close_price} → ${close_price} (${position.direction})`);
       
       // STEP 3: Calculate final P&L
       const finalPnL = await this.calculatePositionPnLWithPrice(position, close_price);
