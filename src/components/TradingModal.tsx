@@ -61,6 +61,21 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   
   const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null); // Track selected percentage
 
+  // CRITICAL FIX: Function to refresh user's SOL balance when balance mismatch detected
+  const refreshUserBalance = async () => {
+    try {
+      console.log('🔄 Refreshing user SOL balance from database...');
+      const userProfile = await userProfileService.getProfile(walletAddress);
+      if (userProfile && onUpdateSOLBalance) {
+        const dbBalance = userProfile.sol_balance;
+        console.log(`💰 Updated SOL balance: ${userSOLBalance} → ${dbBalance}`);
+        onUpdateSOLBalance(dbBalance);
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh SOL balance:', error);
+    }
+  };
+
   // Subscribe to simplified price service for token price updates
   // Note: Price tracking is now handled automatically by the price service when subscribing
 
@@ -360,6 +375,20 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
       return;
     }
 
+    // CRITICAL CHECK: Verify user has sufficient balance before proceeding
+    const requiredCollateral = calculateRequiredCollateral();
+    if (userSOLBalance < requiredCollateral) {
+      console.log('❌ INSUFFICIENT BALANCE DETECTED AT FRONTEND:', {
+        userBalance: userSOLBalance,
+        required: requiredCollateral,
+        shortfall: requiredCollateral - userSOLBalance
+      });
+      setTradeError(`Insufficient SOL balance. You have ${userSOLBalance.toFixed(4)} SOL but need ${requiredCollateral.toFixed(4)} SOL`);
+      // Refresh balance to make sure UI shows correct amount
+      refreshUserBalance();
+      return;
+    }
+
     // IMMEDIATELY disable button and set states
     setIsExecutingTrade(true);
     setTradeError(null);
@@ -586,8 +615,18 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
         errorMessage = 'Duplicate request detected. Please wait before retrying.';
       } else if (error.message?.includes('Insufficient SOL balance')) {
         errorMessage = error.message;
+        // CRITICAL FIX: Refresh balance when insufficient funds error occurs
+        console.log('🔄 Refreshing SOL balance after insufficient funds error...');
+        refreshUserBalance();
       } else if (error.message?.includes('Position size') && error.message?.includes('exceeds limit')) {
         errorMessage = error.message;
+        // Also refresh balance for position size errors (might be due to stale balance)
+        console.log('🔄 Refreshing SOL balance after position size error...');
+        refreshUserBalance();
+      } else {
+        // For any other error, also refresh balance to ensure UI is accurate
+        console.log('🔄 Refreshing SOL balance after trade error to ensure UI accuracy...');
+        refreshUserBalance();
       }
       
       setTradeError(errorMessage);
