@@ -96,27 +96,20 @@ function generateRequestHash(data: CreatePositionData, timestamp: number): strin
 
 class PositionService {
   
-  // Apply 0.2% slippage to make fill prices worse for users (realistic trading simulation)
-  private applySlippage(price: number, direction: 'Long' | 'Short', operation: 'open' | 'close'): { 
+  // Apply 0.2% entry slippage - always worse for user (platform's favor)
+  private applyEntrySlippage(price: number, direction: 'Long' | 'Short'): { 
     slippedPrice: number, 
     slippagePercent: number 
   } {
     let slippedPrice = price;
     
-    if (operation === 'open') {
-      // Opening positions: worse entry prices
-      if (direction === 'Long') {
-        slippedPrice = price * 1.002; // Buy 0.2% higher
-      } else {
-        slippedPrice = price * 0.998; // Sell 0.2% lower
-      }
+    // Entry slippage: always worse for user, better for platform
+    if (direction === 'Long') {
+      // Long: User buys at higher price (worse for user)
+      slippedPrice = price * 1.002; // +0.2% higher entry price
     } else {
-      // Closing positions: worse exit prices
-      if (direction === 'Long') {
-        slippedPrice = price * 0.998; // Sell 0.2% lower
-      } else {
-        slippedPrice = price * 1.002; // Buy 0.2% higher
-      }
+      // Short: User sells at lower price (worse for user)  
+      slippedPrice = price * 0.998; // -0.2% lower entry price
     }
     
     const slippagePercent = ((slippedPrice - price) / price) * 100;
@@ -273,14 +266,14 @@ class PositionService {
         console.log('🎯 LIMIT ORDER - ENTRY PRICE FROM USER:', entry_price);
       }
       
-      // STEP 1.5: Apply 0.2% slippage (worse fill prices for realistic trading simulation)
-      console.log('📊 STEP 1.5: APPLYING 0.2% OPENING SLIPPAGE');
+      // STEP 1.5: Apply 0.2% entry slippage (platform's favor - worse for user)
+      console.log('📊 STEP 1.5: APPLYING 0.2% ENTRY SLIPPAGE (PLATFORM FAVOR)');
       const original_price = entry_price;
-      const slippageResult = this.applySlippage(entry_price, data.direction, 'open');
+      const slippageResult = this.applyEntrySlippage(entry_price, data.direction);
       entry_price = slippageResult.slippedPrice;
       
-      console.log(`📊 ${data.direction} OPENING SLIPPAGE: ${slippageResult.slippagePercent > 0 ? '+' : ''}${slippageResult.slippagePercent.toFixed(3)}%`);
-      console.log(`💰 ENTRY PRICE AFTER SLIPPAGE: ${original_price} → ${entry_price} (${data.direction})`);
+      console.log(`📊 ${data.direction} ENTRY SLIPPAGE: ${slippageResult.slippagePercent > 0 ? '+' : ''}${slippageResult.slippagePercent.toFixed(3)}% (WORSE FOR USER)`);
+      console.log(`💰 ENTRY PRICE: ${original_price} → ${entry_price} (platform gets better price)`);
       
       // Get SOL price for calculations
       console.log('📊 STEP 2: FETCHING SOL PRICE');
@@ -652,14 +645,7 @@ class PositionService {
       let close_price = tokenData.price;
       console.log(`💰 Current market price: $${close_price}`);
       
-      // STEP 2.5: Apply 0.2% slippage (worse fill prices for realistic trading simulation)
-      console.log('📊 APPLYING 0.2% CLOSING SLIPPAGE');
-      const original_close_price = close_price;
-      const closeSlippageResult = this.applySlippage(close_price, position.direction, 'close');
-      close_price = closeSlippageResult.slippedPrice;
-      
-      console.log(`📊 ${position.direction} CLOSING SLIPPAGE: ${closeSlippageResult.slippagePercent > 0 ? '+' : ''}${closeSlippageResult.slippagePercent.toFixed(3)}%`);
-      console.log(`💰 CLOSE PRICE AFTER SLIPPAGE: ${original_close_price} → ${close_price} (${position.direction})`);
+      console.log(`💰 Closing position at market price: $${close_price}`);
       
       // STEP 3: Calculate final P&L
       const finalPnL = await this.calculatePositionPnLWithPrice(position, close_price);
