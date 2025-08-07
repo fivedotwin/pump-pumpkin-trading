@@ -809,10 +809,15 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setIsLoadingPositions(true);
     try {
       console.log('⚡ FAST LOADING: Loading positions with optimized performance...');
+      console.log('🔍 DEBUG: Wallet address:', walletAddress);
+      console.log('🔍 DEBUG: Is guest mode:', walletAddress === 'guest');
+      
       const startTime = Date.now();
       
       // STEP 1: Get basic position data (FAST - no API calls)
       let positions = await positionService.getUserPositions(walletAddress);
+      console.log('🔍 DEBUG: Raw positions from database:', positions.length);
+      console.log('🔍 DEBUG: Position statuses:', positions.map(p => p.status));
       
       // TEMPORARY FIX: Auto-fix stuck 'opening' positions that are older than 30 seconds
       const now = new Date();
@@ -839,15 +844,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         
         // Reload positions after fixing
         positions = await positionService.getUserPositions(walletAddress);
+        console.log('🔍 DEBUG: Positions after fixing:', positions.length);
       }
       
       const openPositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
+      console.log('🔍 DEBUG: Open positions after filtering:', openPositions.length);
       
       console.log(`⚡ FAST LOADING: Got ${openPositions.length} positions from database in ${Date.now() - startTime}ms`);
       
       if (openPositions.length === 0) {
         setTradingPositions([]);
-        console.log('⚡ FAST LOADING: No positions found, completed instantly');
+        if (walletAddress === 'guest') {
+          console.log('⚡ FAST LOADING: Guest user - no positions expected');
+        } else {
+          console.log('⚡ FAST LOADING: No positions found for connected wallet:', walletAddress);
+        }
         return;
       }
       
