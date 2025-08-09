@@ -1,30 +1,98 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Copy, TrendingUp, Home, Briefcase, ArrowUpDown, X, Loader2, CheckCircle, User, LogOut, Plus, Minus, Circle, ArrowLeft, Wallet, ArrowRight, RefreshCw, Calculator, AlertTriangle, AlertCircle, Send, Download, ExternalLink, Share, DollarSign, BarChart3, TrendingUp as TrendingUpIcon, Activity, History, Unlock, MessageCircle, ArrowUpRight } from 'lucide-react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { fetchTrendingTokens, fetchSOLPrice, fetchTokenDetailCached, fetchTokenPriceCached, formatPrice, formatVolume, formatMarketCap, TrendingToken, searchTokens, SearchResult, fetchTokenSecurity, fetchPPAPriceInSOL } from '../services/birdeyeApi';
-import { jupiterSwapService, SwapDirection } from '../services/jupiterApi';
-import { formatNumber, formatCurrency, formatTokenAmount } from '../utils/formatters';
-import { shareTradeResults, TradeShareData } from '../utils/shareUtils';
-import { userProfileService, WithdrawalRequest, supabase, ppaLocksService, PPALock } from '../services/supabaseClient';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Settings,
+  Copy,
+  TrendingUp,
+  Home,
+  Briefcase,
+  ArrowUpDown,
+  X,
+  Loader2,
+  CheckCircle,
+  User,
+  LogOut,
+  Plus,
+  Minus,
+  Circle,
+  ArrowLeft,
+  Wallet,
+  ArrowRight,
+  RefreshCw,
+  Calculator,
+  AlertTriangle,
+  AlertCircle,
+  Send,
+  Download,
+  ExternalLink,
+  Share,
+  DollarSign,
+  BarChart3,
+  TrendingUp as TrendingUpIcon,
+  Activity,
+  History,
+  Unlock,
+  MessageCircle,
+  ArrowUpRight,
+  Info,
+} from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+import {
+  fetchTrendingTokens,
+  fetchSOLPrice,
+  fetchTokenDetailCached,
+  fetchTokenPriceCached,
+  formatPrice,
+  formatVolume,
+  formatMarketCap,
+  TrendingToken,
+  searchTokens,
+  SearchResult,
+  fetchTokenSecurity,
+  fetchPPAPriceInSOL,
+} from "../services/birdeyeApi";
+import { jupiterSwapService, SwapDirection } from "../services/jupiterApi";
+import {
+  formatNumber,
+  formatCurrency,
+  formatTokenAmount,
+} from "../utils/formatters";
+import { shareTradeResults, TradeShareData } from "../utils/shareUtils";
+import {
+  userProfileService,
+  WithdrawalRequest,
+  supabase,
+  ppaLocksService,
+  PPALock,
+} from "../services/supabaseClient";
 
-import EditProfile from './EditProfile';
-import { positionService, TradingPosition } from '../services/positionService';
-import PositionModal from './PositionModal';
-import { jupiterWebSocket, getJupiterPrices } from '../services/birdeyeWebSocket'; // Note: Actually using Birdeye WebSocket
-import priceService from '../services/businessPlanPriceService';
-import { initializeBusinessPlanOptimizations } from '../services/birdeyeApi';
-import TradeLoadingModal from './TradeLoadingModal';
-import TradeResultsModal from './TradeResultsModal';
-import TradingModal from './TradingModal';
-import LockingModal from './LockingModal';
-import UnlockModal from './UnlockModal';
-import WelcomePopup from './WelcomePopup';
-import ShareGainsPopup from './ShareGainsPopup';
-import { soundManager } from '../services/soundManager';
-import { hapticFeedback } from '../utils/animations';
+import EditProfile from "./EditProfile";
+import { positionService, TradingPosition } from "../services/positionService";
+import PositionModal from "./PositionModal";
+import {
+  jupiterWebSocket,
+  getJupiterPrices,
+} from "../services/birdeyeWebSocket"; // Note: Actually using Birdeye WebSocket
+import priceService from "../services/businessPlanPriceService";
+import { initializeBusinessPlanOptimizations } from "../services/birdeyeApi";
+import TradeLoadingModal from "./TradeLoadingModal";
+import TradeResultsModal from "./TradeResultsModal";
+import TradingModal from "./TradingModal";
+import LockingModal from "./LockingModal";
+import UnlockModal from "./UnlockModal";
+import WelcomePopup from "./WelcomePopup";
+import ShareGainsPopup from "./ShareGainsPopup";
+import { soundManager } from "../services/soundManager";
+import { hapticFeedback } from "../utils/animations";
 
-import LivePrice from './LivePrice';
+import LivePrice from "./LivePrice";
+import About from "./About";
 
 interface DashboardProps {
   username: string;
@@ -38,9 +106,9 @@ interface DashboardProps {
   onShowTerms: () => void;
 }
 
-type TabType = 'home' | 'rewards' | 'positions' | 'orders';
-type SwapMode = 'buy' | 'sell';
-type ViewState = 'dashboard' | 'edit-profile';
+type TabType = "home" | "rewards" | "positions" | "orders";
+type SwapMode = "buy" | "sell";
+type ViewState = "dashboard" | "edit-profile";
 
 interface SwapSuccessData {
   txid: string;
@@ -52,159 +120,188 @@ interface SwapSuccessData {
 }
 
 // Platform wallet address for receiving deposits
-const PLATFORM_WALLET = 'CTDZ5teoWajqVcAsWQyEmmvHQzaDiV1jrnvwRmcL1iWv';
+const PLATFORM_WALLET = "CTDZ5teoWajqVcAsWQyEmmvHQzaDiV1jrnvwRmcL1iWv";
 
-export default function Dashboard({ username, profilePicture, walletAddress, balance, solBalance, onUpdateBalance, onUpdateSOLBalance, onUpdateBothBalances, onShowTerms }: DashboardProps) {
+export default function Dashboard({
+  username,
+  profilePicture,
+  walletAddress,
+  balance,
+  solBalance,
+  onUpdateBalance,
+  onUpdateSOLBalance,
+  onUpdateBothBalances,
+  onShowTerms,
+}: DashboardProps) {
   const { publicKey, signTransaction, disconnect } = useWallet();
-  const [caInput, setCaInput] = useState('');
+  const [caInput, setCaInput] = useState("");
   const [isValidatingCA, setIsValidatingCA] = useState(false);
-  const [caValidationError, setCaValidationError] = useState<string | null>(null);
+  const [caValidationError, setCaValidationError] = useState<string | null>(
+    null
+  );
   const [showSettings, setShowSettings] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
+  const [soundEnabled, setSoundEnabled] = useState(
+    soundManager.isSoundEnabled()
+  );
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [swapSuccessData, setSwapSuccessData] = useState<SwapSuccessData | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('positions');
-  const [payAmount, setPayAmount] = useState('');
-  const [depositAmount, setDepositAmount] = useState('');
-  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [swapSuccessData, setSwapSuccessData] =
+    useState<SwapSuccessData | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("positions");
+  const [payAmount, setPayAmount] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
-  const [previousPortfolioValue, setPreviousPortfolioValue] = useState<number>(0);
+  const [previousPortfolioValue, setPreviousPortfolioValue] =
+    useState<number>(0);
   const [isLoadingTokens, setIsLoadingTokens] = useState(true);
-  
+
   // Deposit transaction states
   const [isDepositing, setIsDepositing] = useState(false);
   const [isVerifyingTransaction, setIsVerifyingTransaction] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
-  
+
   // Withdrawal transaction states
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
-  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<
+    WithdrawalRequest[]
+  >([]);
   const [isLoadingWithdrawals, setIsLoadingWithdrawals] = useState(false);
-  
+
   // Swipe to refresh states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [swipeStartY, setSwipeStartY] = useState(0);
   const [swipeCurrentY, setSwipeCurrentY] = useState(0);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
-  
-  const [tradingPositions, setTradingPositions] = useState<TradingPosition[]>([]);
+
+  const [tradingPositions, setTradingPositions] = useState<TradingPosition[]>(
+    []
+  );
   const [isLoadingPositions, setIsLoadingPositions] = useState(false);
-  
+
   // ADDED: Orders state for managing pending limit orders
   const [pendingOrders, setPendingOrders] = useState<TradingPosition[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [isEditingOrder, setIsEditingOrder] = useState<number | null>(null);
-  const [newOrderPrice, setNewOrderPrice] = useState('');
-  
+  const [newOrderPrice, setNewOrderPrice] = useState("");
+
   // Trade History state
   const [tradeHistory, setTradeHistory] = useState<TradingPosition[]>([]);
   const [isLoadingTradeHistory, setIsLoadingTradeHistory] = useState(false);
-  
+
   // Withdrawal History state
-  const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequest[]>([]);
-  
+  const [withdrawalHistory, setWithdrawalHistory] = useState<
+    WithdrawalRequest[]
+  >([]);
+
   // Local SOL balance state for immediate UI updates
   const [currentSOLBalance, setCurrentSOLBalance] = useState(solBalance);
-  
-  // New state for different views
-  const [viewState, setViewState] = useState<ViewState>('dashboard');
 
-  
+  // New state for different views
+  const [viewState, setViewState] = useState<ViewState>("dashboard");
+
   // Profile state for updates
   const [currentUsername, setCurrentUsername] = useState(username);
-  const [currentProfilePicture, setCurrentProfilePicture] = useState(profilePicture);
-  
+  const [currentProfilePicture, setCurrentProfilePicture] =
+    useState(profilePicture);
+
   // Add search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
   // Add positions tab state
-  const [positionsSubTab, setPositionsSubTab] = useState<'active' | 'pending'>('active');
-  
+  const [positionsSubTab, setPositionsSubTab] = useState<"active" | "pending">(
+    "active"
+  );
+
   // Update local SOL balance when prop changes (tracks deposited amount)
   useEffect(() => {
     setCurrentSOLBalance(solBalance);
-          console.log(`Platform SOL balance loaded from database: ${solBalance.toFixed(4)} SOL`);
+    console.log(
+      `Platform SOL balance loaded from database: ${solBalance.toFixed(4)} SOL`
+    );
   }, [solBalance]);
-  
+
   // Jupiter swap states
   const [swapQuote, setSwapQuote] = useState<any | null>(null);
   const [isGettingQuote, setIsGettingQuote] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
   const [ppaPrice, setPpaPrice] = useState<number | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
-  const [swapMode, setSwapMode] = useState<SwapMode>('buy');
+  const [swapMode, setSwapMode] = useState<SwapMode>("buy");
   const [userBalances, setUserBalances] = useState({ sol: 0, ppa: 0 });
   const [exchangeRate, setExchangeRate] = useState<string | null>(null);
-  
+
   // Real PPA price in SOL from Birdeye
   const [realPPAPriceInSOL, setRealPPAPriceInSOL] = useState<number>(0.0001);
-  
+
   // Lifetime PPA Lock Earnings
   const [lifetimeSOLEarnings, setLifetimeSOLEarnings] = useState<number>(0);
   const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
-  
+
   // Active PPA Locks
   const [activePPALocks, setActivePPALocks] = useState<PPALock[]>([]);
   const [totalPPALocked, setTotalPPALocked] = useState<number>(0);
-  const [latestLockCountdown, setLatestLockCountdown] = useState<string>('');
-  
+  const [latestLockCountdown, setLatestLockCountdown] = useState<string>("");
+
   // SOL price state for portfolio calculations
   const [solPrice, setSolPrice] = useState<number>(98.45); // Default fallback price
-  
+
   // Real-time price feed for positions
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [priceUpdateCount, setPriceUpdateCount] = useState(0);
-  
+
   // Position modal state
   const [showPositionModal, setShowPositionModal] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState<TradingPosition | null>(null);
+  const [selectedPosition, setSelectedPosition] =
+    useState<TradingPosition | null>(null);
   const [isClosingPosition, setIsClosingPosition] = useState(false);
 
   // Locking modal state
   const [showLockingModal, setShowLockingModal] = useState(false);
-  
+
   // Unlock modal state
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [expiredLock, setExpiredLock] = useState<PPALock | null>(null);
   const [showUnlockTooltip, setShowUnlockTooltip] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  
+
   // State to trigger re-render for withdrawal time updates
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   // Welcome popup state
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  
+
   // Track positions being closed to prevent duplicates
-  const [closingPositions, setClosingPositions] = useState<Set<number>>(new Set());
-  
+  const [closingPositions, setClosingPositions] = useState<Set<number>>(
+    new Set()
+  );
+
   // Closing trade loading modal state
   const [showClosingModal, setShowClosingModal] = useState(false);
   const [closingTradeData, setClosingTradeData] = useState<{
     tokenSymbol: string;
-    direction: 'Long' | 'Short';
+    direction: "Long" | "Short";
     leverage: number;
     positionId: number; // Add position ID to track results
   } | null>(null);
-  
+
   // Trading modal state for direct token trading
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [selectedTokenData, setSelectedTokenData] = useState<any | null>(null);
-  
+
   // Trade results modal state
   const [showTradeResults, setShowTradeResults] = useState(false);
   const [tradeResultsData, setTradeResultsData] = useState<{
     tokenSymbol: string;
-    direction: 'Long' | 'Short';
+    direction: "Long" | "Short";
     leverage: number;
     entryPrice: number;
     exitPrice: number;
@@ -214,24 +311,28 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     pnlPercentage: number;
     totalReturn: number;
   } | null>(null);
-  
+
   // Share gains popup state
   const [showShareGainsPopup, setShowShareGainsPopup] = useState(false);
-  
+
   // Mock data for PnL (in production, this would come from database) - SET TO 0 BY DEFAULT
   const pnl = 0; // Always 0 by default
   const pnlPercentage = 0; // Always 0 by default
   const isPositivePnl = pnl >= 0;
 
   // Sound and Animation States
-  const [lastPnLValues, setLastPnLValues] = useState<Record<number, number>>({});
+  const [lastPnLValues, setLastPnLValues] = useState<Record<number, number>>(
+    {}
+  );
   const [celebrationActive, setCelebrationActive] = useState(false);
-  const [priceFlashStates, setPriceFlashStates] = useState<Record<string, { isIncrease: boolean; timestamp: number }>>({});
+  const [priceFlashStates, setPriceFlashStates] = useState<
+    Record<string, { isIncrease: boolean; timestamp: number }>
+  >({});
 
   // Initialize sound system on component mount
   useEffect(() => {
     soundManager.loadSettings();
-          console.log('Sound system initialized for trading app');
+    console.log("Sound system initialized for trading app");
   }, []);
 
   // Load trending tokens on component mount
@@ -245,51 +346,64 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   }, [publicKey]);
 
-    // Price service for position tracking
+  // Price service for position tracking
   useEffect(() => {
     if (!walletAddress) return;
-    
+
     // Initialize optimizations
     initializeBusinessPlanOptimizations();
-    
-    console.log('💰 Setting up price tracking for positions');
+
+    console.log("💰 Setting up price tracking for positions");
     console.log(`📊 Current positions count: ${tradingPositions.length}`);
-    
+
     // Get position tokens for tracking
-    const positionTokens = tradingPositions.map(p => p.token_address);
-    
+    const positionTokens = tradingPositions.map((p) => p.token_address);
+
     if (positionTokens.length === 0) {
-      console.log('⚡ Price service ready for position tracking');
+      console.log("⚡ Price service ready for position tracking");
       return; // No positions to track
     }
-    
-    console.log(`⚡ Tracking ${positionTokens.length} position tokens:`, 
-      positionTokens.map(addr => addr.slice(0,8) + '...').join(', '));
-    
+
+    console.log(
+      `⚡ Tracking ${positionTokens.length} position tokens:`,
+      positionTokens.map((addr) => addr.slice(0, 8) + "...").join(", ")
+    );
+
     // Subscribe to price updates for positions
-    const unsubscribe = priceService.subscribeToMultiplePrices('dashboard-positions', positionTokens, (newTokenPrices: { [address: string]: number }) => {
-      console.log(`📊 Price update received for ${Object.keys(newTokenPrices).length} tokens`);
-      
-      // Update token prices
-      setTokenPrices(prevPrices => ({ ...prevPrices, ...newTokenPrices }));
-      
-      // Update P&L for positions
-      if (walletAddress && Object.keys(newTokenPrices).length > 0) {
-        try {
-          updatePositionPnLFromCachedPrices();
-        } catch (error) {
-          console.error('❌ Error updating P&L from price change:', error);
+    const unsubscribe = priceService.subscribeToMultiplePrices(
+      "dashboard-positions",
+      positionTokens,
+      (newTokenPrices: { [address: string]: number }) => {
+        console.log(
+          `📊 Price update received for ${
+            Object.keys(newTokenPrices).length
+          } tokens`
+        );
+
+        // Update token prices
+        setTokenPrices((prevPrices) => ({ ...prevPrices, ...newTokenPrices }));
+
+        // Update P&L for positions
+        if (walletAddress && Object.keys(newTokenPrices).length > 0) {
+          try {
+            updatePositionPnLFromCachedPrices();
+          } catch (error) {
+            console.error("❌ Error updating P&L from price change:", error);
+          }
         }
       }
-    });
-    
+    );
+
     return unsubscribe;
-  }, [walletAddress, JSON.stringify(tradingPositions.map(p => p.token_address))]);
+  }, [
+    walletAddress,
+    JSON.stringify(tradingPositions.map((p) => p.token_address)),
+  ]);
 
   // NEW: Separate effect to ensure positions are loaded first
   useEffect(() => {
     if (!walletAddress) return;
-    
+
     // Load positions immediately when wallet connects
     loadTradingPositions();
   }, [walletAddress]);
@@ -299,25 +413,29 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (!walletAddress) return;
 
     const handleFocus = () => {
-      console.log('🔄 App regained focus - refreshing SOL balance to show latest trades');
+      console.log(
+        "🔄 App regained focus - refreshing SOL balance to show latest trades"
+      );
       refreshSOLBalance();
       loadTradingPositions(); // Also refresh positions
     };
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        console.log('🔄 App became visible - refreshing SOL balance to show latest trades');
+        console.log(
+          "🔄 App became visible - refreshing SOL balance to show latest trades"
+        );
         refreshSOLBalance();
         loadTradingPositions(); // Also refresh positions
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [walletAddress]);
 
@@ -326,61 +444,85 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (!walletAddress || tradingPositions.length === 0) {
       return;
     }
-    
+
     try {
       console.log(`🔄 Updating P&L for ${tradingPositions.length} positions`);
-      
+
       const updatedPositions = tradingPositions.map((position) => {
         try {
           const oldPrice = position.current_price || position.entry_price;
           const pnlData = calculatePositionPnLWithCachedPrice(position);
-          
+
           // Log price and P&L changes for debugging
           if (Math.abs(pnlData.current_price - oldPrice) > 0.000001) {
-            console.log(`📈 Position ${position.id} (${position.token_symbol}): Price $${oldPrice.toFixed(6)} → $${pnlData.current_price.toFixed(6)}, P&L: $${pnlData.pnl.toFixed(2)}`);
+            console.log(
+              `📈 Position ${position.id} (${
+                position.token_symbol
+              }): Price $${oldPrice.toFixed(
+                6
+              )} → $${pnlData.current_price.toFixed(
+                6
+              )}, P&L: $${pnlData.pnl.toFixed(2)}`
+            );
           }
-          
+
           // Check for liquidation FIRST (margin ratio >= 100%)
           if (pnlData.margin_ratio >= 1.0) {
-            console.log(`🚨 LIQUIDATING POSITION ${position.id}: Margin ratio ${(pnlData.margin_ratio * 100).toFixed(1)}%`);
+            console.log(
+              `🚨 LIQUIDATING POSITION ${position.id}: Margin ratio ${(
+                pnlData.margin_ratio * 100
+              ).toFixed(1)}%`
+            );
             // Mark for liquidation (will be handled by separate liquidation service)
-            positionService.liquidatePosition(position.id, pnlData.current_price);
-            
+            positionService.liquidatePosition(
+              position.id,
+              pnlData.current_price
+            );
+
             return {
               ...position,
-              status: 'liquidated' as const,
+              status: "liquidated" as const,
               current_pnl: pnlData.pnl,
               current_price: pnlData.current_price,
               margin_ratio: pnlData.margin_ratio,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             };
           }
-          
+
           return {
             ...position,
             current_pnl: pnlData.pnl,
             current_price: pnlData.current_price,
             margin_ratio: pnlData.margin_ratio,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           };
         } catch (error) {
-          console.error(`❌ Error updating P&L for position ${position.id}:`, error);
+          console.error(
+            `❌ Error updating P&L for position ${position.id}:`,
+            error
+          );
           return position;
         }
       });
-      
+
       // Filter out liquidated positions from the display
-      const activePositions = updatedPositions.filter(p => p.status === 'open' || p.status === 'opening');
+      const activePositions = updatedPositions.filter(
+        (p) => p.status === "open" || p.status === "opening"
+      );
       setTradingPositions(activePositions);
-      
+
       const liquidatedCount = updatedPositions.length - activePositions.length;
       if (liquidatedCount > 0) {
-        console.log(`🗑️ ${liquidatedCount} position(s) liquidated and removed from display`);
+        console.log(
+          `🗑️ ${liquidatedCount} position(s) liquidated and removed from display`
+        );
       }
-      
-      console.log(`✅ Successfully updated ${activePositions.length} positions with real-time prices`);
+
+      console.log(
+        `✅ Successfully updated ${activePositions.length} positions with real-time prices`
+      );
     } catch (error) {
-      console.error('❌ Error updating position P&L:', error);
+      console.error("❌ Error updating position P&L:", error);
     }
   };
 
@@ -401,20 +543,26 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
     const liquidationInterval = setInterval(async () => {
       try {
-        console.log('🔍 AUTOMATED LIQUIDATION CHECK - Monitoring all open positions...');
+        console.log(
+          "🔍 AUTOMATED LIQUIDATION CHECK - Monitoring all open positions..."
+        );
         const result = await positionService.checkLiquidations();
-        
+
         if (result.liquidatedCount > 0) {
-          console.log(`🚨 ${result.liquidatedCount} positions were automatically liquidated!`);
-          // Refresh positions to update UI after liquidations  
+          console.log(
+            `🚨 ${result.liquidatedCount} positions were automatically liquidated!`
+          );
+          // Refresh positions to update UI after liquidations
           await loadTradingPositions();
           // Refresh SOL balance as liquidated collateral is not returned
           await refreshSOLBalance();
         } else {
-          console.log(`✅ All ${result.checkedCount} positions are healthy - no liquidations needed`);
+          console.log(
+            `✅ All ${result.checkedCount} positions are healthy - no liquidations needed`
+          );
         }
       } catch (error) {
-        console.error('❌ Error in automated liquidation check:', error);
+        console.error("❌ Error in automated liquidation check:", error);
       }
     }, 30000); // Check every 30 seconds
 
@@ -433,23 +581,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Load positions when positions tab is selected (with smart caching)
   useEffect(() => {
-    if (activeTab === 'positions') {
+    if (activeTab === "positions") {
       // Only reload if positions are empty or data is stale (older than 30 seconds)
-      const shouldReload = tradingPositions.length === 0 || 
+      const shouldReload =
+        tradingPositions.length === 0 ||
         (tradingPositions.length > 0 && Date.now() - priceUpdateCount > 30000);
-      
+
       if (shouldReload) {
-        console.log('⚡ Loading positions for positions tab...');
+        console.log("⚡ Loading positions for positions tab...");
         loadTradingPositions();
       } else {
-        console.log('⚡ Using cached positions (fresh data available)');
+        console.log("⚡ Using cached positions (fresh data available)");
       }
     }
   }, [activeTab]);
 
   // Load orders when orders tab is selected
   useEffect(() => {
-    if (activeTab === 'orders') {
+    if (activeTab === "orders") {
       loadPendingOrders();
       loadTradeHistory();
       loadWithdrawalHistory();
@@ -458,7 +607,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Load lifetime earnings when rewards tab is selected
   useEffect(() => {
-    if (activeTab === 'rewards') {
+    if (activeTab === "rewards") {
       loadLifetimeEarnings();
       loadActivePPALocks();
     }
@@ -482,7 +631,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Check if user has seen welcome popup before
   useEffect(() => {
     if (walletAddress) {
-      const hasSeenWelcome = localStorage.getItem(`welcomePopupSeen_${walletAddress}`);
+      const hasSeenWelcome = localStorage.getItem(
+        `welcomePopupSeen_${walletAddress}`
+      );
       if (!hasSeenWelcome) {
         // Show popup after a short delay for better UX
         setTimeout(() => {
@@ -493,20 +644,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   }, [walletAddress]);
 
   const loadTrendingTokens = async () => {
-    console.log('📈 TRENDING: Starting robust multi-stage loading system...');
+    console.log("📈 TRENDING: Starting robust multi-stage loading system...");
     setIsLoadingTokens(true);
     try {
       const tokens = await fetchTrendingTokens();
-      console.log(`📈 TRENDING: Successfully loaded ${tokens.length} trending tokens from robust fallback system`);
+      console.log(
+        `📈 TRENDING: Successfully loaded ${tokens.length} trending tokens from robust fallback system`
+      );
       setTrendingTokens(tokens);
-      
+
       // Log the data source for debugging
       if (tokens.length > 0) {
-        console.log('✅ TRENDING: Tokens loaded successfully');
-        console.log('📊 Data source: Birdeye API (primary) or DexScreener (fallback)');
+        console.log("✅ TRENDING: Tokens loaded successfully");
+        console.log(
+          "📊 Data source: Birdeye API (primary) or DexScreener (fallback)"
+        );
       }
     } catch (error) {
-      console.error('❌ TRENDING: All fallback systems failed:', error);
+      console.error("❌ TRENDING: All fallback systems failed:", error);
       setTrendingTokens([]); // Ensure empty array for error UI
     } finally {
       setIsLoadingTokens(false);
@@ -517,9 +672,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const price = await jupiterSwapService.getPPAPrice();
       setPpaPrice(price);
-      console.log('PPA Price loaded:', price);
+      console.log("PPA Price loaded:", price);
     } catch (error) {
-      console.error('Failed to load PPA price:', error);
+      console.error("Failed to load PPA price:", error);
     }
   };
 
@@ -528,87 +683,100 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const priceInSOL = await fetchPPAPriceInSOL();
       setRealPPAPriceInSOL(priceInSOL);
-      console.log('Real PPA Price in SOL loaded:', `${priceInSOL.toFixed(6)} SOL`);
+      console.log(
+        "Real PPA Price in SOL loaded:",
+        `${priceInSOL.toFixed(6)} SOL`
+      );
     } catch (error) {
-      console.error('Failed to load real PPA price in SOL:', error);
+      console.error("Failed to load real PPA price in SOL:", error);
       setRealPPAPriceInSOL(0.0001); // Fallback
     }
   };
 
   const loadUserBalances = async () => {
     if (!publicKey) return;
-    
+
     try {
       const balances = await jupiterSwapService.getUserBalances(publicKey);
       setUserBalances(balances);
-      
-      console.log('User wallet balances loaded:', balances);
+
+      console.log("User wallet balances loaded:", balances);
       // Note: We don't update currentSOLBalance here as it tracks deposited amount, not wallet balance
     } catch (error) {
-      console.error('Failed to load user balances:', error);
+      console.error("Failed to load user balances:", error);
     }
   };
 
   // Track recent deposit to prevent race conditions
   const [lastDepositTime, setLastDepositTime] = useState<number>(0);
-  
+
   // IMPROVED: Refresh SOL balance from both database AND wallet to detect real balance
   const refreshSOLBalance = async (forceUpdate = false) => {
     if (!walletAddress || !publicKey) return;
-    
+
     try {
-      console.log('🔄 Refreshing SOL balance from database AND wallet...');
-      
+      console.log("🔄 Refreshing SOL balance from database AND wallet...");
+
       // RACE CONDITION FIX: Don't overwrite recent deposits (within 30 seconds)
       const timeSinceLastDeposit = Date.now() - lastDepositTime;
       if (!forceUpdate && timeSinceLastDeposit < 30000) {
-        console.log('⏳ Skipping balance refresh - recent deposit in progress (', (30000 - timeSinceLastDeposit) / 1000, 's remaining)');
+        console.log(
+          "⏳ Skipping balance refresh - recent deposit in progress (",
+          (30000 - timeSinceLastDeposit) / 1000,
+          "s remaining)"
+        );
         return;
       }
-      
+
       // Get database balance (deposited SOL)
       const profile = await userProfileService.getProfile(walletAddress);
       const dbBalance = profile ? profile.sol_balance : 0;
-      
+
       // Get actual wallet SOL balance
-      const walletBalances = await jupiterSwapService.getUserBalances(publicKey);
+      const walletBalances = await jupiterSwapService.getUserBalances(
+        publicKey
+      );
       const walletSOLBalance = walletBalances.sol;
-      
-      console.log('💰 SOL Balance Detection:', {
+
+      console.log("💰 SOL Balance Detection:", {
         deposited_sol_db: dbBalance.toFixed(4),
         wallet_sol_real: walletSOLBalance.toFixed(4),
         ui_balance: currentSOLBalance.toFixed(4),
         wallet_address: walletAddress.slice(0, 8),
-        time_since_deposit: timeSinceLastDeposit / 1000 + 's'
+        time_since_deposit: timeSinceLastDeposit / 1000 + "s",
       });
-      
+
       // Update user balances state for wallet operations
       setUserBalances(walletBalances);
-      
+
       // Update platform balance if database changed
       if (Math.abs(dbBalance - currentSOLBalance) > 0.0001) {
-        console.log('✅ Platform SOL balance updated from database:', dbBalance.toFixed(4));
+        console.log(
+          "✅ Platform SOL balance updated from database:",
+          dbBalance.toFixed(4)
+        );
         setCurrentSOLBalance(dbBalance);
         onUpdateSOLBalance(dbBalance);
       }
-      
     } catch (error) {
-      console.error('❌ Failed to refresh SOL balance:', error);
+      console.error("❌ Failed to refresh SOL balance:", error);
     }
   };
 
   // Load lifetime SOL earnings from PPA locks
   const loadLifetimeEarnings = async () => {
     if (!walletAddress) return;
-    
+
     setIsLoadingEarnings(true);
     try {
-      console.log('💰 Loading lifetime PPA lock earnings...');
-      const totalSOLEarned = await ppaLocksService.getLifetimeEarnings(walletAddress);
+      console.log("💰 Loading lifetime PPA lock earnings...");
+      const totalSOLEarned = await ppaLocksService.getLifetimeEarnings(
+        walletAddress
+      );
       setLifetimeSOLEarnings(totalSOLEarned);
       console.log(`✅ Lifetime earnings loaded: ${totalSOLEarned} SOL`);
     } catch (error) {
-      console.error('Failed to load lifetime earnings:', error);
+      console.error("Failed to load lifetime earnings:", error);
       setLifetimeSOLEarnings(0);
     } finally {
       setIsLoadingEarnings(false);
@@ -618,19 +786,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Load active PPA locks and calculate totals
   const loadActivePPALocks = async () => {
     if (!walletAddress) return;
-    
+
     try {
-      console.log('Loading active PPA locks...');
+      console.log("Loading active PPA locks...");
       const locks = await ppaLocksService.getActiveLocksByWallet(walletAddress);
       setActivePPALocks(locks);
-      
+
       // Calculate total PPA locked
-      const totalLocked = locks.reduce((total, lock) => total + (lock.ppa_amount || 0), 0);
+      const totalLocked = locks.reduce(
+        (total, lock) => total + (lock.ppa_amount || 0),
+        0
+      );
       setTotalPPALocked(totalLocked);
-      
-      console.log(`Active locks loaded: ${locks.length} locks, ${totalLocked} PPA locked`);
+
+      console.log(
+        `Active locks loaded: ${locks.length} locks, ${totalLocked} PPA locked`
+      );
     } catch (error) {
-      console.error('Failed to load active PPA locks:', error);
+      console.error("Failed to load active PPA locks:", error);
       setActivePPALocks([]);
       setTotalPPALocked(0);
     }
@@ -639,18 +812,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Calculate countdown for latest lock
   const updateCountdown = () => {
     if (activePPALocks.length === 0) {
-      setLatestLockCountdown('');
+      setLatestLockCountdown("");
       setExpiredLock(null);
       return;
     }
 
     // Get the latest lock (most recent)
-    const latestLock = activePPALocks.sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const latestLock = activePPALocks.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )[0];
 
     if (!latestLock.unlocks_at) {
-      setLatestLockCountdown('');
+      setLatestLockCountdown("");
       setExpiredLock(null);
       return;
     }
@@ -660,17 +834,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const timeLeft = unlockTime - now;
 
     if (timeLeft <= 0) {
-      setLatestLockCountdown('Ready to unlock');
+      setLatestLockCountdown("Ready to unlock");
       setExpiredLock(latestLock);
       return;
     }
 
     const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
+    const hours = Math.floor(
+      (timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+
     setExpiredLock(null);
     if (days > 0) {
-      setLatestLockCountdown(`${days} day${days !== 1 ? 's' : ''} ${hours}h remaining`);
+      setLatestLockCountdown(
+        `${days} day${days !== 1 ? "s" : ""} ${hours}h remaining`
+      );
     } else {
       const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       setLatestLockCountdown(`${hours}h ${minutes}m remaining`);
@@ -690,7 +868,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     setShowWelcomePopup(false);
     if (walletAddress) {
       // Mark as seen for this wallet
-      localStorage.setItem(`welcomePopupSeen_${walletAddress}`, 'true');
+      localStorage.setItem(`welcomePopupSeen_${walletAddress}`, "true");
     }
   };
 
@@ -698,17 +876,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const getWithdrawalApprovalTime = () => {
     // Use currentTime state to ensure re-renders when time updates
     const now = currentTime;
-    
+
     // Get current time in Israel timezone (Asia/Jerusalem handles DST automatically)
-    const israelTime = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jerusalem',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
+    const israelTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     }).format(now);
-    
-    const [hours] = israelTime.split(':').map(Number);
-    
+
+    const [hours] = israelTime.split(":").map(Number);
+
     // Business hours: 10:00 to 22:00 Israel time = 30 minutes
     // After hours: 22:00 to 10:00 Israel time = up to 10 hours
     if (hours >= 10 && hours < 22) {
@@ -717,8 +895,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       return "10 hours";
     }
   };
-
-
 
   // Calculate unlock tooltip text
   const getUnlockTooltipText = () => {
@@ -731,8 +907,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
 
     // Get the latest lock (most recent)
-    const latestLock = activePPALocks.sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const latestLock = activePPALocks.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )[0];
 
     if (!latestLock.unlocks_at) {
@@ -748,10 +925,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
 
     const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
+    const hours = Math.floor(
+      (timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+
     if (days > 0) {
-      return `You can press this button to unlock in ${days} day${days !== 1 ? 's' : ''} ${hours}h`;
+      return `You can press this button to unlock in ${days} day${
+        days !== 1 ? "s" : ""
+      } ${hours}h`;
     } else {
       const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       return `You can press this button to unlock in ${hours}h ${minutes}m`;
@@ -762,19 +943,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     try {
       const price = await fetchSOLPrice();
       setSolPrice(price);
-      console.log('SOL price loaded:', `$${price.toFixed(2)}`);
+      console.log("SOL price loaded:", `$${price.toFixed(2)}`);
     } catch (error) {
-      console.error('Failed to load SOL price:', error);
+      console.error("Failed to load SOL price:", error);
     }
   };
 
   // Real-time price feed for position tokens - OPTIMIZED WITH CACHING - 2Hz SPEED
   const updateTokenPrices = async () => {
     if (tradingPositions.length === 0) return;
-    
+
     try {
-      console.log('Optimized updating real-time token prices using cache...');
-      const uniqueTokens = [...new Set(tradingPositions.map(p => p.token_address))];
+      console.log("Optimized updating real-time token prices using cache...");
+      const uniqueTokens = [
+        ...new Set(tradingPositions.map((p) => p.token_address)),
+      ];
       const pricePromises = uniqueTokens.map(async (tokenAddress) => {
         try {
           // Use cached price fetching for better performance
@@ -782,101 +965,133 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           return { address: tokenAddress, price: price || 0 };
         } catch (error) {
           console.error(`Failed to fetch price for ${tokenAddress}:`, error);
-          return { address: tokenAddress, price: tokenPrices[tokenAddress] || 0 }; // Use cached price if API fails
+          return {
+            address: tokenAddress,
+            price: tokenPrices[tokenAddress] || 0,
+          }; // Use cached price if API fails
         }
       });
 
       const priceResults = await Promise.all(pricePromises);
       const newPrices: Record<string, number> = {};
-      
+
       priceResults.forEach(({ address, price }) => {
         newPrices[address] = price;
       });
 
       setTokenPrices(newPrices);
-      setPriceUpdateCount(prev => prev + 1);
-              console.log(`Updated prices for ${uniqueTokens.length} tokens using cache`, newPrices);
+      setPriceUpdateCount((prev) => prev + 1);
+      console.log(
+        `Updated prices for ${uniqueTokens.length} tokens using cache`,
+        newPrices
+      );
     } catch (error) {
-      console.error('Error updating token prices:', error);
+      console.error("Error updating token prices:", error);
     }
   };
 
   const loadWithdrawalRequests = async () => {
     setIsLoadingWithdrawals(true);
     try {
-      const requests = await userProfileService.getWithdrawalRequests(walletAddress);
+      const requests = await userProfileService.getWithdrawalRequests(
+        walletAddress
+      );
       setWithdrawalRequests(requests);
-      console.log('Withdrawal requests loaded:', requests.length);
+      console.log("Withdrawal requests loaded:", requests.length);
     } catch (error) {
-      console.error('Failed to load withdrawal requests:', error);
+      console.error("Failed to load withdrawal requests:", error);
     } finally {
       setIsLoadingWithdrawals(false);
     }
   };
 
-    const loadTradingPositions = async () => {
+  const loadTradingPositions = async () => {
     if (!walletAddress) return;
-    
+
     setIsLoadingPositions(true);
     try {
-      console.log('⚡ FAST LOADING: Loading positions with optimized performance...');
-      console.log('🔍 DEBUG: Wallet address:', walletAddress);
-      console.log('🔍 DEBUG: Is guest mode:', walletAddress === 'guest');
-      
+      console.log(
+        "⚡ FAST LOADING: Loading positions with optimized performance..."
+      );
+      console.log("🔍 DEBUG: Wallet address:", walletAddress);
+      console.log("🔍 DEBUG: Is guest mode:", walletAddress === "guest");
+
       const startTime = Date.now();
-      
+
       // STEP 1: Get basic position data (FAST - no API calls)
       let positions = await positionService.getUserPositions(walletAddress);
-      console.log('🔍 DEBUG: Raw positions from database:', positions.length);
-      console.log('🔍 DEBUG: Position statuses:', positions.map(p => p.status));
-      
+      console.log("🔍 DEBUG: Raw positions from database:", positions.length);
+      console.log(
+        "🔍 DEBUG: Position statuses:",
+        positions.map((p) => p.status)
+      );
+
       // TEMPORARY FIX: Auto-fix stuck 'opening' positions that are older than 30 seconds
       const now = new Date();
-      const positionsToFix = positions.filter(p => 
-        p.status === 'opening' && 
-        (now.getTime() - new Date(p.created_at).getTime()) > 30000 // 30 seconds
+      const positionsToFix = positions.filter(
+        (p) =>
+          p.status === "opening" &&
+          now.getTime() - new Date(p.created_at).getTime() > 30000 // 30 seconds
       );
-      
+
       if (positionsToFix.length > 0) {
-        console.log(`🔧 FIXING ${positionsToFix.length} stuck 'opening' positions...`);
-        
+        console.log(
+          `🔧 FIXING ${positionsToFix.length} stuck 'opening' positions...`
+        );
+
         // Update stuck positions to 'open' status
         for (const pos of positionsToFix) {
           try {
             await supabase
-              .from('trading_positions')
-              .update({ status: 'open', updated_at: new Date().toISOString() })
-              .eq('id', pos.id);
+              .from("trading_positions")
+              .update({ status: "open", updated_at: new Date().toISOString() })
+              .eq("id", pos.id);
             console.log(`✅ Fixed stuck position ${pos.id}: opening → open`);
           } catch (error) {
             console.error(`❌ Failed to fix position ${pos.id}:`, error);
           }
         }
-        
+
         // Reload positions after fixing
         positions = await positionService.getUserPositions(walletAddress);
-        console.log('🔍 DEBUG: Positions after fixing:', positions.length);
+        console.log("🔍 DEBUG: Positions after fixing:", positions.length);
       }
-      
-      const openPositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
-      console.log('🔍 DEBUG: Open positions after filtering:', openPositions.length);
-      
-      console.log(`⚡ FAST LOADING: Got ${openPositions.length} positions from database in ${Date.now() - startTime}ms`);
-      
+
+      const openPositions = positions.filter(
+        (p) => p.status === "open" || p.status === "opening"
+      );
+      console.log(
+        "🔍 DEBUG: Open positions after filtering:",
+        openPositions.length
+      );
+
+      console.log(
+        `⚡ FAST LOADING: Got ${
+          openPositions.length
+        } positions from database in ${Date.now() - startTime}ms`
+      );
+
       if (openPositions.length === 0) {
         setTradingPositions([]);
-        if (walletAddress === 'guest') {
-          console.log('⚡ FAST LOADING: Guest user - no positions expected');
+        if (walletAddress === "guest") {
+          console.log("⚡ FAST LOADING: Guest user - no positions expected");
         } else {
-          console.log('⚡ FAST LOADING: No positions found for connected wallet:', walletAddress);
+          console.log(
+            "⚡ FAST LOADING: No positions found for connected wallet:",
+            walletAddress
+          );
         }
         return;
       }
-      
+
       // STEP 2: Batch fetch token images (OPTIMIZED - parallel requests)
-      const tokenAddresses = [...new Set(openPositions.map(p => p.token_address))];
-      console.log(`⚡ FAST LOADING: Batching token data for ${tokenAddresses.length} unique tokens...`);
-      
+      const tokenAddresses = [
+        ...new Set(openPositions.map((p) => p.token_address)),
+      ];
+      console.log(
+        `⚡ FAST LOADING: Batching token data for ${tokenAddresses.length} unique tokens...`
+      );
+
       const tokenDataPromises = tokenAddresses.map(async (address) => {
         try {
           const tokenData = await fetchTokenDetailCached(address);
@@ -886,34 +1101,37 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           return { address, logoURI: null };
         }
       });
-      
+
       const tokenResults = await Promise.all(tokenDataPromises);
       const tokenImageMap = tokenResults.reduce((acc, { address, logoURI }) => {
         acc[address] = logoURI;
         return acc;
       }, {} as Record<string, string | null>);
-      
+
       // STEP 3: Set positions with images (FAST - no P&L calculations yet)
-      const positionsWithImages = openPositions.map(position => ({
+      const positionsWithImages = openPositions.map((position) => ({
         ...position,
         token_image: tokenImageMap[position.token_address],
         // Use existing P&L values from database or defaults
         current_pnl: position.current_pnl || 0,
         current_price: position.current_price || position.entry_price,
-        margin_ratio: position.margin_ratio || 0
+        margin_ratio: position.margin_ratio || 0,
       }));
-      
+
       setTradingPositions(positionsWithImages);
-      
+
       const loadTime = Date.now() - startTime;
-      console.log(`⚡ FAST LOADING: Completed in ${loadTime}ms - positions displayed immediately!`);
-      console.log(`🚀 BUSINESS PLAN: Real-time P&L updates will start via 20Hz price service`);
-      
+      console.log(
+        `⚡ FAST LOADING: Completed in ${loadTime}ms - positions displayed immediately!`
+      );
+      console.log(
+        `🚀 BUSINESS PLAN: Real-time P&L updates will start via 20Hz price service`
+      );
+
       // STEP 4: Refresh SOL balance (non-blocking)
       refreshSOLBalance();
-      
     } catch (error) {
-      console.error('Error loading positions:', error);
+      console.error("Error loading positions:", error);
       setTradingPositions([]);
     } finally {
       setIsLoadingPositions(false);
@@ -923,13 +1141,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // ADDED: Load pending limit orders
   const loadPendingOrders = async () => {
     if (!walletAddress) return;
-    
+
     setIsLoadingOrders(true);
     try {
-              console.log('Loading pending limit orders...');
+      console.log("Loading pending limit orders...");
       const positions = await positionService.getUserPositions(walletAddress);
-      const orders = positions.filter(p => p.status === 'pending');
-      
+      const orders = positions.filter((p) => p.status === "pending");
+
       // Fetch token images for orders
       const ordersWithImages = await Promise.all(
         orders.map(async (order) => {
@@ -938,19 +1156,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             return {
               ...order,
               token_image: tokenData?.logoURI || null,
-              current_price: tokenData?.price || 0 // Add current market price for comparison
+              current_price: tokenData?.price || 0, // Add current market price for comparison
             };
           } catch (error) {
-            console.error(`Error fetching token data for order ${order.id}:`, error);
+            console.error(
+              `Error fetching token data for order ${order.id}:`,
+              error
+            );
             return order;
           }
         })
       );
-      
+
       setPendingOrders(ordersWithImages);
-              console.log(`Loaded ${ordersWithImages.length} pending orders`);
+      console.log(`Loaded ${ordersWithImages.length} pending orders`);
     } catch (error) {
-      console.error('Error loading pending orders:', error);
+      console.error("Error loading pending orders:", error);
       setPendingOrders([]);
     } finally {
       setIsLoadingOrders(false);
@@ -960,40 +1181,49 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // ADDED: Load trade history (closed/liquidated positions)
   const loadTradeHistory = async () => {
     if (!walletAddress) return;
-    
+
     setIsLoadingTradeHistory(true);
     try {
-              console.log('Loading trade history...');
+      console.log("Loading trade history...");
       const positions = await positionService.getUserPositions(walletAddress);
-      const history = positions.filter(p => p.status === 'closed' || p.status === 'liquidated' || p.status === 'cancelled');
-      
+      const history = positions.filter(
+        (p) =>
+          p.status === "closed" ||
+          p.status === "liquidated" ||
+          p.status === "cancelled"
+      );
+
       // Sort by closed date, most recent first
       const sortedHistory = history.sort((a, b) => {
         const dateA = new Date(a.closed_at || a.updated_at);
         const dateB = new Date(b.closed_at || b.updated_at);
         return dateB.getTime() - dateA.getTime();
       });
-      
+
       // Fetch token images for trade history
       const historyWithImages = await Promise.all(
-        sortedHistory.slice(0, 6).map(async (trade) => { // Show last 6 trades
+        sortedHistory.slice(0, 6).map(async (trade) => {
+          // Show last 6 trades
           try {
             const tokenData = await fetchTokenDetailCached(trade.token_address);
             return {
               ...trade,
-              token_image: tokenData?.logoURI || null
+              token_image: tokenData?.logoURI || null,
             };
           } catch (error) {
-            console.error(`Error fetching token data for trade ${trade.id}:`, error);
+            console.error(
+              `Error fetching token data for trade ${trade.id}:`,
+              error
+            );
             return trade;
           }
         })
       );
-      
+
       setTradeHistory(historyWithImages);
-              console.log(`Loaded ${historyWithImages.length} trade history records`);
+      console.log(`Loaded ${historyWithImages.length} trade history records`);
     } catch (error) {
-      console.error('Error loading trade history:', error);
+      console.error("Error loading trade history:", error);
       setTradeHistory([]);
     } finally {
       setIsLoadingTradeHistory(false);
@@ -1003,23 +1233,25 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Load withdrawal history
   const loadWithdrawalHistory = async () => {
     if (!walletAddress) return;
-    
+
     setIsLoadingWithdrawals(true);
     try {
-      console.log('Loading withdrawal history...');
-      const withdrawals = await userProfileService.getWithdrawalRequests(walletAddress);
-      
+      console.log("Loading withdrawal history...");
+      const withdrawals = await userProfileService.getWithdrawalRequests(
+        walletAddress
+      );
+
       // Sort by created date, most recent first
       const sortedWithdrawals = withdrawals.sort((a, b) => {
         const dateA = new Date(a.created_at);
         const dateB = new Date(b.created_at);
         return dateB.getTime() - dateA.getTime();
       });
-      
+
       setWithdrawalHistory(sortedWithdrawals.slice(0, 10)); // Show last 10 withdrawals
       console.log(`Loaded ${sortedWithdrawals.length} withdrawal records`);
     } catch (error) {
-      console.error('Error loading withdrawal history:', error);
+      console.error("Error loading withdrawal history:", error);
       setWithdrawalHistory([]);
     } finally {
       setIsLoadingWithdrawals(false);
@@ -1033,23 +1265,36 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const entry_price = position.entry_price;
     const amount = position.amount;
     const leverage = position.leverage;
-    
+
     // Log price source for debugging
     if (!cached_price) {
-      console.log(`⚠️ Position ${position.id} (${position.token_symbol}): No cached price found for ${position.token_address.slice(0,8)}..., using entry price $${entry_price.toFixed(6)}`);
+      console.log(
+        `⚠️ Position ${position.id} (${
+          position.token_symbol
+        }): No cached price found for ${position.token_address.slice(
+          0,
+          8
+        )}..., using entry price $${entry_price.toFixed(6)}`
+      );
     } else {
-      console.log(`✅ Position ${position.id} (${position.token_symbol}): Using cached price $${cached_price.toFixed(6)} for ${position.token_address.slice(0,8)}...`);
+      console.log(
+        `✅ Position ${position.id} (${
+          position.token_symbol
+        }): Using cached price $${cached_price.toFixed(
+          6
+        )} for ${position.token_address.slice(0, 8)}...`
+      );
     }
-    
+
     // Calculate P&L in USD
     // FIXED: Remove leverage double-counting - amount is position size, leverage affects collateral only
     let pnl_usd = 0;
-    if (position.direction === 'Long') {
+    if (position.direction === "Long") {
       pnl_usd = (current_price - entry_price) * amount; // No leverage multiplication!
     } else {
       pnl_usd = (entry_price - current_price) * amount; // No leverage multiplication!
     }
-    
+
     console.log(`🧮 FRONTEND P&L Debug for Position ${position.id}:`, {
       token: position.token_symbol,
       amount: amount,
@@ -1058,34 +1303,35 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       price_diff: (current_price - entry_price).toFixed(8),
       direction: position.direction,
       leverage: leverage,
-      pnl_usd_FIXED: pnl_usd.toFixed(2)
+      pnl_usd_FIXED: pnl_usd.toFixed(2),
     });
-    
+
     // Calculate margin ratio in SOL terms (CORRECT WAY)
     const max_loss_sol = position.collateral_sol; // Keep max loss in SOL
     const pnl_sol = pnl_usd / solPrice; // Convert P&L from USD to SOL
-    
+
     let margin_ratio = 0;
     if (pnl_sol < 0) {
       margin_ratio = Math.abs(pnl_sol) / max_loss_sol;
     }
-    
+
     // Reduced logging - only log occasionally
-    if (Math.random() < 0.1) { // Log 10% of calculations
+    if (Math.random() < 0.1) {
+      // Log 10% of calculations
       console.log(`💰 Position ${position.id} calculation:`, {
         token: position.token_symbol,
         entry_price: entry_price.toFixed(6),
         current_price: current_price.toFixed(6),
-        price_source: cached_price ? 'cached' : 'entry',
+        price_source: cached_price ? "cached" : "entry",
         pnl_usd: pnl_usd.toFixed(2),
-        direction: position.direction
+        direction: position.direction,
       });
     }
-    
+
     return {
       pnl: pnl_usd, // Return P&L in USD for display
       margin_ratio: Math.min(margin_ratio, 1),
-      current_price
+      current_price,
     };
   };
 
@@ -1095,20 +1341,20 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const lockedSOLCollateral = tradingPositions.reduce((total, position) => {
       return total + (position.collateral_sol || 0);
     }, 0);
-    
+
     // Total SOL holdings = Available SOL + Locked SOL in positions
     const totalSOLHoldings = currentSOLBalance + lockedSOLCollateral;
     const totalSOLValue = totalSOLHoldings * solPrice;
-    
+
     // Calculate total unrealized P&L from all active positions using real-time prices
     const totalPositionPnL = tradingPositions.reduce((total, position) => {
       const realtimePnL = calculatePositionPnLWithCachedPrice(position);
       return total + realtimePnL.pnl;
     }, 0);
-    
+
     // Total portfolio = USD balance + Total SOL value + unrealized P&L
     const totalValue = balance + totalSOLValue + totalPositionPnL;
-    
+
     return {
       totalValue,
       collateralValue: totalSOLValue,
@@ -1117,32 +1363,36 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       positionCount: tradingPositions.length,
       availableSOL: currentSOLBalance,
       lockedSOL: lockedSOLCollateral,
-      totalSOL: totalSOLHoldings
+      totalSOL: totalSOLHoldings,
     };
   };
 
   const getSwapQuote = async () => {
     if (!payAmount || parseFloat(payAmount) <= 0) return;
-    
+
     setIsGettingQuote(true);
     setSwapError(null);
-    
+
     try {
-      const direction: SwapDirection = swapMode === 'buy' ? 'SOL_TO_PPA' : 'PPA_TO_SOL';
-      const quote = await jupiterSwapService.getSwapQuoteWithDirection(parseFloat(payAmount), direction);
+      const direction: SwapDirection =
+        swapMode === "buy" ? "SOL_TO_PPA" : "PPA_TO_SOL";
+      const quote = await jupiterSwapService.getSwapQuoteWithDirection(
+        parseFloat(payAmount),
+        direction
+      );
       setSwapQuote(quote);
-      
+
       if (quote) {
         // Use the service method for both directions
         const rate = await jupiterSwapService.getExchangeRate(direction);
         setExchangeRate(rate);
       } else {
-        setSwapError('Unable to get quote. Please try again.');
+        setSwapError("Unable to get quote. Please try again.");
         setExchangeRate(null);
       }
     } catch (error) {
-      console.error('Error getting quote:', error);
-      setSwapError('Failed to get quote. Please check your connection.');
+      console.error("Error getting quote:", error);
+      setSwapError("Failed to get quote. Please check your connection.");
       setExchangeRate(null);
     } finally {
       setIsGettingQuote(false);
@@ -1160,73 +1410,77 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const handleCASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!caInput.trim()) return;
-    
+
     const tokenAddress = caInput.trim();
-    
+
     setIsValidatingCA(true);
     setCaValidationError(null);
-    
+
     try {
-      console.log('🔍 Validating token for honeypots and market cap:', tokenAddress);
-      
+      console.log(
+        "🔍 Validating token for honeypots and market cap:",
+        tokenAddress
+      );
+
       // STEP 1: Check for honeypots first (security check)
       const securityData = await fetchTokenSecurity(tokenAddress);
-      
+
       if (securityData?.honeypotRisk) {
-        console.log('🚫 BLOCKED HONEYPOT via CA input:', tokenAddress);
+        console.log("🚫 BLOCKED HONEYPOT via CA input:", tokenAddress);
         setCaValidationError(
-          'This token has been identified as a potential honeypot and cannot be traded. ' +
-          'Honeypots may prevent you from selling your tokens.'
+          "This token has been identified as a potential honeypot and cannot be traded. " +
+            "Honeypots may prevent you from selling your tokens."
         );
         return;
       }
-      
-              console.log('Token passed honeypot security check');
-      
+
+      console.log("Token passed honeypot security check");
+
       // STEP 2: Fetch token data to check market cap
       const tokenData = await fetchTokenDetailCached(tokenAddress);
-      
+
       if (!tokenData) {
-        setCaValidationError('Token not found or invalid contract address');
+        setCaValidationError("Token not found or invalid contract address");
         return;
       }
-      
+
       const marketCap = tokenData.marketCap || 0;
       const minimumMarketCap = 80000; // $80k minimum
-      
-              console.log('Token market cap:', `$${marketCap.toLocaleString()}`);
-              console.log('Minimum required:', `$${minimumMarketCap.toLocaleString()}`);
-      
+
+      console.log("Token market cap:", `$${marketCap.toLocaleString()}`);
+      console.log("Minimum required:", `$${minimumMarketCap.toLocaleString()}`);
+
       if (marketCap < minimumMarketCap) {
         setCaValidationError(
           `Market cap too low: $${marketCap.toLocaleString()}. ` +
-          `Minimum required: $${minimumMarketCap.toLocaleString()}`
+            `Minimum required: $${minimumMarketCap.toLocaleString()}`
         );
         return;
       }
-      
-              console.log('Token passes all validation checks, proceeding to trading...');
-      
+
+      console.log(
+        "Token passes all validation checks, proceeding to trading..."
+      );
+
       // Token passes all validation, proceed to trading modal directly
       setSelectedTokenData(tokenData);
       setShowTradingModal(true);
-      setCaInput('');
+      setCaInput("");
       setCaValidationError(null);
-      
     } catch (error: any) {
-              console.error('Error validating token:', error);
-      setCaValidationError('Failed to validate token. Please check the contract address and try again.');
+      console.error("Error validating token:", error);
+      setCaValidationError(
+        "Failed to validate token. Please check the contract address and try again."
+      );
     } finally {
       setIsValidatingCA(false);
     }
   };
 
-
-
   const handleBuyPPA = () => {
     setShowSwapModal(true);
-    setSwapMode('buy');
-    setPayAmount('');
+    setSwapMode("buy");
+    setPayAmount("");
     setSwapQuote(null);
     setSwapError(null);
     setExchangeRate(null);
@@ -1237,17 +1491,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleToggleSwapMode = () => {
     // Clear current values when switching modes
-    setPayAmount('');
+    setPayAmount("");
     setSwapQuote(null);
     setExchangeRate(null);
     setSwapError(null);
-    
+
     // Toggle between buy and sell
-    setSwapMode(swapMode === 'buy' ? 'sell' : 'buy');
+    setSwapMode(swapMode === "buy" ? "sell" : "buy");
   };
 
   const handleMaxAmount = () => {
-    if (swapMode === 'buy') {
+    if (swapMode === "buy") {
       // For buying, use available SOL (leave a small buffer for transaction fees)
       const maxSOL = Math.max(0, userBalances.sol - 0.01);
       setPayAmount(maxSOL.toFixed(4));
@@ -1257,11 +1511,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     }
   };
 
-
-
   const handleSwap = async () => {
     if (!swapQuote || !publicKey || !signTransaction) {
-      setSwapError('Wallet not connected or quote not available');
+      setSwapError("Wallet not connected or quote not available");
       return;
     }
 
@@ -1270,24 +1522,27 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
     try {
       // Validate balance based on swap mode
-      if (swapMode === 'buy') {
-        const hasBalance = await jupiterSwapService.validateSOLBalance(publicKey, parseFloat(payAmount));
+      if (swapMode === "buy") {
+        const hasBalance = await jupiterSwapService.validateSOLBalance(
+          publicKey,
+          parseFloat(payAmount)
+        );
         if (!hasBalance) {
-          setSwapError('Insufficient SOL balance');
+          setSwapError("Insufficient SOL balance");
           setIsSwapping(false);
           return;
         }
       } else {
         // For selling PPA, check if user has enough PPA
         if (userBalances.ppa < parseFloat(payAmount)) {
-          setSwapError('Insufficient PPA balance');
+          setSwapError("Insufficient PPA balance");
           setIsSwapping(false);
           return;
         }
       }
 
-              console.log(`Starting ${swapMode} transaction...`);
-      
+      console.log(`Starting ${swapMode} transaction...`);
+
       const result = await jupiterSwapService.executeSwap(
         swapQuote,
         publicKey,
@@ -1295,31 +1550,31 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       );
 
       if (result) {
-        console.log('Swap successful:', result);
-        
-        const inputToken = swapMode === 'buy' ? 'SOL' : 'PPA';
-        const outputToken = swapMode === 'buy' ? 'PPA' : 'SOL';
-        
+        console.log("Swap successful:", result);
+
+        const inputToken = swapMode === "buy" ? "SOL" : "PPA";
+        const outputToken = swapMode === "buy" ? "PPA" : "SOL";
+
         setSwapSuccessData({
           txid: result.txid,
           inputAmount: result.inputAmount,
           outputAmount: result.outputAmount,
           inputToken,
           outputToken,
-          feeAmount: result.feeAmount
+          feeAmount: result.feeAmount,
         });
-        
+
         setShowSwapModal(false);
         setShowSuccessModal(true);
-        
-        setPayAmount('');
+
+        setPayAmount("");
         setSwapQuote(null);
         setExchangeRate(null);
-        
+
         loadUserBalances();
 
         // Update balance based on swap mode
-        if (swapMode === 'buy') {
+        if (swapMode === "buy") {
           // Buying PPA with SOL - spending SOL
           const balanceChange = -result.inputAmount;
           const newBalance = balance + balanceChange;
@@ -1331,28 +1586,35 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           onUpdateBalance(newBalance);
         }
       } else {
-        setSwapError('Swap failed. Please try again.');
+        setSwapError("Swap failed. Please try again.");
+      }
+    } catch (error: any) {
+      console.error("DETAILED Swap error:", error);
+      console.error("Error message:", error.message);
+      console.error("Error type:", typeof error);
+      console.error(
+        "Full error object:",
+        JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+      );
+
+      let userFriendlyError = error.message || "Swap failed. Please try again.";
+
+      // Parse common Solana transaction errors
+      if (userFriendlyError.includes("InsufficientFunds")) {
+        userFriendlyError =
+          swapMode === "buy"
+            ? "Insufficient SOL balance for transaction fees"
+            : "Insufficient PPA balance";
+      } else if (userFriendlyError.includes("0x1")) {
+        userFriendlyError = "Insufficient funds for this transaction";
+      } else if (userFriendlyError.includes("0x0")) {
+        userFriendlyError =
+          "Account not found - you may need to create a token account first";
+      } else if (userFriendlyError.includes("slippage")) {
+        userFriendlyError =
+          "Price moved too much during swap. Try again with higher slippage tolerance.";
       }
 
-    } catch (error: any) {
-              console.error('DETAILED Swap error:', error);
-              console.error('Error message:', error.message);
-              console.error('Error type:', typeof error);
-              console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-      
-      let userFriendlyError = error.message || 'Swap failed. Please try again.';
-      
-      // Parse common Solana transaction errors
-      if (userFriendlyError.includes('InsufficientFunds')) {
-        userFriendlyError = swapMode === 'buy' ? 'Insufficient SOL balance for transaction fees' : 'Insufficient PPA balance';
-      } else if (userFriendlyError.includes('0x1')) {
-        userFriendlyError = 'Insufficient funds for this transaction';
-      } else if (userFriendlyError.includes('0x0')) {
-        userFriendlyError = 'Account not found - you may need to create a token account first';
-      } else if (userFriendlyError.includes('slippage')) {
-        userFriendlyError = 'Price moved too much during swap. Try again with higher slippage tolerance.';
-      }
-      
       setSwapError(userFriendlyError);
     } finally {
       setIsSwapping(false);
@@ -1363,7 +1625,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     // Immediate UI feedback
     soundManager.playClick();
     hapticFeedback.light();
-    
+
     // Show modal immediately with loading state
     setSelectedTokenData({
       address: token.address,
@@ -1374,23 +1636,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Minimal data for immediate display
       marketCap: 0,
       volume24h: 0,
-      description: '', // Not displayed in UI
-      socialLinks: { website: '', twitter: '', telegram: '' },
-      isLoading: true // Add loading flag
+      description: "", // Not displayed in UI
+      socialLinks: { website: "", twitter: "", telegram: "" },
+      isLoading: true, // Add loading flag
     });
     setShowTradingModal(true);
-    
+
     // Load full token data in background
     try {
       const tokenData = await fetchTokenDetailCached(token.address);
       if (tokenData) {
         setSelectedTokenData({
           ...tokenData,
-          isLoading: false
+          isLoading: false,
         });
       }
     } catch (error) {
-      console.error('Error loading full token data:', error);
+      console.error("Error loading full token data:", error);
       // Keep the modal open with basic data if full load fails
     }
   };
@@ -1403,14 +1665,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // SOL transfer function
   const transferSOL = async (amount: number): Promise<string | null> => {
     if (!publicKey || !signTransaction) {
-      throw new Error('Wallet not connected');
+      throw new Error("Wallet not connected");
     }
 
     try {
       // Create connection
-      const connection = new Connection('https://dimensional-white-pine.solana-mainnet.quiknode.pro/e229761b955e887d87f412414b4024c993e7a91d/', {
-        commitment: 'confirmed',
-      });
+      const connection = new Connection(
+        "https://dimensional-white-pine.solana-mainnet.quiknode.pro/e229761b955e887d87f412414b4024c993e7a91d/",
+        {
+          commitment: "confirmed",
+        }
+      );
 
       // Create transaction
       const transaction = new Transaction().add(
@@ -1426,39 +1691,44 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      console.log('📝 Transaction created, requesting signature...');
+      console.log("📝 Transaction created, requesting signature...");
 
       // Sign transaction
       const signedTransaction = await signTransaction(transaction);
 
-              console.log('Sending transaction to network...');
+      console.log("Sending transaction to network...");
 
       // Send transaction
-      const txid = await connection.sendRawTransaction(signedTransaction.serialize(), {
-        skipPreflight: true,
-        maxRetries: 2,
-      });
+      const txid = await connection.sendRawTransaction(
+        signedTransaction.serialize(),
+        {
+          skipPreflight: true,
+          maxRetries: 2,
+        }
+      );
 
-      console.log('⏳ Confirming transaction:', txid);
+      console.log("⏳ Confirming transaction:", txid);
 
       // Show verification loading screen
       setIsVerifyingTransaction(true);
 
       // Confirm transaction
-      const confirmation = await connection.confirmTransaction(txid, 'confirmed');
-      
+      const confirmation = await connection.confirmTransaction(
+        txid,
+        "confirmed"
+      );
+
       if (confirmation.value.err) {
         throw new Error(`Transaction failed: ${confirmation.value.err}`);
       }
 
-              console.log('SOL transfer confirmed:', txid);
-      
+      console.log("SOL transfer confirmed:", txid);
+
       // Hide verification loading screen
       setIsVerifyingTransaction(false);
       return txid;
-
     } catch (error: any) {
-              console.error('SOL transfer error:', error);
+      console.error("SOL transfer error:", error);
       throw error;
     }
   };
@@ -1469,7 +1739,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     if (!amount || amount <= 0 || amount < 0.04) return;
 
     if (!publicKey || !signTransaction) {
-      setDepositError('Wallet not connected');
+      setDepositError("Wallet not connected");
       return;
     }
 
@@ -1478,54 +1748,76 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
     try {
       // Check if user has enough SOL
-      const connection = new Connection('https://dimensional-white-pine.solana-mainnet.quiknode.pro/e229761b955e887d87f412414b4024c993e7a91d/', {
-        commitment: 'confirmed',
-      });
-      
+      const connection = new Connection(
+        "https://dimensional-white-pine.solana-mainnet.quiknode.pro/e229761b955e887d87f412414b4024c993e7a91d/",
+        {
+          commitment: "confirmed",
+        }
+      );
+
       const balance = await connection.getBalance(publicKey);
       const solBalance = balance / LAMPORTS_PER_SOL;
       const requiredAmount = amount + 0.001; // Include transaction fee
 
       if (solBalance < requiredAmount) {
-        setDepositError(`Insufficient SOL balance. You have ${solBalance.toFixed(4)} SOL, need ${requiredAmount.toFixed(4)} SOL (including fees)`);
+        setDepositError(
+          `Insufficient SOL balance. You have ${solBalance.toFixed(
+            4
+          )} SOL, need ${requiredAmount.toFixed(4)} SOL (including fees)`
+        );
         return;
       }
 
-              console.log('Starting SOL deposit:', amount, 'SOL');
+      console.log("Starting SOL deposit:", amount, "SOL");
 
       // Execute the SOL transfer
       const txid = await transferSOL(amount);
 
       if (txid) {
-        console.log('SOL deposit successful:', txid);
-        
+        console.log("SOL deposit successful:", txid);
+
         // Add the deposited amount to user's platform SOL balance
         const newPlatformSOLBalance = currentSOLBalance + amount;
-        
-        console.log(`Platform SOL balance: ${currentSOLBalance.toFixed(4)} + ${amount.toFixed(4)} = ${newPlatformSOLBalance.toFixed(4)} SOL`);
-        
+
+        console.log(
+          `Platform SOL balance: ${currentSOLBalance.toFixed(
+            4
+          )} + ${amount.toFixed(4)} = ${newPlatformSOLBalance.toFixed(4)} SOL`
+        );
+
         // Update local state immediately for UI
         setCurrentSOLBalance(newPlatformSOLBalance);
-        
+
         // RACE CONDITION FIX: Mark deposit timestamp to prevent refresh from overwriting
         setLastDepositTime(Date.now());
-        
+
         // Update database with the new platform SOL balance
         onUpdateSOLBalance(newPlatformSOLBalance);
-        
-        // Clear form and close modal
-        setDepositAmount('');
-        setShowDepositModal(false);
-        
-        // Show success notification
-                  console.log(`Deposited ${amount} SOL successfully! Transaction: ${txid}`);
-                  console.log(`Platform SOL balance updated to: ${newPlatformSOLBalance.toFixed(4)} SOL`);
-                  console.log(`User now has ${newPlatformSOLBalance.toFixed(4)} SOL deposited on platform`);
-      }
 
+        // Clear form and close modal
+        setDepositAmount("");
+        setShowDepositModal(false);
+
+        // Show success notification
+        console.log(
+          `Deposited ${amount} SOL successfully! Transaction: ${txid}`
+        );
+        console.log(
+          `Platform SOL balance updated to: ${newPlatformSOLBalance.toFixed(
+            4
+          )} SOL`
+        );
+        console.log(
+          `User now has ${newPlatformSOLBalance.toFixed(
+            4
+          )} SOL deposited on platform`
+        );
+      }
     } catch (error: any) {
-              console.error('Deposit error:', error);
-      setDepositError(error.message || 'Failed to deposit SOL. Please try again.');
+      console.error("Deposit error:", error);
+      setDepositError(
+        error.message || "Failed to deposit SOL. Please try again."
+      );
     } finally {
       setIsDepositing(false);
     }
@@ -1533,52 +1825,69 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
-    if (!amount || amount <= 0 || amount < 0.04 || amount > currentSOLBalance) return;
+    if (!amount || amount <= 0 || amount < 0.04 || amount > currentSOLBalance)
+      return;
 
     setIsWithdrawing(true);
     setWithdrawError(null);
     setWithdrawSuccess(null);
 
     try {
-              console.log('Starting SOL withdrawal request:', amount, 'SOL');
+      console.log("Starting SOL withdrawal request:", amount, "SOL");
 
       // Create withdrawal request and deduct balance
-      const withdrawalRequest = await userProfileService.createWithdrawalRequest(walletAddress, amount);
+      const withdrawalRequest =
+        await userProfileService.createWithdrawalRequest(walletAddress, amount);
 
       if (withdrawalRequest) {
-        console.log('Withdrawal request created successfully:', withdrawalRequest.id);
-        
+        console.log(
+          "Withdrawal request created successfully:",
+          withdrawalRequest.id
+        );
+
         // Update local SOL balance immediately (it's already deducted in the database)
         const newSOLBalance = currentSOLBalance - amount;
         setCurrentSOLBalance(newSOLBalance);
-        
+
         // RACE CONDITION FIX: Mark withdrawal timestamp to prevent refresh from overwriting
         setLastDepositTime(Date.now());
-        
+
         // Update parent component
         onUpdateSOLBalance(newSOLBalance);
-        
+
         // Show success message
-        setWithdrawSuccess(`Withdrawal request submitted for ${amount.toFixed(4)} SOL. Withdrawal is being processed this typically takes up to ${getWithdrawalApprovalTime()}.`);
-        
+        setWithdrawSuccess(
+          `Withdrawal request submitted for ${amount.toFixed(
+            4
+          )} SOL. Withdrawal is being processed this typically takes up to ${getWithdrawalApprovalTime()}.`
+        );
+
         // Reload withdrawal requests to show the new one
         loadWithdrawalRequests();
-        
+
         // Clear form and close modal after a short delay
         setTimeout(() => {
-          setWithdrawAmount('');
+          setWithdrawAmount("");
           setShowWithdrawModal(false);
           setWithdrawSuccess(null);
         }, 3000);
 
-                  console.log(`Withdrawal request submitted! New SOL balance: ${newSOLBalance.toFixed(4)} SOL`);
+        console.log(
+          `Withdrawal request submitted! New SOL balance: ${newSOLBalance.toFixed(
+            4
+          )} SOL`
+        );
       } else {
-        setWithdrawError('Failed to create withdrawal request. Please try again.');
+        setWithdrawError(
+          "Failed to create withdrawal request. Please try again."
+        );
       }
-
     } catch (error: any) {
-              console.error('Withdrawal request error:', error);
-      setWithdrawError(error.message || 'Failed to create withdrawal request. Please try again.');
+      console.error("Withdrawal request error:", error);
+      setWithdrawError(
+        error.message ||
+          "Failed to create withdrawal request. Please try again."
+      );
     } finally {
       setIsWithdrawing(false);
     }
@@ -1587,37 +1896,36 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Settings handlers
   const handleEditProfile = () => {
     setShowSettings(false);
-    setViewState('edit-profile');
+    setViewState("edit-profile");
   };
 
-    const handleDisconnectWallet = async () => {
+  const handleDisconnectWallet = async () => {
     try {
-    setShowSettings(false);
-      
+      setShowSettings(false);
+
       // Force disconnect the wallet
       await disconnect();
-      
+
       // Clear wallet-related localStorage (common wallet adapter keys)
-      localStorage.removeItem('walletName');
-      localStorage.removeItem('wallet-adapter-autoconnect');
-      localStorage.removeItem('wallet-adapter-cached-wallet');
-      
+      localStorage.removeItem("walletName");
+      localStorage.removeItem("wallet-adapter-autoconnect");
+      localStorage.removeItem("wallet-adapter-cached-wallet");
+
       // Clear any Phantom-specific storage
-      localStorage.removeItem('phantom-wallet');
-      localStorage.removeItem('solana-wallet');
-      
+      localStorage.removeItem("phantom-wallet");
+      localStorage.removeItem("solana-wallet");
+
       // Clear session storage
       sessionStorage.clear();
 
-      console.log('Wallet disconnected successfully');
-      
+      console.log("Wallet disconnected successfully");
+
       // Force page reload to ensure complete disconnection
       setTimeout(() => {
         window.location.reload();
       }, 500);
-      
     } catch (error) {
-            console.error('Error disconnecting wallet:', error);
+      console.error("Error disconnecting wallet:", error);
       // Force reload even if disconnect fails
       setTimeout(() => {
         window.location.reload();
@@ -1628,13 +1936,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const handleConnectWalletFromGuest = async () => {
     try {
       setShowSettings(false);
-      console.log('🔄 Switching from guest mode to wallet connection');
-      
+      console.log("🔄 Switching from guest mode to wallet connection");
+
       // Force page reload to return to login screen
       window.location.reload();
-      
     } catch (error) {
-      console.error('Error switching to wallet connection:', error);
+      console.error("Error switching to wallet connection:", error);
       window.location.reload();
     }
   };
@@ -1643,18 +1950,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     const newSoundEnabled = !soundEnabled;
     setSoundEnabled(newSoundEnabled);
     soundManager.setSoundEnabled(newSoundEnabled);
-    
-          console.log(`Sound ${newSoundEnabled ? 'enabled' : 'disabled'}`);
+
+    console.log(`Sound ${newSoundEnabled ? "enabled" : "disabled"}`);
   };
 
   const handleBackToDashboard = () => {
-    setViewState('dashboard');
+    setViewState("dashboard");
   };
 
-  const handleProfileSave = (profileData: { username: string; profilePicture?: string }) => {
+  const handleProfileSave = (profileData: {
+    username: string;
+    profilePicture?: string;
+  }) => {
     setCurrentUsername(profileData.username);
     setCurrentProfilePicture(profileData.profilePicture);
-    setViewState('dashboard');
+    setViewState("dashboard");
   };
 
   // Position modal handlers
@@ -1671,145 +1981,168 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleClosePosition = async (positionId: number) => {
     // Check if position is already in closing status
-    const position = tradingPositions.find(p => p.id === positionId);
-    if (position?.status === 'closing') {
-              console.log(`Position ${positionId} is already closing (10-second delay in progress)`);
+    const position = tradingPositions.find((p) => p.id === positionId);
+    if (position?.status === "closing") {
+      console.log(
+        `Position ${positionId} is already closing (10-second delay in progress)`
+      );
       return;
     }
-    
+
     // Prevent duplicate closing operations
     if (closingPositions.has(positionId)) {
-              console.log(`Position ${positionId} is already being closed, skipping duplicate operation`);
+      console.log(
+        `Position ${positionId} is already being closed, skipping duplicate operation`
+      );
       return;
     }
-    
+
     setIsClosingPosition(true);
-    setClosingPositions(prev => new Set(prev).add(positionId));
-    
+    setClosingPositions((prev) => new Set(prev).add(positionId));
+
     // Position closes immediately - check for results and reload
     if (position) {
       // Check for trade results immediately
       await checkForTradeResults(positionId);
-      
+
       // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
-      console.log('🎯 FORCING ShareGainsPopup after trade completion');
-      
+      console.log("🎯 FORCING ShareGainsPopup after trade completion");
+
       // Reload positions to get updated data
       await loadTradingPositions();
-        
+
       // Try to get the real trade results data from the closed position
       try {
         const { data: closedPosition, error } = await supabase
-          .from('trading_positions')
-          .select('*')
-          .eq('id', positionId)
-          .eq('status', 'closed')
+          .from("trading_positions")
+          .select("*")
+          .eq("id", positionId)
+          .eq("status", "closed")
           .single();
-        
+
         if (closedPosition && !error) {
-          console.log('📊 Found closed position with real P&L:', closedPosition);
-          
+          console.log(
+            "📊 Found closed position with real P&L:",
+            closedPosition
+          );
+
           // Calculate REAL P&L using actual entry and exit prices
           const entryPrice = parseFloat(closedPosition.entry_price) || 0;
-          const exitPrice = parseFloat(closedPosition.close_price || closedPosition.current_price) || entryPrice;
+          const exitPrice =
+            parseFloat(
+              closedPosition.close_price || closedPosition.current_price
+            ) || entryPrice;
           const amount = parseFloat(closedPosition.amount) || 0;
           const leverage = parseInt(closedPosition.leverage) || 1;
           const direction = closedPosition.direction;
-          
+
           // Calculate real P&L (same logic as in positionService)
           let realPnL = 0;
-          
+
           // Try to use stored current_pnl first (most accurate)
-          if (closedPosition.current_pnl !== null && closedPosition.current_pnl !== undefined) {
+          if (
+            closedPosition.current_pnl !== null &&
+            closedPosition.current_pnl !== undefined
+          ) {
             realPnL = parseFloat(closedPosition.current_pnl);
-            console.log('🎯 Using stored current_pnl:', realPnL);
+            console.log("🎯 Using stored current_pnl:", realPnL);
           } else {
             // Fallback calculation
-            if (direction === 'Long') {
+            if (direction === "Long") {
               realPnL = (exitPrice - entryPrice) * amount;
             } else {
               realPnL = (entryPrice - exitPrice) * amount;
             }
-            console.log('🎯 Calculated P&L from prices:', realPnL);
+            console.log("🎯 Calculated P&L from prices:", realPnL);
           }
-          
+
           // Calculate return percentage
-          const sol_price = await fetchSOLPrice() || 200; // Fallback SOL price
-          const pnlPercentage = ((realPnL / sol_price) / closedPosition.collateral_sol) * 100;
-          
-          console.log('🎯 Final P&L calculations:', {
+          const sol_price = (await fetchSOLPrice()) || 200; // Fallback SOL price
+          const pnlPercentage =
+            (realPnL / sol_price / closedPosition.collateral_sol) * 100;
+
+          console.log("🎯 Final P&L calculations:", {
             realPnL,
             pnlPercentage,
             entryPrice,
             exitPrice,
             amount,
             leverage,
-            direction
+            direction,
           });
-          
+
           // Show ShareGainsPopup with REAL P&L data
-          console.log('🎯 Position closed with P&L:', {
+          console.log("🎯 Position closed with P&L:", {
             tokenSymbol: closedPosition.token_symbol,
             direction: direction,
             leverage: leverage,
             entryPrice: entryPrice,
             exitPrice: exitPrice,
             pnlAmount: realPnL,
-            pnlPercentage: pnlPercentage
+            pnlPercentage: pnlPercentage,
           });
           setShowShareGainsPopup(true);
         } else {
-          console.log('❌ Could not fetch closed position data, using fallback');
-          console.log('Position closed successfully! Check your balance.');
+          console.log(
+            "❌ Could not fetch closed position data, using fallback"
+          );
+          console.log("Position closed successfully! Check your balance.");
         }
       } catch (error) {
-        console.error('❌ Error fetching trade results:', error);
-        console.log('Position closed successfully! Check your balance.');
+        console.error("❌ Error fetching trade results:", error);
+        console.log("Position closed successfully! Check your balance.");
       }
     }
-    
+
     try {
-      console.log('🔄 Closing position with FRESH price:', positionId);
-      
+      console.log("🔄 Closing position with FRESH price:", positionId);
+
       // 🚨 CRITICAL: Get FRESH price right before closing for maximum accuracy
-      const position = tradingPositions.find(p => p.id === positionId);
+      const position = tradingPositions.find((p) => p.id === positionId);
       if (position) {
-        console.log('GETTING FRESH PRICE FOR POSITION CLOSE...');
-        
+        console.log("GETTING FRESH PRICE FOR POSITION CLOSE...");
+
         try {
-          const freshTokenData = await fetchTokenDetailCached(position.token_address);
+          const freshTokenData = await fetchTokenDetailCached(
+            position.token_address
+          );
           if (freshTokenData) {
             const freshPrice = freshTokenData.price;
-            console.log('FRESH PRICE FETCHED FOR CLOSE:', {
+            console.log("FRESH PRICE FETCHED FOR CLOSE:", {
               position_id: positionId,
               token: position.token_symbol,
               entry_price: position.entry_price,
-              cached_current_price: position.current_price || 'N/A',
+              cached_current_price: position.current_price || "N/A",
               fresh_close_price: freshPrice,
-              'FINAL_EXECUTION_PRICE': freshPrice
+              FINAL_EXECUTION_PRICE: freshPrice,
             });
           } else {
-            console.log('Fresh price fetch failed for position close, using existing price');
+            console.log(
+              "Fresh price fetch failed for position close, using existing price"
+            );
           }
         } catch (error) {
-          console.log('Error fetching fresh price for close, proceeding with existing price:', error);
+          console.log(
+            "Error fetching fresh price for close, proceeding with existing price:",
+            error
+          );
         }
       }
-      
-      await positionService.closePosition(positionId, 'manual');
-      
-            // Reload positions to reflect the change
+
+      await positionService.closePosition(positionId, "manual");
+
+      // Reload positions to reflect the change
       await loadTradingPositions();
-      
+
       // ADDED: Refresh SOL balance immediately after closing position (user should see returned collateral)
       refreshSOLBalance();
-      
-      console.log('Position closed successfully with fresh price');
+
+      console.log("Position closed successfully with fresh price");
     } catch (error) {
-              console.error('Error closing position:', error);
+      console.error("Error closing position:", error);
     } finally {
       setIsClosingPosition(false);
-      setClosingPositions(prev => {
+      setClosingPositions((prev) => {
         const newSet = new Set(prev);
         newSet.delete(positionId);
         return newSet;
@@ -1820,40 +2153,45 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // ADDED: Order management functions
   const handleEditOrderPrice = async (orderId: number) => {
     if (!newOrderPrice || parseFloat(newOrderPrice) <= 0) {
-      console.error('Invalid price for order update');
+      console.error("Invalid price for order update");
       return;
     }
 
     try {
       console.log(`🔄 Updating order ${orderId} price to ${newOrderPrice}...`);
-      
+
       // Update the order in the database
       const { error } = await supabase
-        .from('trading_positions')
-        .update({ 
+        .from("trading_positions")
+        .update({
           target_price: parseFloat(newOrderPrice),
           entry_price: parseFloat(newOrderPrice), // For limit orders, these should be the same
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', orderId);
-      
+        .eq("id", orderId);
+
       if (error) {
         throw error;
       }
-      
-              console.log(`Order ${orderId} price updated successfully`);
-      
+
+      console.log(`Order ${orderId} price updated successfully`);
+
       // Update UI immediately
-      setPendingOrders(prev => prev.map(order => 
-        order.id === orderId 
-          ? { ...order, target_price: parseFloat(newOrderPrice), entry_price: parseFloat(newOrderPrice) }
-          : order
-      ));
-      
+      setPendingOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                target_price: parseFloat(newOrderPrice),
+                entry_price: parseFloat(newOrderPrice),
+              }
+            : order
+        )
+      );
+
       // Reset edit state
       setIsEditingOrder(null);
-      setNewOrderPrice('');
-      
+      setNewOrderPrice("");
     } catch (error) {
       console.error(`Error updating order ${orderId}:`, error);
     }
@@ -1862,45 +2200,49 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   const handleCancelOrder = async (orderId: number) => {
     try {
       console.log(`🔄 Cancelling order ${orderId}...`);
-      
+
       // Get the order details first to refund collateral
-      const order = pendingOrders.find(o => o.id === orderId);
+      const order = pendingOrders.find((o) => o.id === orderId);
       if (!order) {
-        throw new Error('Order not found');
+        throw new Error("Order not found");
       }
-      
+
       // Cancel the order in database
       const { error: cancelError } = await supabase
-        .from('trading_positions')
-        .update({ 
-          status: 'cancelled',
-          updated_at: new Date().toISOString()
+        .from("trading_positions")
+        .update({
+          status: "cancelled",
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', orderId);
-      
+        .eq("id", orderId);
+
       if (cancelError) {
         throw cancelError;
       }
-      
+
       // Refund collateral to user (no trading fees to refund)
       const profile = await userProfileService.getProfile(walletAddress);
       if (profile) {
         const refundAmount = order.collateral_sol;
         const newSOLBalance = profile.sol_balance + refundAmount;
-        
-        const updated = await userProfileService.updateSOLBalance(walletAddress, newSOLBalance);
+
+        const updated = await userProfileService.updateSOLBalance(
+          walletAddress,
+          newSOLBalance
+        );
         if (updated && onUpdateSOLBalance) {
           onUpdateSOLBalance(newSOLBalance);
           setCurrentSOLBalance(newSOLBalance);
-          console.log(`Refunded ${refundAmount.toFixed(4)} SOL collateral to user`);
+          console.log(
+            `Refunded ${refundAmount.toFixed(4)} SOL collateral to user`
+          );
         }
       }
-      
-              console.log(`Order ${orderId} cancelled successfully`);
-      
+
+      console.log(`Order ${orderId} cancelled successfully`);
+
       // Remove order from UI
-      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      
+      setPendingOrders((prev) => prev.filter((o) => o.id !== orderId));
     } catch (error) {
       console.error(`Error cancelling order ${orderId}:`, error);
     }
@@ -1909,76 +2251,83 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Check for trade results after closing modal completes
   const checkForTradeResults = async (positionId: number) => {
     try {
-      console.log('🔍 Checking for trade results for position', positionId);
-      
+      console.log("🔍 Checking for trade results for position", positionId);
+
       // Get the position from database to check for trade results
       const { data: position, error } = await supabase
-        .from('trading_positions')
-        .select('trade_results')
-        .eq('id', positionId)
+        .from("trading_positions")
+        .select("trade_results")
+        .eq("id", positionId)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching position for trade results:', error);
+        console.error("Error fetching position for trade results:", error);
         return;
       }
-      
+
       if (position?.trade_results) {
         const tradeResults = JSON.parse(position.trade_results);
-        console.log('Found trade results for position', positionId, ':', tradeResults);
-        
+        console.log(
+          "Found trade results for position",
+          positionId,
+          ":",
+          tradeResults
+        );
+
         setTradeResultsData(tradeResults);
         setShowTradeResults(true);
-        
+
         // Clear trade results from database after displaying
         await supabase
-          .from('trading_positions')
+          .from("trading_positions")
           .update({ trade_results: null })
-          .eq('id', positionId);
-          
-                  console.log('Cleared trade results from database for position', positionId);
+          .eq("id", positionId);
+
+        console.log(
+          "Cleared trade results from database for position",
+          positionId
+        );
       } else {
-        console.log('No trade results found for position', positionId);
+        console.log("No trade results found for position", positionId);
       }
     } catch (error) {
-      console.error('Error checking for trade results:', error);
+      console.error("Error checking for trade results:", error);
     }
   };
 
-    // Debug function to check profile status
+  // Debug function to check profile status
   const debugProfile = async () => {
     if (!walletAddress) {
-      console.log('No wallet connected');
+      console.log("No wallet connected");
       return;
     }
-    
+
     try {
-      console.log('Debugging profile for wallet:', walletAddress);
+      console.log("Debugging profile for wallet:", walletAddress);
       const profile = await userProfileService.getProfile(walletAddress);
-      
+
       if (!profile) {
-        console.log('No profile found in database');
+        console.log("No profile found in database");
         return;
       }
-      
-      console.log('Profile found in database:', {
+
+      console.log("Profile found in database:", {
         wallet_address: profile.wallet_address,
         username: profile.username,
         usd_balance: profile.balance,
         sol_balance: profile.sol_balance,
         created_at: profile.created_at,
-        updated_at: profile.updated_at
+        updated_at: profile.updated_at,
       });
-      
-      console.log('Current state comparison:', {
+
+      console.log("Current state comparison:", {
         db_sol_balance: profile.sol_balance,
         ui_sol_balance: currentSOLBalance,
         db_usd_balance: profile.balance,
-        ui_usd_balance: balance
+        ui_usd_balance: balance,
       });
-      
     } catch (error) {
-      console.error('Error debugging profile:', error);
+      console.error("Error debugging profile:", error);
     }
   };
 
@@ -1986,67 +2335,83 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   useEffect(() => {
     if (walletAddress) {
       (window as any).debugSOLBalance = async () => {
-        console.log('🔧 DEBUG SOL BALANCE SYSTEM:');
-        
+        console.log("🔧 DEBUG SOL BALANCE SYSTEM:");
+
         try {
           const profile = await userProfileService.getProfile(walletAddress);
-          const positions = await positionService.getUserPositions(walletAddress);
-          const activePositions = positions.filter(p => p.status === 'open' || p.status === 'opening');
-          
-          const totalCollateral = activePositions.reduce((sum, pos) => sum + pos.collateral_sol, 0);
-          
-          console.log('📊 SOL BALANCE BREAKDOWN:', {
+          const positions = await positionService.getUserPositions(
+            walletAddress
+          );
+          const activePositions = positions.filter(
+            (p) => p.status === "open" || p.status === "opening"
+          );
+
+          const totalCollateral = activePositions.reduce(
+            (sum, pos) => sum + pos.collateral_sol,
+            0
+          );
+
+          console.log("📊 SOL BALANCE BREAKDOWN:", {
             database_sol_balance: profile?.sol_balance || 0,
             ui_displayed_balance: currentSOLBalance,
             active_positions: activePositions.length,
             collateral_locked: totalCollateral.toFixed(4),
             available_sol: (profile?.sol_balance || 0).toFixed(4),
-            total_sol_holdings: ((profile?.sol_balance || 0) + totalCollateral).toFixed(4)
+            total_sol_holdings: (
+              (profile?.sol_balance || 0) + totalCollateral
+            ).toFixed(4),
           });
-          
-          console.log('🔄 REFRESHING SOL BALANCE NOW...');
+
+          console.log("🔄 REFRESHING SOL BALANCE NOW...");
           await refreshSOLBalance();
-          console.log('✅ SOL balance refresh complete');
-          
+          console.log("✅ SOL balance refresh complete");
+
           return {
             database_balance: profile?.sol_balance || 0,
             ui_balance: currentSOLBalance,
             positions_count: activePositions.length,
-            collateral_locked: totalCollateral
+            collateral_locked: totalCollateral,
           };
         } catch (error) {
-          console.error('❌ Error debugging SOL balance:', error);
+          console.error("❌ Error debugging SOL balance:", error);
           return error;
         }
       };
-      
+
       (window as any).forceRefreshSOL = () => {
-        console.log('🔄 FORCE REFRESHING SOL BALANCE...');
+        console.log("🔄 FORCE REFRESHING SOL BALANCE...");
         refreshSOLBalance();
         loadTradingPositions();
-        return 'SOL balance and positions refreshed';
+        return "SOL balance and positions refreshed";
       };
 
       (window as any).testPositionLoadSpeed = async () => {
-        console.log('⚡ TESTING POSITION LOAD PERFORMANCE...');
+        console.log("⚡ TESTING POSITION LOAD PERFORMANCE...");
         const startTime = Date.now();
-        
+
         setIsLoadingPositions(true);
         await loadTradingPositions();
-        
+
         const loadTime = Date.now() - startTime;
         console.log(`🏁 POSITION LOAD COMPLETED IN: ${loadTime}ms`);
-        
+
         return {
           loadTimeMs: loadTime,
           positionCount: tradingPositions.length,
-          performance: loadTime < 500 ? 'EXCELLENT' : loadTime < 1000 ? 'GOOD' : loadTime < 2000 ? 'FAIR' : 'SLOW',
+          performance:
+            loadTime < 500
+              ? "EXCELLENT"
+              : loadTime < 1000
+              ? "GOOD"
+              : loadTime < 2000
+              ? "FAIR"
+              : "SLOW",
           optimizations: [
-            '✅ Eliminated heavy P&L calculations on load',
-            '✅ Batched token image fetches',
-            '✅ Used database values instead of API calls',
-            '✅ Deferred calculations to real-time service'
-          ]
+            "✅ Eliminated heavy P&L calculations on load",
+            "✅ Batched token image fetches",
+            "✅ Used database values instead of API calls",
+            "✅ Deferred calculations to real-time service",
+          ],
         };
       };
     }
@@ -2054,7 +2419,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Show different views based on viewState
 
-  if (viewState === 'edit-profile') {
+  if (viewState === "edit-profile") {
     return (
       <EditProfile
         onBack={handleBackToDashboard}
@@ -2066,38 +2431,36 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
     );
   }
 
-
-
   // Use real trading positions data
-  const activePositions = tradingPositions.filter(position => 
-    position.status === 'open' || position.status === 'pending'
+  const activePositions = tradingPositions.filter(
+    (position) => position.status === "open" || position.status === "pending"
   );
 
   const tabs = [
-    { 
-      id: 'positions' as TabType, 
-      label: 'Home', 
+    {
+      id: "positions" as TabType,
+      label: "Home",
       icon: Home,
-      badgeCount: activePositions.length 
+      badgeCount: activePositions.length,
     },
-    { 
-      id: 'rewards' as TabType, 
-      label: 'Rewards', 
-      icon: DollarSign,
-      badgeCount: 0 
+    {
+      id: "about" as TabType,
+      label: "About Us",
+      icon: Info,
+      badgeCount: 0,
     },
-    { 
-      id: 'orders' as TabType, 
-      label: 'History', 
+    {
+      id: "orders" as TabType,
+      label: "History",
       icon: History,
-      badgeCount: 0 
+      badgeCount: 0,
     },
   ];
 
   // Search tokens function
   const handleTokenSearch = async (query: string) => {
     setSearchQuery(query);
-    
+
     if (query.length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
@@ -2106,12 +2469,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
     setIsSearching(true);
     setShowSearchResults(true);
-    
+
     try {
       const results = await searchTokens(query);
       setSearchResults(results);
     } catch (error) {
-      console.error('Search error:', error);
+      console.error("Search error:", error);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -2120,10 +2483,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   // Handle search result selection - go directly to trading modal
   const handleSearchResultClick = async (result: SearchResult) => {
-    setSearchQuery('');
+    setSearchQuery("");
     setShowSearchResults(false);
     setSearchResults([]);
-    
+
     // Show modal immediately with loading state
     setSelectedTokenData({
       address: result.address,
@@ -2134,23 +2497,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       // Minimal data for immediate display
       marketCap: 0,
       volume24h: 0,
-      description: '', // Not displayed in UI
-      socialLinks: { website: '', twitter: '', telegram: '' },
-      isLoading: true // Add loading flag
+      description: "", // Not displayed in UI
+      socialLinks: { website: "", twitter: "", telegram: "" },
+      isLoading: true, // Add loading flag
     });
     setShowTradingModal(true);
-    
+
     // Load full token data in background
     try {
       const tokenData = await fetchTokenDetailCached(result.address);
       if (tokenData) {
         setSelectedTokenData({
           ...tokenData,
-          isLoading: false
+          isLoading: false,
         });
       }
     } catch (error) {
-      console.error('Error loading full token data:', error);
+      console.error("Error loading full token data:", error);
       // Keep the modal open with basic data if full load fails
     }
   };
@@ -2158,7 +2521,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
   // Swipe to refresh functionality
   const handleTouchStart = (e: React.TouchEvent) => {
     if (isRefreshing) return;
-    
+
     const touch = e.touches[0];
     setSwipeStartY(touch.clientY);
     setSwipeCurrentY(touch.clientY);
@@ -2167,10 +2530,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isSwipeActive || isRefreshing) return;
-    
+
     const touch = e.touches[0];
     const deltaY = touch.clientY - swipeStartY;
-    
+
     // Only allow pull-down (positive deltaY) and limit the distance
     if (deltaY > 0 && deltaY <= 80) {
       setSwipeCurrentY(touch.clientY);
@@ -2180,14 +2543,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const handleTouchEnd = () => {
     if (!isSwipeActive || isRefreshing) return;
-    
+
     const deltaY = swipeCurrentY - swipeStartY;
-    
+
     // Trigger refresh if pulled down enough (40px threshold)
     if (deltaY > 40) {
       triggerRefresh();
     }
-    
+
     // Reset swipe state
     setIsSwipeActive(false);
     setSwipeStartY(0);
@@ -2197,14 +2560,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const triggerRefresh = async () => {
     if (isRefreshing) return;
-    
+
     setIsRefreshing(true);
     setRefreshProgress(1);
 
     try {
       // Refresh based on current tab
       switch (activeTab) {
-        case 'positions':
+        case "positions":
           await Promise.all([
             loadTradingPositions(),
             loadPendingOrders(),
@@ -2213,27 +2576,26 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             loadTrendingTokens(),
             loadPPAPrice(),
             loadRealPPAPriceInSOL(),
-            loadUserBalances()
+            loadUserBalances(),
           ]);
           break;
-        case 'rewards':
+        case "rewards":
           await Promise.all([
             loadPPAPrice(),
             loadRealPPAPriceInSOL(),
             loadUserBalances(),
-            getSwapQuote()
+            getSwapQuote(),
           ]);
           break;
-        case 'orders':
+        case "orders":
           await loadTradeHistory();
           break;
       }
-      
+
       // Show visual feedback for at least 800ms
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
+      await new Promise((resolve) => setTimeout(resolve, 800));
     } catch (error) {
-      console.error('Refresh error:', error);
+      console.error("Refresh error:", error);
     } finally {
       setIsRefreshing(false);
       setRefreshProgress(0);
@@ -2242,24 +2604,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'home':
+      case "home":
         const homePortfolioData = calculateTotalPortfolioValue();
-        
+
         return (
           <div className="text-center max-w-sm w-full px-4 mx-auto">
             {/* Character Icon - Properly sized */}
             <div className="mb-6">
               <div className="w-20 h-20 mx-auto">
                 {currentProfilePicture ? (
-                  <img 
-                    src={currentProfilePicture} 
-                    alt="Profile Picture" 
+                  <img
+                    src={currentProfilePicture}
+                    alt="Profile Picture"
                     className="w-full h-full object-cover rounded-lg"
                   />
                 ) : (
-                  <img 
-                    src="https://i.imgur.com/fWVz5td.png" 
-                    alt="Pump Pumpkin Icon" 
+                  <img
+                    src="https://i.imgur.com/fWVz5td.png"
+                    alt="Pump Pumpkin Icon"
                     className="w-full h-full object-cover rounded-lg"
                   />
                 )}
@@ -2268,17 +2630,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             {/* Welcome Text - Properly sized */}
             <h1 className="text-2xl font-normal mb-3">
-              Welcome Back, <span style={{ color: '#1e7cfa' }}>{currentUsername}</span>
+              Welcome Back,{" "}
+              <span style={{ color: "#1e7cfa" }}>{currentUsername}</span>
             </h1>
-            
+
             {/* Total Portfolio Balance - Properly sized */}
             <p className="text-gray-400 text-base mb-3">Your Trading Balance</p>
             <p className="text-3xl font-bold text-white mb-4">
               {formatCurrency(homePortfolioData.totalValue)}
             </p>
 
-
-            
             {/* Token Search Bar */}
             <div className="mb-4 relative">
               <input
@@ -2306,33 +2667,41 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                       >
                         <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
                           {result.logoURI ? (
-                            <img 
-                              src={result.logoURI} 
+                            <img
+                              src={result.logoURI}
                               alt={result.symbol}
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.currentTarget;
-                                target.style.display = 'none';
+                                target.style.display = "none";
                               }}
                             />
                           ) : (
-                            <span className="text-xs font-bold text-white">{result.symbol.charAt(0)}</span>
+                            <span className="text-xs font-bold text-white">
+                              {result.symbol.charAt(0)}
+                            </span>
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-white font-bold text-sm">{result.symbol}</p>
-                          <p className="text-gray-400 text-xs truncate">{result.name}</p>
+                          <p className="text-white font-bold text-sm">
+                            {result.symbol}
+                          </p>
+                          <p className="text-gray-400 text-xs truncate">
+                            {result.name}
+                          </p>
                         </div>
                         {result.price && (
                           <div className="text-right">
-                            <p className="text-white text-sm font-bold">{formatPrice(result.price)}</p>
+                            <p className="text-white text-sm font-bold">
+                              {formatPrice(result.price)}
+                            </p>
                           </div>
                         )}
                       </div>
                     ))
                   ) : (
                     <div className="p-3 text-center text-gray-400 text-sm">
-                      {isSearching ? 'Searching...' : 'No tokens found'}
+                      {isSearching ? "Searching..." : "No tokens found"}
                     </div>
                   )}
                 </div>
@@ -2352,35 +2721,37 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   placeholder="Enter Contract Address (CA)"
                   disabled={isValidatingCA}
                   className={`w-full bg-gray-900 border rounded-lg px-4 py-4 text-white text-base placeholder-gray-500 focus:outline-none transition-all pr-20 ${
-                    caValidationError 
-                      ? 'border-red-500 focus:border-red-400' 
-                      : 'border-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-400'
-                  } ${isValidatingCA ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    caValidationError
+                      ? "border-red-500 focus:border-red-400"
+                      : "border-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-400"
+                  } ${isValidatingCA ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <button
                   type="submit"
                   disabled={!caInput.trim() || isValidatingCA}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                  style={{ 
-                    backgroundColor: (!caInput.trim() || isValidatingCA) ? '#374151' : '#1e7cfa',
-                    color: (!caInput.trim() || isValidatingCA) ? '#9ca3af' : 'black'
+                  style={{
+                    backgroundColor:
+                      !caInput.trim() || isValidatingCA ? "#374151" : "#1e7cfa",
+                    color:
+                      !caInput.trim() || isValidatingCA ? "#9ca3af" : "black",
                   }}
                 >
                   {isValidatingCA ? (
                     <>
                       <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                        <circle 
-                          className="opacity-25" 
-                          cx="12" 
-                          cy="12" 
-                          r="10" 
-                          stroke="currentColor" 
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
                           strokeWidth="4"
                           fill="none"
                         />
-                        <path 
-                          className="opacity-75" 
-                          fill="currentColor" 
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
                           d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         />
                       </svg>
@@ -2391,15 +2762,23 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   )}
                 </button>
               </div>
-              
+
               {/* Error Message - Blue Theme */}
               {caValidationError && (
                 <div className="mt-4 p-4 bg-gray-900 border border-blue-500 rounded-lg">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        <svg
+                          className="w-4 h-4 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                       </div>
                     </div>
@@ -2408,200 +2787,47 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                         Market Cap Too Low
                       </h4>
                       <p className="text-gray-300 text-sm">
-                        This token has a market cap of <span className="font-medium text-blue-400">{caValidationError.match(/\$[\d,]+/)?.[0] || 'N/A'}</span>, which is below our minimum requirement of <span className="font-medium text-blue-400">$80,000</span>.
+                        This token has a market cap of{" "}
+                        <span className="font-medium text-blue-400">
+                          {caValidationError.match(/\$[\d,]+/)?.[0] || "N/A"}
+                        </span>
+                        , which is below our minimum requirement of{" "}
+                        <span className="font-medium text-blue-400">
+                          $80,000
+                        </span>
+                        .
                       </p>
                     </div>
                   </div>
                 </div>
               )}
             </form>
-            
+
             <p className="text-gray-500 text-sm text-center mt-4">
               Enter a Pump.fun token contract address to start trading
               <br />
-              <span className="text-xs text-gray-600">Minimum market cap: $80,000</span>
+              <span className="text-xs text-gray-600">
+                Minimum market cap: $80,000
+              </span>
             </p>
           </div>
         );
-      
-      case 'rewards':
-        return (
-          <div className="text-center max-w-full w-full px-4">
-            {/* Character Icon - Smaller for mobile */}
-            <div className="mb-3">
-              <div className="w-12 h-12 mx-auto">
-                <img 
-                  src="https://i.imgur.com/fWVz5td.png" 
-                  alt="Pump Pumpkin Icon" 
-                  className="w-full h-full object-cover rounded-lg"
-                />
-              </div>
-            </div>
 
-            {/* Rewards Title - Smaller */}
-            <h1 className="text-lg font-normal mb-2">
-              Your <span style={{ color: '#1e7cfa' }}>Rewards</span>
-            </h1>
-            
-            {/* Lifetime Rewards - Smaller */}
-            <p className="text-gray-400 text-xs mb-1">Lifetime PPA Lock Earnings</p>
-            {isLoadingEarnings ? (
-              <div className="flex items-center justify-center mb-3">
-                <Loader2 className="w-4 h-4 animate-spin text-white mr-2" />
-                <span className="text-lg font-bold text-white">Loading...</span>
-              </div>
-            ) : (
-              <>
-                <p className="text-lg font-bold text-white">{lifetimeSOLEarnings.toFixed(4)} SOL</p>
-                <p className="text-gray-400 text-xs mb-3">{formatCurrency(lifetimeSOLEarnings * solPrice)}</p>
-              </>
-            )}
+      case "about":
+        return <About />;
 
-            {/* PPA Info - Compact */}
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
-              <h3 className="text-sm font-bold text-white mb-3">Lock Your PPA Tokens And Get SOL To Trade With Immediately</h3>
-              <p className="text-gray-400 text-xs mb-3">
-                Lock your PPA tokens for 7-30 days and receive SOL rewards upfront immediately. Start trading with your SOL rewards right away while your PPA earns more over time.
-              </p>
-              
-              {/* PPA Stats - Compact */}
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white">{formatTokenAmount(userBalances.ppa)}</p>
-                  <p className="text-gray-500 text-xs">PPA In Wallet</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white">
-                    {isLoadingEarnings ? 'Loading...' : formatCurrency(lifetimeSOLEarnings * solPrice)}
-                  </p>
-                  <p className="text-gray-500 text-xs">Lock Earnings</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white">
-                    {ppaPrice ? formatNumber(ppaPrice) : '0'}
-                  </p>
-                  <p className="text-gray-500 text-xs">PPA/SOL</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white">{formatTokenAmount(totalPPALocked)}</p>
-                  <p className="text-gray-500 text-xs">PPA Locked</p>
-                </div>
-              </div>
-
-              {/* Lock Countdown - Wide across the card */}
-              {latestLockCountdown && (
-                <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 mb-4">
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs mb-1">Latest Lock Status</p>
-                    <p className="text-white font-bold text-sm">{latestLockCountdown}</p>
-                    {expiredLock && (
-                      <button
-                        onClick={handleUnlockClick}
-
-                        className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-500 transition-colors text-sm flex items-center justify-center space-x-2 mx-auto"
-                      >
-                        <Unlock className="w-4 h-4" />
-                        <span>Request Unlock</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons - Compact */}
-              <div className="space-y-2 relative" style={{ overflow: 'visible' }}>
-                <button
-                  onClick={() => {
-                    handleBuyPPA();
-                    hapticFeedback.medium();
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
-                  }}
-                  className="btn-premium w-full text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors"
-                  style={{ backgroundColor: '#1e7cfa' }}
-                >
-                  Buy PPA Tokens
-                </button>
-                
-                {/* Earn SOL Button */}
-                <button
-                  onClick={() => {
-                    setShowLockingModal(true);
-                    hapticFeedback.medium();
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
-                  }}
-                  className="btn-premium w-full text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
-                  style={{ backgroundColor: '#1e7cfa' }}
-                >
-                  <Wallet className="w-4 h-4" />
-                  <span>Earn SOL</span>
-                </button>
-
-                {/* Unlock Button with Tooltip */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      if (expiredLock) {
-                        setShowUnlockModal(true);
-                        hapticFeedback.medium();
-                      }
-                    }}
-                    disabled={!expiredLock}
-                    onMouseEnter={(e) => {
-                      if (!expiredLock) return;
-                      (e.target as HTMLElement).style.backgroundColor = '#16a34a';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!expiredLock) return;
-                      (e.target as HTMLElement).style.backgroundColor = '#22c55e';
-                    }}
-                    className="btn-premium w-full text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ 
-                      backgroundColor: expiredLock ? '#22c55e' : '#6b7280',
-                      color: 'white'
-                    }}
-                  >
-                    <Unlock className="w-4 h-4" />
-                    <span>{expiredLock ? 'Unlock PPA' : 'No Unlocks Available'}</span>
-                  </button>
-
-                  {/* Unlock Info Text Below Button */}
-                  <div className="mt-2 text-center">
-                    <p className="text-gray-400 text-xs">
-                      {getUnlockTooltipText()}
-                    </p>
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-
-
-          </div>
-        );
-      
-      case 'positions':
+      case "positions":
         const portfolioData = calculateTotalPortfolioValue();
-        
+
         return (
           <div className="max-w-full w-full px-4">
             {/* Header with User Profile Image - Mobile optimized */}
             <div className="text-center mb-6">
               <div className="w-16 h-16 mx-auto mb-4">
                 {currentProfilePicture ? (
-                  <img 
-                    src={currentProfilePicture} 
-                    alt="Profile Picture" 
+                  <img
+                    src={currentProfilePicture}
+                    alt="Profile Picture"
                     className="w-full h-full object-cover rounded-lg"
                   />
                 ) : (
@@ -2611,36 +2837,43 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 )}
               </div>
               <h1 className="text-xl font-normal mb-4">
-                Welcome Back, <span style={{ color: '#1e7cfa' }}>{currentUsername}</span>
+                Welcome Back,{" "}
+                <span style={{ color: "#1e7cfa" }}>{currentUsername}</span>
               </h1>
               <div className="text-center mb-4">
                 <p className="text-gray-400 text-sm mb-2 font-medium">
                   Total Portfolio Value
                 </p>
-                <LivePrice 
+                <LivePrice
                   price={portfolioData.totalValue}
                   previousPrice={previousPortfolioValue}
                   className="text-3xl font-bold text-white"
                   showChange={true}
                 />
               </div>
-              
+
               {/* Portfolio Breakdown - Mobile optimized */}
               {portfolioData.positionCount > 0 && (
                 <div className="mt-3 text-sm text-gray-400 space-y-1">
                   <div className="flex justify-between">
                     <span>Available SOL:</span>
-                    <span className="text-white">{formatCurrency(portfolioData.availableSOL * solPrice)}</span>
+                    <span className="text-white">
+                      {formatCurrency(portfolioData.availableSOL * solPrice)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Locked Collateral:</span>
-                    <span className="text-orange-300">{formatCurrency(portfolioData.lockedSOL * solPrice)}</span>
+                    <span className="text-orange-300">
+                      {formatCurrency(portfolioData.lockedSOL * solPrice)}
+                    </span>
                   </div>
 
                   {portfolioData.tradingBalance > 0 && (
                     <div className="flex justify-between">
                       <span>Trading Balance:</span>
-                      <span className="text-white">{formatCurrency(portfolioData.tradingBalance)}</span>
+                      <span className="text-white">
+                        {formatCurrency(portfolioData.tradingBalance)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -2678,27 +2911,35 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.currentTarget;
-                                target.style.display = 'none';
+                                target.style.display = "none";
                               }}
                             />
                           ) : (
-                            <span className="text-xs font-bold text-white">{result.symbol.charAt(0)}</span>
+                            <span className="text-xs font-bold text-white">
+                              {result.symbol.charAt(0)}
+                            </span>
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-white font-bold text-sm">{result.symbol}</p>
-                          <p className="text-gray-400 text-xs truncate">{result.name}</p>
+                          <p className="text-white font-bold text-sm">
+                            {result.symbol}
+                          </p>
+                          <p className="text-gray-400 text-xs truncate">
+                            {result.name}
+                          </p>
                         </div>
                         {result.price && (
                           <div className="text-right">
-                            <p className="text-white text-sm font-bold">{formatPrice(result.price)}</p>
+                            <p className="text-white text-sm font-bold">
+                              {formatPrice(result.price)}
+                            </p>
                           </div>
                         )}
                       </div>
                     ))
                   ) : (
                     <div className="p-3 text-center text-gray-400 text-sm">
-                      {isSearching ? 'Searching...' : 'No tokens found'}
+                      {isSearching ? "Searching..." : "No tokens found"}
                     </div>
                   )}
                 </div>
@@ -2715,18 +2956,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     hapticFeedback.medium();
                   }}
                   onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+                    (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
                   }}
                   onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+                    (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
                   }}
                   className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
-                  style={{ backgroundColor: '#1e7cfa' }}
+                  style={{ backgroundColor: "#1e7cfa" }}
                 >
                   <Plus className="w-4 h-4" />
                   <span>Deposit</span>
                 </button>
-                
+
                 <button
                   onClick={() => {
                     setShowWithdrawModal(true);
@@ -2734,16 +2975,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     hapticFeedback.light();
                   }}
                   onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+                    (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
                   }}
                   onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+                    (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
                   }}
                   disabled={currentSOLBalance < 0.04}
                   className="btn-premium flex-1 text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ 
-                    backgroundColor: '#1e7cfa',
-                    color: 'black'
+                  style={{
+                    backgroundColor: "#1e7cfa",
+                    color: "black",
                   }}
                 >
                   <Minus className="w-4 h-4" />
@@ -2756,38 +2997,47 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <Briefcase className="w-5 h-5 mr-2" />
                   Assets
                 </h3>
-                
+
                 <div className="space-y-3">
                   {/* Available SOL */}
                   <div>
-                    <p className="text-gray-400 text-sm mb-2">Available Balance</p>
+                    <p className="text-gray-400 text-sm mb-2">
+                      Available Balance
+                    </p>
                     <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-r from-purple-400 to-green-400">
-                            <img 
-                              src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" 
+                            <img
+                              src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
                               alt="Solana"
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 // Fallback to a simple circle if image fails to load
                                 const target = e.currentTarget;
-                                target.style.display = 'none';
+                                target.style.display = "none";
                                 const parent = target.parentElement;
                                 if (parent) {
-                                  parent.innerHTML = '<span class="text-white text-sm font-bold">SOL</span>';
+                                  parent.innerHTML =
+                                    '<span class="text-white text-sm font-bold">SOL</span>';
                                 }
                               }}
                             />
                           </div>
                           <div>
                             <p className="text-white font-bold text-sm">SOL</p>
-                            <p className="text-gray-400 text-xs">Available for trading</p>
+                            <p className="text-gray-400 text-xs">
+                              Available for trading
+                            </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-white font-bold text-sm">{currentSOLBalance.toFixed(4)} SOL</p>
-                          <p className="text-gray-400 text-xs">{formatCurrency(currentSOLBalance * solPrice)}</p>
+                          <p className="text-white font-bold text-sm">
+                            {currentSOLBalance.toFixed(4)} SOL
+                          </p>
+                          <p className="text-gray-400 text-xs">
+                            {formatCurrency(currentSOLBalance * solPrice)}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -2796,34 +3046,49 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   {/* Locked Collateral - Only show if user has active positions */}
                   {portfolioData.lockedSOL > 0 && (
                     <div>
-                      <p className="text-gray-400 text-sm mb-2">Locked in Positions</p>
+                      <p className="text-gray-400 text-sm mb-2">
+                        Locked in Positions
+                      </p>
                       <div className="bg-gray-800 border border-orange-600 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-r from-orange-400 to-red-400">
-                              <img 
-                                src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" 
+                              <img
+                                src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
                                 alt="Solana"
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   // Fallback to a simple circle if image fails to load
                                   const target = e.currentTarget;
-                                  target.style.display = 'none';
+                                  target.style.display = "none";
                                   const parent = target.parentElement;
                                   if (parent) {
-                                    parent.innerHTML = '<span class="text-white text-sm font-bold">SOL</span>';
+                                    parent.innerHTML =
+                                      '<span class="text-white text-sm font-bold">SOL</span>';
                                   }
                                 }}
                               />
                             </div>
                             <div>
-                              <p className="text-orange-300 font-bold text-sm">SOL</p>
-                              <p className="text-orange-400 text-xs">Collateral in {portfolioData.positionCount} position{portfolioData.positionCount !== 1 ? 's' : ''}</p>
+                              <p className="text-orange-300 font-bold text-sm">
+                                SOL
+                              </p>
+                              <p className="text-orange-400 text-xs">
+                                Collateral in {portfolioData.positionCount}{" "}
+                                position
+                                {portfolioData.positionCount !== 1 ? "s" : ""}
+                              </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-orange-300 font-bold text-sm">{portfolioData.lockedSOL.toFixed(4)} SOL</p>
-                            <p className="text-orange-400 text-xs">{formatCurrency(portfolioData.lockedSOL * solPrice)}</p>
+                            <p className="text-orange-300 font-bold text-sm">
+                              {portfolioData.lockedSOL.toFixed(4)} SOL
+                            </p>
+                            <p className="text-orange-400 text-xs">
+                              {formatCurrency(
+                                portfolioData.lockedSOL * solPrice
+                              )}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -2838,11 +3103,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <TrendingUp className="w-5 h-5 mr-2" />
                   Active Positions
                 </h3>
-                
+
                 {isLoadingPositions ? (
                   <div className="space-y-3">
                     {[...Array(3)].map((_, index) => (
-                      <div key={index} className="bg-gray-800 border border-gray-600 rounded-lg p-4 animate-pulse min-h-[120px]">
+                      <div
+                        key={index}
+                        className="bg-gray-800 border border-gray-600 rounded-lg p-4 animate-pulse min-h-[120px]"
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-gray-700 rounded-full"></div>
@@ -2864,20 +3132,24 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="space-y-4">
                     {activePositions.map((position) => {
                       // Calculate real-time P&L using cached prices
-                      const realtimePnL = calculatePositionPnLWithCachedPrice(position);
+                      const realtimePnL =
+                        calculatePositionPnLWithCachedPrice(position);
                       const currentPnL = realtimePnL.pnl;
                       const isPositive = currentPnL >= 0;
-                      
+
                       // FIXED: P&L percentage should be based on collateral (actual investment), not leveraged position value
-                      const collateralValueUSD = (position.collateral_sol || 0) * solPrice;
-                      const pnlPercent = collateralValueUSD > 0 
-                        ? (currentPnL / collateralValueUSD) * 100 
-                        : 0;
-                      
+                      const collateralValueUSD =
+                        (position.collateral_sol || 0) * solPrice;
+                      const pnlPercent =
+                        collateralValueUSD > 0
+                          ? (currentPnL / collateralValueUSD) * 100
+                          : 0;
+
                       // Add warning styling for positions close to liquidation
-                      const isNearLiquidation = (position.margin_ratio || 0) >= 0.8;
+                      const isNearLiquidation =
+                        (position.margin_ratio || 0) >= 0.8;
                       const isInDanger = (position.margin_ratio || 0) >= 0.9;
-                      
+
                       return (
                         <div key={position.id} className="space-y-2">
                           {/* Decorative line with leverage label */}
@@ -2886,116 +3158,166 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                               <div className="w-full border-t border-gray-600"></div>
                             </div>
                             <div className="relative flex justify-center">
-                              <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                                position.direction === 'Long' 
-                                  ? 'bg-green-900 text-green-300 border border-green-600' 
-                                  : 'bg-red-900 text-red-300 border border-red-600'
-                              }`}>
+                              <span
+                                className={`px-3 py-1 text-xs font-bold rounded-full ${
+                                  position.direction === "Long"
+                                    ? "bg-green-900 text-green-300 border border-green-600"
+                                    : "bg-red-900 text-red-300 border border-red-600"
+                                }`}
+                              >
                                 {position.leverage}x {position.direction}
                               </span>
                             </div>
                           </div>
-                          
+
                           {/* Position Card */}
-                          <div 
+                          <div
                             onClick={() => {
                               handlePositionClick(position);
                               hapticFeedback.light();
                             }}
-                            onMouseEnter={() => {
-                            }}
+                            onMouseEnter={() => {}}
                             className={`card-premium rounded-lg p-4 cursor-pointer transition-all min-h-[130px] ${
-                              isInDanger ? 'position-danger bg-red-900 border-2 border-red-500' : 
-                              isNearLiquidation ? 'bg-orange-900 border-2 border-orange-500' : 
-                              isPositive ? 'position-profit bg-gray-800 border border-gray-600 hover:border-green-500' :
-                              currentPnL < -5 ? 'position-loss bg-gray-800 border border-gray-600 hover:border-red-500' :
-                              'bg-gray-800 border border-gray-600 hover:border-gray-500'
+                              isInDanger
+                                ? "position-danger bg-red-900 border-2 border-red-500"
+                                : isNearLiquidation
+                                ? "bg-orange-900 border-2 border-orange-500"
+                                : isPositive
+                                ? "position-profit bg-gray-800 border border-gray-600 hover:border-green-500"
+                                : currentPnL < -5
+                                ? "position-loss bg-gray-800 border border-gray-600 hover:border-red-500"
+                                : "bg-gray-800 border border-gray-600 hover:border-gray-500"
                             }`}
                           >
-                          {/* Header with token info and position value */}
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center space-x-3">
-                              <div>
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="text-white font-bold text-sm">{position.token_symbol}</span>
-                                  <span className={`text-xs px-2 py-1 rounded-full font-bold ${
-                                    position.direction === 'Long' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-                                  }`}>
-                                    {position.leverage}x {position.direction}
-                                  </span>
+                            {/* Header with token info and position value */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div>
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className="text-white font-bold text-sm">
+                                      {position.token_symbol}
+                                    </span>
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded-full font-bold ${
+                                        position.direction === "Long"
+                                          ? "bg-green-900 text-green-300"
+                                          : "bg-red-900 text-red-300"
+                                      }`}
+                                    >
+                                      {position.leverage}x {position.direction}
+                                    </span>
+                                  </div>
+                                  {position.status === "opening" && (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-blue-900 text-blue-400 font-bold animate-pulse">
+                                      OPENING...
+                                    </span>
+                                  )}
+                                  {position.status === "closing" && (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-900 text-yellow-400 font-bold animate-pulse">
+                                      CLOSING...
+                                    </span>
+                                  )}
                                 </div>
-                                {position.status === 'opening' && (
-                                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900 text-blue-400 font-bold animate-pulse">
-                                    OPENING...
-                                  </span>
-                                )}
-                                {position.status === 'closing' && (
-                                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900 text-yellow-400 font-bold animate-pulse">
-                                    CLOSING...
-                                  </span>
-                                )}
+                              </div>
+                              <div className="text-right">
+                                <p className="text-white text-sm font-bold">
+                                  {formatCurrency(position.position_value_usd)}
+                                </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-white text-sm font-bold">
-                                {formatCurrency(position.position_value_usd)}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Price information - clearly displayed */}
-                          <div className="grid grid-cols-2 gap-4 mb-3 text-xs">
-                            <div>
-                              <span className="text-gray-400">Entry Price:</span>
-                              <p className="text-white font-medium">{formatPrice(position.entry_price)}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 flex items-center space-x-1">
-                                <span>Live Price:</span>
 
-                              </span>
-                              <p className="text-white font-medium">
-                {formatPrice(tokenPrices[position.token_address] || position.entry_price)}
-                {tokenPrices[position.token_address] && (
-                  <span className="text-green-400 text-xs ml-1">● Live</span>
-                )}
-              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Progress bar showing margin ratio */}
-                          <div className="mt-3">
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className={isInDanger ? 'text-red-300 font-bold' : isNearLiquidation ? 'text-orange-300 font-bold' : 'text-gray-400'}>
-                                Margin Health
-                              </span>
-                              <span className={isInDanger ? 'text-red-300 font-bold' : isNearLiquidation ? 'text-orange-300 font-bold' : 'text-gray-400'}>
-                                {position.margin_ratio ? `${(position.margin_ratio * 100).toFixed(1)}%` : 'Healthy'}
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-700 rounded-full h-2">
-                              <div 
-                                className={`h-2 rounded-full transition-all duration-300 ${
-                                  (position.margin_ratio || 0) >= 0.8 ? 'bg-red-500' : 
-                                  (position.margin_ratio || 0) >= 0.6 ? 'bg-yellow-500' : 
-                                  'bg-green-500'
-                                }`}
-                                style={{ width: `${Math.min((position.margin_ratio || 0) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                            
-                            {/* Warning messages */}
-                            {isInDanger && position.status === 'open' && (
-                              <div className="mt-2 text-xs text-red-300 font-bold animate-pulse">
-                                LIQUIDATION IMMINENT - POSITION AT EXTREME RISK!
+                            {/* Price information - clearly displayed */}
+                            <div className="grid grid-cols-2 gap-4 mb-3 text-xs">
+                              <div>
+                                <span className="text-gray-400">
+                                  Entry Price:
+                                </span>
+                                <p className="text-white font-medium">
+                                  {formatPrice(position.entry_price)}
+                                </p>
                               </div>
-                            )}
-                            {isNearLiquidation && !isInDanger && position.status === 'open' && (
-                              <div className="mt-2 text-xs text-orange-300 font-bold">
-                                Margin call triggered - Add collateral or close position
+                              <div>
+                                <span className="text-gray-400 flex items-center space-x-1">
+                                  <span>Live Price:</span>
+                                </span>
+                                <p className="text-white font-medium">
+                                  {formatPrice(
+                                    tokenPrices[position.token_address] ||
+                                      position.entry_price
+                                  )}
+                                  {tokenPrices[position.token_address] && (
+                                    <span className="text-green-400 text-xs ml-1">
+                                      ● Live
+                                    </span>
+                                  )}
+                                </p>
                               </div>
-                            )}
-                          </div>
+                            </div>
+
+                            {/* Progress bar showing margin ratio */}
+                            <div className="mt-3">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span
+                                  className={
+                                    isInDanger
+                                      ? "text-red-300 font-bold"
+                                      : isNearLiquidation
+                                      ? "text-orange-300 font-bold"
+                                      : "text-gray-400"
+                                  }
+                                >
+                                  Margin Health
+                                </span>
+                                <span
+                                  className={
+                                    isInDanger
+                                      ? "text-red-300 font-bold"
+                                      : isNearLiquidation
+                                      ? "text-orange-300 font-bold"
+                                      : "text-gray-400"
+                                  }
+                                >
+                                  {position.margin_ratio
+                                    ? `${(position.margin_ratio * 100).toFixed(
+                                        1
+                                      )}%`
+                                    : "Healthy"}
+                                </span>
+                              </div>
+                              <div className="w-full bg-gray-700 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full transition-all duration-300 ${
+                                    (position.margin_ratio || 0) >= 0.8
+                                      ? "bg-red-500"
+                                      : (position.margin_ratio || 0) >= 0.6
+                                      ? "bg-yellow-500"
+                                      : "bg-green-500"
+                                  }`}
+                                  style={{
+                                    width: `${Math.min(
+                                      (position.margin_ratio || 0) * 100,
+                                      100
+                                    )}%`,
+                                  }}
+                                ></div>
+                              </div>
+
+                              {/* Warning messages */}
+                              {isInDanger && position.status === "open" && (
+                                <div className="mt-2 text-xs text-red-300 font-bold animate-pulse">
+                                  LIQUIDATION IMMINENT - POSITION AT EXTREME
+                                  RISK!
+                                </div>
+                              )}
+                              {isNearLiquidation &&
+                                !isInDanger &&
+                                position.status === "open" && (
+                                  <div className="mt-2 text-xs text-orange-300 font-bold">
+                                    Margin call triggered - Add collateral or
+                                    close position
+                                  </div>
+                                )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -3022,33 +3344,38 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               {isLoadingTokens ? (
                 <div>
                   <div className="text-center mb-4">
-                    <p className="text-gray-500 text-xs">Loading from multiple data sources...</p>
+                    <p className="text-gray-500 text-xs">
+                      Loading from multiple data sources...
+                    </p>
                   </div>
                   <div className="space-y-3">
-                  {[...Array(6)].map((_, index) => (
-                    <div key={index} className="bg-gray-900 border border-gray-700 rounded-lg p-4 animate-pulse">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gray-700 rounded-full"></div>
-                          <div>
-                            <div className="w-16 h-4 bg-gray-700 rounded mb-2"></div>
-                            <div className="w-12 h-3 bg-gray-800 rounded"></div>
+                    {[...Array(6)].map((_, index) => (
+                      <div
+                        key={index}
+                        className="bg-gray-900 border border-gray-700 rounded-lg p-4 animate-pulse"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gray-700 rounded-full"></div>
+                            <div>
+                              <div className="w-16 h-4 bg-gray-700 rounded mb-2"></div>
+                              <div className="w-12 h-3 bg-gray-800 rounded"></div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="w-20 h-4 bg-gray-700 rounded mb-2"></div>
+                            <div className="w-16 h-3 bg-gray-800 rounded"></div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="w-20 h-4 bg-gray-700 rounded mb-2"></div>
-                          <div className="w-16 h-3 bg-gray-800 rounded"></div>
-                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {trendingTokens.map((token, index) => (
-                    <div 
-                      key={token.address} 
+                    <div
+                      key={token.address}
                       className="bg-gray-900 border border-gray-700 rounded-lg p-4 hover:border-gray-600 transition-colors cursor-pointer"
                       onClick={() => handleTokenClick(token)}
                     >
@@ -3056,42 +3383,56 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center overflow-hidden">
                             {token.logoURI ? (
-                              <img 
-                                src={token.logoURI} 
+                              <img
+                                src={token.logoURI}
                                 alt={token.symbol}
                                 className="w-full h-full object-cover rounded-full"
                                 onError={(e) => {
                                   const target = e.currentTarget;
-                                  target.style.display = 'none';
-                                  const fallback = target.nextElementSibling as HTMLElement;
+                                  target.style.display = "none";
+                                  const fallback =
+                                    target.nextElementSibling as HTMLElement;
                                   if (fallback) {
-                                    fallback.style.display = 'flex';
+                                    fallback.style.display = "flex";
                                   }
                                 }}
                               />
                             ) : null}
-                            <span className={`text-xs font-bold text-white ${token.logoURI ? 'hidden' : 'flex'}`}>
+                            <span
+                              className={`text-xs font-bold text-white ${
+                                token.logoURI ? "hidden" : "flex"
+                              }`}
+                            >
                               {token.symbol.charAt(0)}
                             </span>
                           </div>
                           <div>
-                            <p className="text-white font-bold text-sm">{token.symbol}</p>
+                            <p className="text-white font-bold text-sm">
+                              {token.symbol}
+                            </p>
                             <p className="text-gray-400 text-xs">
-                              {token.name.length > 20 ? `${token.name.substring(0, 20)}...` : token.name}
+                              {token.name.length > 20
+                                ? `${token.name.substring(0, 20)}...`
+                                : token.name}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <LivePrice 
+                          <LivePrice
                             price={token.price}
                             previousPrice={undefined}
                             className="text-white text-sm font-bold"
                             showChange={false}
                           />
-                          <p className={`text-xs font-bold ${
-                            token.priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {token.priceChange24h >= 0 ? '+' : ''}{token.priceChange24h.toFixed(2)}%
+                          <p
+                            className={`text-xs font-bold ${
+                              token.priceChange24h >= 0
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {token.priceChange24h >= 0 ? "+" : ""}
+                            {token.priceChange24h.toFixed(2)}%
                           </p>
                         </div>
                       </div>
@@ -3105,8 +3446,13 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <AlertTriangle className="w-6 h-6 text-orange-500" />
                   </div>
-                  <p className="text-gray-400 text-sm mb-2">Due to technical errors we couldn't load the trending token pairs</p>
-                  <p className="text-gray-500 text-xs mb-3">Our data provider is experiencing issues</p>
+                  <p className="text-gray-400 text-sm mb-2">
+                    Due to technical errors we couldn't load the trending token
+                    pairs
+                  </p>
+                  <p className="text-gray-500 text-xs mb-3">
+                    Our data provider is experiencing issues
+                  </p>
                   <button
                     onClick={loadTrendingTokens}
                     className="mt-2 text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1 mx-auto"
@@ -3119,17 +3465,17 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             </div>
           </div>
         );
-      
-      case 'orders':
+
+      case "orders":
         return (
           <div className="max-w-lg w-full px-4">
             {/* Header with User Profile Image - Much larger */}
             <div className="text-center mb-10">
               <div className="w-28 h-28 mx-auto mb-6">
                 {currentProfilePicture ? (
-                  <img 
-                    src={currentProfilePicture} 
-                    alt="Profile Picture" 
+                  <img
+                    src={currentProfilePicture}
+                    alt="Profile Picture"
                     className="w-full h-full object-cover rounded-xl"
                   />
                 ) : (
@@ -3139,11 +3485,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 )}
               </div>
               <h1 className="text-4xl font-normal mb-4">
-                Trade <span style={{ color: '#1e7cfa' }}>History</span>
+                Trade <span style={{ color: "#1e7cfa" }}>History</span>
               </h1>
             </div>
-
-
 
             {/* Enhanced Trade History Section */}
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4">
@@ -3151,16 +3495,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <History className="w-5 h-5 text-blue-400" />
-                  <h3 className="text-lg font-semibold text-white">Recent Trades</h3>
+                  <h3 className="text-lg font-semibold text-white">
+                    Recent Trades
+                  </h3>
                 </div>
               </div>
 
-
-              
               {isLoadingTradeHistory ? (
                 <div className="space-y-3">
                   {[...Array(3)].map((_, index) => (
-                    <div key={index} className="bg-gray-800 border border-gray-600 rounded-lg p-3 animate-pulse">
+                    <div
+                      key={index}
+                      className="bg-gray-800 border border-gray-600 rounded-lg p-3 animate-pulse"
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 bg-gray-700 rounded-full"></div>
@@ -3182,31 +3529,38 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                   {tradeHistory.map((trade, index) => {
                     const isProfit = (trade.current_pnl || 0) >= 0;
-                    const wasLiquidated = trade.status === 'liquidated';
-                    const wasCancelled = trade.status === 'cancelled';
-                    
+                    const wasLiquidated = trade.status === "liquidated";
+                    const wasCancelled = trade.status === "cancelled";
+
                     // Format date - more compact for mobile
-                    const tradeDate = new Date(trade.closed_at || trade.updated_at);
+                    const tradeDate = new Date(
+                      trade.closed_at || trade.updated_at
+                    );
                     const now = new Date();
-                    const diffTime = Math.abs(now.getTime() - tradeDate.getTime());
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    let timeAgo = '';
+                    const diffTime = Math.abs(
+                      now.getTime() - tradeDate.getTime()
+                    );
+                    const diffDays = Math.ceil(
+                      diffTime / (1000 * 60 * 60 * 24)
+                    );
+
+                    let timeAgo = "";
                     if (diffDays === 1) {
-                      timeAgo = 'Today';
+                      timeAgo = "Today";
                     } else if (diffDays === 2) {
-                      timeAgo = 'Yesterday';
+                      timeAgo = "Yesterday";
                     } else if (diffDays <= 7) {
                       timeAgo = `${diffDays}d ago`;
                     } else {
-                      timeAgo = tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      timeAgo = tradeDate.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      });
                     }
-                    
 
-                    
                     return (
-                      <div 
-                        key={trade.id} 
+                      <div
+                        key={trade.id}
                         onClick={() => {
                           // Navigate to trading modal when clicked
                           handleTokenClick({
@@ -3218,74 +3572,86 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                             priceChange24h: 0,
                             volume24h: 0,
                             marketCap: 0,
-                            liquidity: 0
+                            liquidity: 0,
                           });
                         }}
                         className={`rounded-lg p-3 border transition-all relative overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-lg ${
-                          wasLiquidated ? 'bg-red-950/50 border-red-600/30 hover:border-red-500/50' :
-                          wasCancelled ? 'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50' :
-                          isProfit ? 'bg-green-950/50 border-green-600/30 hover:border-green-500/50' : 
-                          'bg-red-950/50 border-red-600/30 hover:border-red-500/50'
+                          wasLiquidated
+                            ? "bg-red-950/50 border-red-600/30 hover:border-red-500/50"
+                            : wasCancelled
+                            ? "bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50"
+                            : isProfit
+                            ? "bg-green-950/50 border-green-600/30 hover:border-green-500/50"
+                            : "bg-red-950/50 border-red-600/30 hover:border-red-500/50"
                         }`}
                       >
-
-                        
                         {/* Main trade info */}
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-3 flex-1">
                             <div className="flex-1">
                               <div className="flex items-center space-x-2 mb-1">
-                                <span className="text-white font-semibold text-sm">{trade.token_symbol}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                                  trade.direction === 'Long' ? 'bg-green-800/50 text-green-300 border border-green-600/30' : 'bg-red-800/50 text-red-300 border border-red-600/30'
-                                }`}>
+                                <span className="text-white font-semibold text-sm">
+                                  {trade.token_symbol}
+                                </span>
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                    trade.direction === "Long"
+                                      ? "bg-green-800/50 text-green-300 border border-green-600/30"
+                                      : "bg-red-800/50 text-red-300 border border-red-600/30"
+                                  }`}
+                                >
                                   {trade.leverage}x {trade.direction}
                                 </span>
                               </div>
-                              
-                                                             {/* Status badges */}
-                               <div className="flex items-center space-x-2 mb-1">
-                                 {wasLiquidated && (
-                                   <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-red-100 font-bold animate-pulse">
-                                     LIQUIDATED
-                                   </span>
-                                 )}
-                                 {wasCancelled && (
-                                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-600/50 text-gray-300 border border-gray-500/30">
-                                     CANCELLED
-                                   </span>
-                                 )}
 
-                               </div>
-                              
-                                                             {/* Trade details */}
-                               <div className="flex items-center space-x-3 text-xs text-gray-400">
-                                 <span>{timeAgo}</span>
-                               </div>
+                              {/* Status badges */}
+                              <div className="flex items-center space-x-2 mb-1">
+                                {wasLiquidated && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-red-100 font-bold animate-pulse">
+                                    LIQUIDATED
+                                  </span>
+                                )}
+                                {wasCancelled && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-600/50 text-gray-300 border border-gray-500/30">
+                                    CANCELLED
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Trade details */}
+                              <div className="flex items-center space-x-3 text-xs text-gray-400">
+                                <span>{timeAgo}</span>
+                              </div>
                             </div>
                           </div>
-                          
+
                           {/* P&L Display */}
                           <div className="text-right">
                             {!wasCancelled ? (
                               <>
-                                <p className={`text-lg font-bold ${
-                                  wasLiquidated ? 'text-red-400' :
-                                  isProfit ? 'text-green-400' : 'text-red-400'
-                                }`}>
-                                  {isProfit ? '+' : ''}{formatCurrency(trade.current_pnl || 0)}
+                                <p
+                                  className={`text-lg font-bold ${
+                                    wasLiquidated
+                                      ? "text-red-400"
+                                      : isProfit
+                                      ? "text-green-400"
+                                      : "text-red-400"
+                                  }`}
+                                >
+                                  {isProfit ? "+" : ""}
+                                  {formatCurrency(trade.current_pnl || 0)}
                                 </p>
                               </>
                             ) : (
                               <div className="text-center">
-                                <p className="text-gray-400 text-sm font-medium">Cancelled</p>
+                                <p className="text-gray-400 text-sm font-medium">
+                                  Cancelled
+                                </p>
                                 <p className="text-gray-500 text-xs">No P&L</p>
                               </div>
                             )}
                           </div>
                         </div>
-
-
                       </div>
                     );
                   })}
@@ -3295,10 +3661,14 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="w-16 h-16 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-4">
                     <History className="w-8 h-8 text-gray-500" />
                   </div>
-                  <h4 className="text-white font-semibold text-lg mb-2">No Trading History</h4>
-                  <p className="text-gray-400 text-sm mb-4">Start trading to see your completed positions here</p>
+                  <h4 className="text-white font-semibold text-lg mb-2">
+                    No Trading History
+                  </h4>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Start trading to see your completed positions here
+                  </p>
                   <button
-                    onClick={() => setActiveTab('positions')}
+                    onClick={() => setActiveTab("positions")}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
                   >
                     Start Trading
@@ -3313,7 +3683,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <ArrowUpRight className="w-5 h-5 text-red-400" />
-                  <h3 className="text-lg font-semibold text-white">Withdrawal History</h3>
+                  <h3 className="text-lg font-semibold text-white">
+                    Withdrawal History
+                  </h3>
                 </div>
               </div>
 
@@ -3321,7 +3693,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               {isLoadingWithdrawals ? (
                 <div className="space-y-3">
                   {[...Array(3)].map((_, index) => (
-                    <div key={index} className="bg-gray-800 border border-gray-600 rounded-lg p-3 animate-pulse">
+                    <div
+                      key={index}
+                      className="bg-gray-800 border border-gray-600 rounded-lg p-3 animate-pulse"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 bg-gray-700 rounded-full"></div>
@@ -3344,29 +3719,40 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                     // Format date - more compact for mobile
                     const withdrawalDate = new Date(withdrawal.created_at);
                     const now = new Date();
-                    const diffTime = Math.abs(now.getTime() - withdrawalDate.getTime());
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    let timeAgo = '';
+                    const diffTime = Math.abs(
+                      now.getTime() - withdrawalDate.getTime()
+                    );
+                    const diffDays = Math.ceil(
+                      diffTime / (1000 * 60 * 60 * 24)
+                    );
+
+                    let timeAgo = "";
                     if (diffDays === 1) {
-                      timeAgo = 'Today';
+                      timeAgo = "Today";
                     } else if (diffDays === 2) {
-                      timeAgo = 'Yesterday';
+                      timeAgo = "Yesterday";
                     } else if (diffDays <= 7) {
                       timeAgo = `${diffDays}d ago`;
                     } else {
-                      timeAgo = withdrawalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      timeAgo = withdrawalDate.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      });
                     }
 
                     return (
-                      <div 
-                        key={withdrawal.id} 
+                      <div
+                        key={withdrawal.id}
                         className={`rounded-lg p-3 border transition-all relative overflow-hidden hover:scale-[1.02] hover:shadow-lg ${
-                          withdrawal.status === 'completed' ? 'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50' :
-                          withdrawal.status === 'pending' ? 'bg-yellow-950/30 border-yellow-600/30 hover:border-yellow-500/50' :
-                          withdrawal.status === 'approved' ? 'bg-blue-950/30 border-blue-600/30 hover:border-blue-500/50' :
-                          withdrawal.status === 'rejected' ? 'bg-red-950/50 border-red-600/30 hover:border-red-500/50' :
-                          'bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50'
+                          withdrawal.status === "completed"
+                            ? "bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50"
+                            : withdrawal.status === "pending"
+                            ? "bg-yellow-950/30 border-yellow-600/30 hover:border-yellow-500/50"
+                            : withdrawal.status === "approved"
+                            ? "bg-blue-950/30 border-blue-600/30 hover:border-blue-500/50"
+                            : withdrawal.status === "rejected"
+                            ? "bg-red-950/50 border-red-600/30 hover:border-red-500/50"
+                            : "bg-gray-800/50 border-gray-600/30 hover:border-gray-500/50"
                         }`}
                       >
                         {/* Main withdrawal info */}
@@ -3374,36 +3760,38 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                           <div className="flex items-center space-x-3 flex-1">
                             <div className="flex-1">
                               <div className="flex items-center space-x-2 mb-1">
-                                <span className="text-white font-semibold text-sm">SOL Withdrawal</span>
-                                {withdrawal.status === 'pending' && (
+                                <span className="text-white font-semibold text-sm">
+                                  SOL Withdrawal
+                                </span>
+                                {withdrawal.status === "pending" && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-800/50 text-yellow-300 border border-yellow-600/30 animate-pulse">
                                     PENDING
                                   </span>
                                 )}
-                                {withdrawal.status === 'approved' && (
+                                {withdrawal.status === "approved" && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-800/50 text-blue-300 border border-blue-600/30">
                                     APPROVED
                                   </span>
                                 )}
-                                {withdrawal.status === 'rejected' && (
+                                {withdrawal.status === "rejected" && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-red-100 font-bold">
                                     REJECTED
                                   </span>
                                 )}
-                                {withdrawal.status === 'completed' && (
+                                {withdrawal.status === "completed" && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-800/50 text-green-300 border border-green-600/30">
                                     COMPLETED
                                   </span>
                                 )}
                               </div>
-                              
+
                               {/* Withdrawal details */}
                               <div className="flex items-center space-x-3 text-xs text-gray-400">
                                 <span>{timeAgo}</span>
                               </div>
                             </div>
                           </div>
-                          
+
                           {/* Amount Display */}
                           <div className="text-right">
                             <p className="text-red-400 text-lg font-bold">
@@ -3420,14 +3808,18 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <div className="w-16 h-16 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-4">
                     <ArrowUpRight className="w-8 h-8 text-gray-500" />
                   </div>
-                  <h4 className="text-white font-semibold text-lg mb-2">No Withdrawal History</h4>
-                  <p className="text-gray-400 text-sm mb-4">Your SOL withdrawals will appear here once requested</p>
+                  <h4 className="text-white font-semibold text-lg mb-2">
+                    No Withdrawal History
+                  </h4>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Your SOL withdrawals will appear here once requested
+                  </p>
                 </div>
               )}
             </div>
           </div>
         );
-      
+
       default:
         return null;
     }
@@ -3442,175 +3834,224 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           <div className="relative">
             {/* Settings button for all screens */}
             <div>
-            <button 
-              onClick={() => {
-                setShowSettings(!showSettings);
-              }}
-              className={`p-3 bg-gray-800/50 rounded-xl text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50 ${
-                showSettings ? 'bg-blue-600/20 border-blue-500/30 text-blue-400' : ''
-              }`}
-            >
-              <Settings className="w-6 h-6" />
-            </button>
-            
-            {/* Quick Settings Dropdown */}
-            {showSettings && (
-              <>
-                {/* Backdrop to close dropdown */}
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setShowSettings(false)}
-                ></div>
-                
-                <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 py-2">
-                <div className="px-4 py-2 border-b border-gray-700">
-                  <p className="text-white font-semibold text-sm">Quick Actions</p>
-                </div>
-                
-                <button
-                  onClick={() => {
-                    handleEditProfile();
-                    setShowSettings(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
-                >
-                  <User className="w-5 h-5" />
-                  <span className="text-sm">Edit Profile</span>
-                </button>
-                
-                <a
-                  href="https://t.me/YonatanBad1"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setShowSettings(false)}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  <span className="text-sm">Contact Support</span>
-                </a>
-                
-                <button
-                  onClick={() => {
-                    handleToggleSound();
-                  }}
-                  className="w-full flex items-center justify-between px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
-                >
-                  <div className="flex items-center space-x-3">
-                    {soundEnabled ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M7.5 12H3a1 1 0 01-1-1V9a1 1 0 011-1h4.5l4.95-4.95a1 1 0 011.414 0 1 1 0 01.293.707V19.5a1 1 0 01-.293.707 1 1 0 01-1.414 0L7.5 15z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                      </svg>
-                    )}
-                    <span className="text-sm">Sounds</span>
-                  </div>
-                  <div className={`w-10 h-6 rounded-full p-1 transition-colors ${soundEnabled ? 'bg-blue-600' : 'bg-gray-600'}`}>
-                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                  </div>
-                </button>
-                
-                <div className="border-t border-gray-700 mt-2">
-                  <button
-                    onClick={() => {
-                      onShowTerms();
-                      setShowSettings(false);
-                    }}
-                    className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
-                  >
-                    <ExternalLink className="w-5 h-5" />
-                    <span className="text-sm">Terms of Service</span>
-                  </button>
-                  
-                                    {walletAddress === 'guest' ? (
+              <button
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                }}
+                className={`p-3 bg-gray-800/50 rounded-xl text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 active:scale-95 border border-gray-700/50 ${
+                  showSettings
+                    ? "bg-blue-600/20 border-blue-500/30 text-blue-400"
+                    : ""
+                }`}
+              >
+                <Settings className="w-6 h-6" />
+              </button>
+
+              {/* Quick Settings Dropdown */}
+              {showSettings && (
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowSettings(false)}
+                  ></div>
+
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 py-2">
+                    <div className="px-4 py-2 border-b border-gray-700">
+                      <p className="text-white font-semibold text-sm">
+                        Quick Actions
+                      </p>
+                    </div>
+
                     <button
                       onClick={() => {
-                        handleConnectWalletFromGuest();
+                        handleEditProfile();
                         setShowSettings(false);
                       }}
-                      className="w-full flex items-center space-x-3 px-4 py-3 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 transition-colors text-left"
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
                     >
-                      <LogOut className="w-5 h-5" />
-                      <span className="text-sm">Connect Wallet</span>
+                      <User className="w-5 h-5" />
+                      <span className="text-sm">Edit Profile</span>
                     </button>
-                  ) : (
+
+                    <a
+                      href="https://t.me/YonatanBad1"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setShowSettings(false)}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      <span className="text-sm">Contact Support</span>
+                    </a>
+
                     <button
                       onClick={() => {
-                        handleDisconnectWallet();
-                        setShowSettings(false);
+                        handleToggleSound();
                       }}
-                      className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-colors text-left"
+                      className="w-full flex items-center justify-between px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
                     >
-                      <LogOut className="w-5 h-5" />
-                      <span className="text-sm">Disconnect Wallet</span>
+                      <div className="flex items-center space-x-3">
+                        {soundEnabled ? (
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M7.5 12H3a1 1 0 01-1-1V9a1 1 0 011-1h4.5l4.95-4.95a1 1 0 011.414 0 1 1 0 01.293.707V19.5a1 1 0 01-.293.707 1 1 0 01-1.414 0L7.5 15z"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                            />
+                          </svg>
+                        )}
+                        <span className="text-sm">Sounds</span>
+                      </div>
+                      <div
+                        className={`w-10 h-6 rounded-full p-1 transition-colors ${
+                          soundEnabled ? "bg-blue-600" : "bg-gray-600"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                            soundEnabled ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        ></div>
+                      </div>
                     </button>
-                  )}
-                </div>
-                
-                {/* Social Media Links Section */}
-                <div className="border-t border-gray-700 mt-2 pt-3">
-                  <div className="px-4 py-2">
-                    <p className="text-white font-semibold text-sm mb-3">Join Our Community</p>
-                    <div className="flex items-center justify-center space-x-4">
-                      {/* Telegram */}
-                      <a
-                        href="https://t.me/PumpPumpkinio"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShowSettings(false)}
-                        className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-blue-600/20 transition-all duration-200 active:scale-95"
-                        title="Join our Telegram"
+
+                    <div className="border-t border-gray-700 mt-2">
+                      <button
+                        onClick={() => {
+                          onShowTerms();
+                          setShowSettings(false);
+                        }}
+                        className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-left"
                       >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                        </svg>
-                        <span className="text-sm">Telegram</span>
-                      </a>
-                      
-                      {/* X (Twitter) */}
-                      <a
-                        href="https://x.com/pumppumpkinio"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShowSettings(false)}
-                        className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-blue-600/20 transition-all duration-200 active:scale-95"
-                        title="Follow us on Twitter"
-                      >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.80l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                        <span className="text-sm">twitter</span>
-                      </a>
+                        <ExternalLink className="w-5 h-5" />
+                        <span className="text-sm">Terms of Service</span>
+                      </button>
+
+                      {walletAddress === "guest" ? (
+                        <button
+                          onClick={() => {
+                            handleConnectWalletFromGuest();
+                            setShowSettings(false);
+                          }}
+                          className="w-full flex items-center space-x-3 px-4 py-3 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 transition-colors text-left"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          <span className="text-sm">Connect Wallet</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            handleDisconnectWallet();
+                            setShowSettings(false);
+                          }}
+                          className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-colors text-left"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          <span className="text-sm">Disconnect Wallet</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Social Media Links Section */}
+                    <div className="border-t border-gray-700 mt-2 pt-3">
+                      <div className="px-4 py-2">
+                        <p className="text-white font-semibold text-sm mb-3">
+                          Join Our Community
+                        </p>
+                        <div className="flex items-center justify-center space-x-4">
+                          {/* Telegram */}
+                          <a
+                            href="https://t.me/PumpPumpkinio"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setShowSettings(false)}
+                            className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-blue-600/20 transition-all duration-200 active:scale-95"
+                            title="Join our Telegram"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                            </svg>
+                            <span className="text-sm">Telegram</span>
+                          </a>
+
+                          {/* X (Twitter) */}
+                          <a
+                            href="https://x.com/pumppumpkinio"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setShowSettings(false)}
+                            className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-blue-600/20 transition-all duration-200 active:scale-95"
+                            title="Follow us on Twitter"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.80l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                            </svg>
+                            <span className="text-sm">twitter</span>
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-               </>
-             )}
+                </>
+              )}
             </div>
           </div>
-          
+
           {/* Center - App Logo/Title - Absolutely centered */}
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center space-x-2">
             <div className="w-6 h-6 md:w-8 md:h-8">
-              <img 
-                src="https://i.imgur.com/fWVz5td.png" 
-                alt="Pump Pumpkin" 
+              <img
+                src="https://i.imgur.com/fWVz5td.png"
+                alt="Pump Pumpkin"
                 className="w-full h-full object-cover rounded-lg"
               />
             </div>
-            <span className="text-white font-bold text-sm md:text-lg">Pump Pumpkin</span>
+            <span className="text-white font-bold text-sm md:text-lg">
+              Pump Pumpkin
+            </span>
           </div>
-          
+
           {/* Right Side - Wallet Info - Hidden on mobile, shown on desktop */}
           <div className="relative">
             {/* Invisible spacer for mobile to maintain layout balance */}
             <div className="md:hidden w-8 h-8"></div>
             {/* Wallet button for desktop */}
-            <button 
+            <button
               onClick={() => {
                 handleCopyAddress();
               }}
@@ -3627,7 +4068,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       </div>
 
       {/* Enhanced Main Content with proper swipe-to-refresh like X.com */}
-      <div 
+      <div
         className="flex-1 flex flex-col overflow-y-auto"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -3635,38 +4076,44 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
       >
         {/* Refresh Area - expands naturally like X.com */}
         {(isSwipeActive || isRefreshing) && (
-          <div 
+          <div
             className="bg-black flex items-center justify-center transition-all duration-300 ease-out"
             style={{
-              height: isRefreshing ? '80px' : `${Math.min(swipeCurrentY - swipeStartY, 80)}px`,
-              opacity: isRefreshing ? 1 : Math.max(refreshProgress, 0.3)
+              height: isRefreshing
+                ? "80px"
+                : `${Math.min(swipeCurrentY - swipeStartY, 80)}px`,
+              opacity: isRefreshing ? 1 : Math.max(refreshProgress, 0.3),
             }}
           >
             <div className="flex flex-col items-center">
-              <div className={`w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center ${
-                isRefreshing ? 'animate-spin' : ''
-              }`}>
+              <div
+                className={`w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center ${
+                  isRefreshing ? "animate-spin" : ""
+                }`}
+              >
                 {isRefreshing ? (
                   <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
                 ) : (
-                  <div 
+                  <div
                     className="w-3 h-3 bg-blue-500 rounded-full transition-opacity duration-200"
                     style={{ opacity: refreshProgress }}
                   />
                 )}
               </div>
               <div className="text-blue-400 text-xs mt-2 font-medium">
-                {isRefreshing ? 'Refreshing...' : refreshProgress > 0.5 ? 'Release to refresh' : 'Pull to refresh'}
+                {isRefreshing
+                  ? "Refreshing..."
+                  : refreshProgress > 0.5
+                  ? "Release to refresh"
+                  : "Pull to refresh"}
               </div>
             </div>
           </div>
         )}
-        
+
         {/* Main Content Container */}
         <div className="flex-1 flex items-center justify-center p-4 pb-32">
-          <div className="w-full max-w-lg mx-auto">
-            {renderTabContent()}
-          </div>
+          <div className="w-full max-w-lg mx-auto">{renderTabContent()}</div>
         </div>
       </div>
 
@@ -3677,7 +4124,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             const hasBadge = tab.badgeCount > 0;
-            
+
             return (
               <button
                 key={tab.id}
@@ -3696,42 +4143,48 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   if (!isActive) {
                   }
                 }}
-                className={`tab-enhanced ${isActive ? 'active' : ''} relative flex flex-col items-center space-y-1 px-4 py-3 rounded-xl transition-all duration-200 transform ${
-                  isActive 
-                    ? 'text-white bg-blue-600/20 border border-blue-500/30 scale-105 shadow-lg shadow-blue-500/25' 
-                    : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50 hover:scale-105 active:scale-95'
+                className={`tab-enhanced ${
+                  isActive ? "active" : ""
+                } relative flex flex-col items-center space-y-1 px-4 py-3 rounded-xl transition-all duration-200 transform ${
+                  isActive
+                    ? "text-white bg-blue-600/20 border border-blue-500/30 scale-105 shadow-lg shadow-blue-500/25"
+                    : "text-gray-400 hover:text-gray-300 hover:bg-gray-800/50 hover:scale-105 active:scale-95"
                 }`}
                 style={{
-                  minWidth: '70px',
-                  minHeight: '64px'
+                  minWidth: "70px",
+                  minHeight: "64px",
                 }}
               >
                 {/* Icon Container with Badge */}
                 <div className="relative">
-                  <Icon className={`w-6 h-6 transition-all duration-200 ${
-                    isActive ? 'text-blue-400' : 'text-inherit'
-                  }`} />
-                  
+                  <Icon
+                    className={`w-6 h-6 transition-all duration-200 ${
+                      isActive ? "text-blue-400" : "text-inherit"
+                    }`}
+                  />
+
                   {/* Notification Badge */}
                   {hasBadge && (
                     <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-black animate-pulse">
-                      {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
+                      {tab.badgeCount > 99 ? "99+" : tab.badgeCount}
                     </div>
                   )}
                 </div>
-                
+
                 {/* Label */}
-                <span className={`text-xs font-semibold transition-all duration-200 ${
-                  isActive ? 'text-white' : 'text-inherit'
-                }`}>
+                <span
+                  className={`text-xs font-semibold transition-all duration-200 ${
+                    isActive ? "text-white" : "text-inherit"
+                  }`}
+                >
                   {tab.label}
                 </span>
-                
+
                 {/* Active Indicator */}
                 {isActive && (
                   <div className="absolute -bottom-1 w-8 h-1 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 animate-pulse"></div>
                 )}
-                
+
                 {/* Glow Effect for Active Tab */}
                 {isActive && (
                   <div className="absolute inset-0 rounded-xl bg-blue-400/10 blur-sm"></div>
@@ -3740,12 +4193,10 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             );
           })}
         </div>
-        
+
         {/* Safe Area for devices with home indicators */}
         <div className="h-2 bg-transparent"></div>
       </div>
-
-
 
       {/* Deposit Modal - Styled like Connect Wallet */}
       {showDepositModal && (
@@ -3763,22 +4214,28 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             <div className="mb-8">
               <div className="w-20 h-20 mx-auto">
-                <img 
-                  src="https://i.imgur.com/fWVz5td.png" 
-                  alt="Pump Pumpkin Icon" 
+                <img
+                  src="https://i.imgur.com/fWVz5td.png"
+                  alt="Pump Pumpkin Icon"
                   className="w-full h-full object-cover rounded-lg"
                 />
               </div>
             </div>
 
             <h1 className="text-3xl font-normal mb-2">
-              <span style={{ color: '#1e7cfa' }}>Deposit</span> SOL
+              <span style={{ color: "#1e7cfa" }}>Deposit</span> SOL
             </h1>
-            
-            <p className="text-gray-400 text-lg mb-2">Add SOL To Your Platform Balance</p>
-            
-            <p className="text-gray-500 text-sm mb-2">Wallet Balance: {userBalances.sol.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-8">Minimum deposit: 0.04 SOL</p>
+
+            <p className="text-gray-400 text-lg mb-2">
+              Add SOL To Your Platform Balance
+            </p>
+
+            <p className="text-gray-500 text-sm mb-2">
+              Wallet Balance: {userBalances.sol.toFixed(4)} SOL
+            </p>
+            <p className="text-gray-500 text-sm mb-8">
+              Minimum deposit: 0.04 SOL
+            </p>
 
             {/* Error Message */}
             {depositError && (
@@ -3806,18 +4263,22 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 <button
                   onClick={() => {
                     if (!userBalances.sol || userBalances.sol < 0.06) {
-                      setDepositError('Insufficient SOL balance. You need at least 0.06 SOL (0.04 deposit + 0.02 gas fees).');
+                      setDepositError(
+                        "Insufficient SOL balance. You need at least 0.06 SOL (0.04 deposit + 0.02 gas fees)."
+                      );
                       return;
                     }
-                    
+
                     // Set max amount leaving 0.02 SOL for gas fees
                     const maxAmount = Math.max(0, userBalances.sol - 0.02);
                     if (maxAmount >= 0.04) {
                       setDepositAmount(maxAmount.toFixed(4));
                       setDepositError(null);
-                                          } else {
-                        setDepositError('Insufficient SOL balance. You need at least 0.06 SOL (0.04 deposit + 0.02 gas fees).');
-                      }
+                    } else {
+                      setDepositError(
+                        "Insufficient SOL balance. You need at least 0.06 SOL (0.04 deposit + 0.02 gas fees)."
+                      );
+                    }
                   }}
                   disabled={isDepositing}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors"
@@ -3829,22 +4290,49 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             <button
               onClick={handleDeposit}
-              disabled={!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.02 > userBalances.sol || isDepositing}
+              disabled={
+                !depositAmount ||
+                parseFloat(depositAmount) < 0.04 ||
+                parseFloat(depositAmount) + 0.02 > userBalances.sol ||
+                isDepositing
+              }
               className="w-full text-black font-medium py-4 px-6 rounded-lg text-lg transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
-              style={{ 
-                backgroundColor: (!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.02 > userBalances.sol || isDepositing) ? '#374151' : '#1e7cfa',
-                color: (!depositAmount || parseFloat(depositAmount) < 0.04 || parseFloat(depositAmount) + 0.02 > userBalances.sol || isDepositing) ? '#9ca3af' : 'black'
+              style={{
+                backgroundColor:
+                  !depositAmount ||
+                  parseFloat(depositAmount) < 0.04 ||
+                  parseFloat(depositAmount) + 0.02 > userBalances.sol ||
+                  isDepositing
+                    ? "#374151"
+                    : "#1e7cfa",
+                color:
+                  !depositAmount ||
+                  parseFloat(depositAmount) < 0.04 ||
+                  parseFloat(depositAmount) + 0.02 > userBalances.sol ||
+                  isDepositing
+                    ? "#9ca3af"
+                    : "black",
               }}
-                              onMouseEnter={(e) => {
-                  if (depositAmount && parseFloat(depositAmount) >= 0.04 && parseFloat(depositAmount) + 0.02 <= userBalances.sol && !isDepositing) {
-                    (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (depositAmount && parseFloat(depositAmount) >= 0.04 && parseFloat(depositAmount) + 0.02 <= userBalances.sol && !isDepositing) {
-                    (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
-                  }
-                }}
+              onMouseEnter={(e) => {
+                if (
+                  depositAmount &&
+                  parseFloat(depositAmount) >= 0.04 &&
+                  parseFloat(depositAmount) + 0.02 <= userBalances.sol &&
+                  !isDepositing
+                ) {
+                  (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (
+                  depositAmount &&
+                  parseFloat(depositAmount) >= 0.04 &&
+                  parseFloat(depositAmount) + 0.02 <= userBalances.sol &&
+                  !isDepositing
+                ) {
+                  (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
+                }
+              }}
             >
               {isDepositing ? (
                 <>
@@ -3852,7 +4340,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <span>Processing...</span>
                 </>
               ) : (
-                <span>Deposit {depositAmount ? `${parseFloat(depositAmount).toFixed(4)} SOL` : 'SOL'}</span>
+                <span>
+                  Deposit{" "}
+                  {depositAmount
+                    ? `${parseFloat(depositAmount).toFixed(4)} SOL`
+                    : "SOL"}
+                </span>
               )}
             </button>
 
@@ -3860,7 +4353,8 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               SOL Will Be Added To Your Platform Balance
             </p>
             <p className="text-gray-500 text-xs mb-1">
-              Transfer to: {PLATFORM_WALLET.slice(0, 8)}...{PLATFORM_WALLET.slice(-8)}
+              Transfer to: {PLATFORM_WALLET.slice(0, 8)}...
+              {PLATFORM_WALLET.slice(-8)}
             </p>
             <p className="text-gray-500 text-xs">
               Note: 0.02 SOL reserved for gas fees
@@ -3879,7 +4373,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   setShowWithdrawModal(false);
                   setWithdrawError(null);
                   setWithdrawSuccess(null);
-                  setWithdrawAmount('');
+                  setWithdrawAmount("");
                 }}
                 disabled={isWithdrawing}
                 className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3890,22 +4384,28 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             <div className="mb-4">
               <div className="w-16 h-16 mx-auto">
-                <img 
-                  src="https://i.imgur.com/fWVz5td.png" 
-                  alt="Pump Pumpkin Icon" 
+                <img
+                  src="https://i.imgur.com/fWVz5td.png"
+                  alt="Pump Pumpkin Icon"
                   className="w-full h-full object-cover rounded-lg"
                 />
               </div>
             </div>
 
             <h1 className="text-2xl font-normal mb-2">
-              <span style={{ color: '#1e7cfa' }}>Withdraw</span> SOL
+              <span style={{ color: "#1e7cfa" }}>Withdraw</span> SOL
             </h1>
-            
-            <p className="text-gray-400 text-base mb-2">Request SOL Withdrawal</p>
-            
-            <p className="text-gray-500 text-sm mb-1">Available: {currentSOLBalance.toFixed(4)} SOL</p>
-            <p className="text-gray-500 text-sm mb-3">Minimum withdrawal: 0.04 SOL</p>
+
+            <p className="text-gray-400 text-base mb-2">
+              Request SOL Withdrawal
+            </p>
+
+            <p className="text-gray-500 text-sm mb-1">
+              Available: {currentSOLBalance.toFixed(4)} SOL
+            </p>
+            <p className="text-gray-500 text-sm mb-3">
+              Minimum withdrawal: 0.04 SOL
+            </p>
 
             {/* Approval Time */}
             <div className="mb-4 p-2 rounded-lg border text-xs bg-gray-800 border-gray-600 text-gray-300">
@@ -3947,20 +4447,47 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             <button
               onClick={handleWithdraw}
-              disabled={!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing}
+              disabled={
+                !withdrawAmount ||
+                parseFloat(withdrawAmount) < 0.04 ||
+                parseFloat(withdrawAmount) > currentSOLBalance ||
+                isWithdrawing
+              }
               className="w-full text-black font-medium py-3 px-4 rounded-lg text-base transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-4 flex items-center justify-center space-x-2"
-              style={{ 
-                backgroundColor: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#374151' : '#1e7cfa',
-                color: (!withdrawAmount || parseFloat(withdrawAmount) < 0.04 || parseFloat(withdrawAmount) > currentSOLBalance || isWithdrawing) ? '#9ca3af' : 'black'
+              style={{
+                backgroundColor:
+                  !withdrawAmount ||
+                  parseFloat(withdrawAmount) < 0.04 ||
+                  parseFloat(withdrawAmount) > currentSOLBalance ||
+                  isWithdrawing
+                    ? "#374151"
+                    : "#1e7cfa",
+                color:
+                  !withdrawAmount ||
+                  parseFloat(withdrawAmount) < 0.04 ||
+                  parseFloat(withdrawAmount) > currentSOLBalance ||
+                  isWithdrawing
+                    ? "#9ca3af"
+                    : "black",
               }}
               onMouseEnter={(e) => {
-                if (withdrawAmount && parseFloat(withdrawAmount) >= 0.04 && parseFloat(withdrawAmount) <= currentSOLBalance && !isWithdrawing) {
-                  (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+                if (
+                  withdrawAmount &&
+                  parseFloat(withdrawAmount) >= 0.04 &&
+                  parseFloat(withdrawAmount) <= currentSOLBalance &&
+                  !isWithdrawing
+                ) {
+                  (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
                 }
               }}
               onMouseLeave={(e) => {
-                if (withdrawAmount && parseFloat(withdrawAmount) >= 0.04 && parseFloat(withdrawAmount) <= currentSOLBalance && !isWithdrawing) {
-                  (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+                if (
+                  withdrawAmount &&
+                  parseFloat(withdrawAmount) >= 0.04 &&
+                  parseFloat(withdrawAmount) <= currentSOLBalance &&
+                  !isWithdrawing
+                ) {
+                  (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
                 }
               }}
             >
@@ -3970,14 +4497,21 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <span>Processing...</span>
                 </>
               ) : (
-                <span>Request Withdrawal {withdrawAmount ? `${parseFloat(withdrawAmount).toFixed(4)} SOL` : ''}</span>
+                <span>
+                  Request Withdrawal{" "}
+                  {withdrawAmount
+                    ? `${parseFloat(withdrawAmount).toFixed(4)} SOL`
+                    : ""}
+                </span>
               )}
             </button>
 
             {/* Withdrawal History Card */}
             <div className="mt-4 mb-4">
-              <h3 className="text-sm font-medium text-gray-300 mb-2">Recent Withdrawals</h3>
-              
+              <h3 className="text-sm font-medium text-gray-300 mb-2">
+                Recent Withdrawals
+              </h3>
+
               {isLoadingWithdrawals ? (
                 <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
                   <div className="flex items-center justify-center">
@@ -3988,28 +4522,45 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
               ) : withdrawalRequests.length > 0 ? (
                 <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
                   {withdrawalRequests.slice(0, 3).map((request) => (
-                    <div key={request.id} className="bg-gray-800 border border-gray-600 rounded-lg p-3">
+                    <div
+                      key={request.id}
+                      className="bg-gray-800 border border-gray-600 rounded-lg p-3"
+                    >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-white text-sm font-medium">{parseFloat(request.amount.toString()).toFixed(4)} SOL</p>
+                          <p className="text-white text-sm font-medium">
+                            {parseFloat(request.amount.toString()).toFixed(4)}{" "}
+                            SOL
+                          </p>
                           <p className="text-gray-400 text-xs">
-                            {new Date(request.created_at).toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                            {new Date(request.created_at).toLocaleString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </p>
                         </div>
                         <div className="text-right">
-                          {request.status === 'pending' ? (
-                            <span className="text-gray-400 text-xs font-medium">pending...</span>
-                          ) : request.status === 'completed' ? (
-                            <span className="text-green-400 text-xs font-medium">successful</span>
-                          ) : request.status === 'approved' ? (
-                            <span className="text-blue-400 text-xs font-medium">approved</span>
+                          {request.status === "pending" ? (
+                            <span className="text-gray-400 text-xs font-medium">
+                              pending...
+                            </span>
+                          ) : request.status === "completed" ? (
+                            <span className="text-green-400 text-xs font-medium">
+                              successful
+                            </span>
+                          ) : request.status === "approved" ? (
+                            <span className="text-blue-400 text-xs font-medium">
+                              approved
+                            </span>
                           ) : (
-                            <span className="text-red-400 text-xs font-medium">rejected</span>
+                            <span className="text-red-400 text-xs font-medium">
+                              rejected
+                            </span>
                           )}
                         </div>
                       </div>
@@ -4018,7 +4569,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                 </div>
               ) : (
                 <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 text-center">
-                  <p className="text-gray-400 text-sm">No withdrawal requests yet</p>
+                  <p className="text-gray-400 text-sm">
+                    No withdrawal requests yet
+                  </p>
                 </div>
               )}
             </div>
@@ -4051,9 +4604,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             {/* Character Icon */}
             <div className="mb-4">
               <div className="w-12 h-12 mx-auto">
-                <img 
-                  src="https://i.imgur.com/fWVz5td.png" 
-                  alt="Pump Pumpkin Icon" 
+                <img
+                  src="https://i.imgur.com/fWVz5td.png"
+                  alt="Pump Pumpkin Icon"
                   className="w-full h-full object-cover rounded-lg"
                 />
               </div>
@@ -4061,32 +4614,32 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             {/* Title */}
             <h1 className="text-xl font-normal mb-1 text-center">
-              {swapMode === 'buy' ? 'Buy' : 'Sell'} <span style={{ color: '#1e7cfa' }}>PPA</span>
+              {swapMode === "buy" ? "Buy" : "Sell"}{" "}
+              <span style={{ color: "#1e7cfa" }}>PPA</span>
             </h1>
-            
+
             {/* Subtitle */}
             <p className="text-gray-400 text-sm mb-3 text-center">
-              {swapMode === 'buy' ? 'Swap SOL For PPA' : 'Swap PPA For SOL'}
+              {swapMode === "buy" ? "Swap SOL For PPA" : "Swap PPA For SOL"}
             </p>
 
             {/* Balance Display */}
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-3">
               <p className="text-gray-400 text-xs mb-1">Available</p>
               <p className="text-white text-sm">
-                {swapMode === 'buy' 
-                  ? `${userBalances.sol.toFixed(4)} SOL` 
-                  : `${formatTokenAmount(userBalances.ppa)} PPA`
-                }
+                {swapMode === "buy"
+                  ? `${userBalances.sol.toFixed(4)} SOL`
+                  : `${formatTokenAmount(userBalances.ppa)} PPA`}
               </p>
             </div>
-            
+
             {/* Error Message */}
             {swapError && (
               <div className="bg-red-900 border border-red-700 rounded-lg p-2 mb-3">
                 <p className="text-red-300 text-xs">{swapError}</p>
               </div>
             )}
-            
+
             {/* Pay Input with Max Button */}
             <div className="mb-2">
               <div className="relative">
@@ -4094,9 +4647,11 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   type="number"
                   value={payAmount}
                   onChange={(e) => setPayAmount(e.target.value)}
-                  placeholder={`Enter ${swapMode === 'buy' ? 'SOL' : 'PPA'} Amount`}
+                  placeholder={`Enter ${
+                    swapMode === "buy" ? "SOL" : "PPA"
+                  } Amount`}
                   min="0"
-                  step={swapMode === 'buy' ? '0.001' : '0.01'}
+                  step={swapMode === "buy" ? "0.001" : "0.01"}
                   disabled={isSwapping}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 pr-16 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-center disabled:opacity-50"
                 />
@@ -4104,7 +4659,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   onClick={() => {
                     handleMaxAmount();
                   }}
-                  disabled={isSwapping || (swapMode === 'buy' ? userBalances.sol <= 0.01 : userBalances.ppa <= 0)}
+                  disabled={
+                    isSwapping ||
+                    (swapMode === "buy"
+                      ? userBalances.sol <= 0.01
+                      : userBalances.ppa <= 0)
+                  }
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Max
@@ -4133,14 +4693,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <div className="mb-3">
               <div className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-center">
                 <span className="text-white text-sm">
-                  {swapQuote ? 
-                    swapMode === 'buy' 
-                      ? `${jupiterSwapService.formatTokenAmount(swapQuote.outAmount, 'PPA')} PPA`
-                      : `${jupiterSwapService.formatTokenAmount(swapQuote.outAmount, 'SOL')} SOL`
-                    : swapMode === 'buy' 
-                      ? '0 PPA'
-                      : '0 SOL'
-                  }
+                  {swapQuote
+                    ? swapMode === "buy"
+                      ? `${jupiterSwapService.formatTokenAmount(
+                          swapQuote.outAmount,
+                          "PPA"
+                        )} PPA`
+                      : `${jupiterSwapService.formatTokenAmount(
+                          swapQuote.outAmount,
+                          "SOL"
+                        )} SOL`
+                    : swapMode === "buy"
+                    ? "0 PPA"
+                    : "0 SOL"}
                 </span>
               </div>
             </div>
@@ -4149,24 +4714,29 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <div className="mb-4 text-center space-y-1">
               {swapQuote && swapQuote.priceImpactPct && (
                 <p className="text-gray-400 text-xs">
-                  Impact: {parseFloat(swapQuote.priceImpactPct || '0').toFixed(2)}%
+                  Impact:{" "}
+                  {parseFloat(swapQuote.priceImpactPct || "0").toFixed(2)}%
                 </p>
               )}
               {exchangeRate && (
-                <p className="text-white text-xs">
-                  {exchangeRate}
-                </p>
+                <p className="text-white text-xs">{exchangeRate}</p>
               )}
             </div>
 
             {/* Swap Button */}
             <button
               onClick={handleSwap}
-              disabled={!payAmount || !swapQuote || isSwapping || isGettingQuote}
+              disabled={
+                !payAmount || !swapQuote || isSwapping || isGettingQuote
+              }
               className="w-full text-black font-medium py-2 px-4 rounded-lg text-sm transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed mb-2 flex items-center justify-center space-x-2"
-              style={{ 
-                backgroundColor: (!payAmount || !swapQuote || isSwapping) ? '#374151' : '#1e7cfa',
-                color: (!payAmount || !swapQuote || isSwapping) ? '#9ca3af' : 'black'
+              style={{
+                backgroundColor:
+                  !payAmount || !swapQuote || isSwapping
+                    ? "#374151"
+                    : "#1e7cfa",
+                color:
+                  !payAmount || !swapQuote || isSwapping ? "#9ca3af" : "black",
               }}
             >
               {isSwapping ? (
@@ -4175,7 +4745,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
                   <span>Swapping...</span>
                 </>
               ) : (
-                <span>{swapMode === 'buy' ? 'Buy PPA' : 'Sell PPA'}</span>
+                <span>{swapMode === "buy" ? "Buy PPA" : "Sell PPA"}</span>
               )}
             </button>
 
@@ -4191,9 +4761,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             {/* Powered by Jupiter */}
             <div className="flex items-center justify-center space-x-1">
               <span className="text-gray-500 text-xs">Powered by</span>
-              <img 
-                src="https://portal.jup.ag/images/branding/JupiterIcon.svg" 
-                alt="Jupiter" 
+              <img
+                src="https://portal.jup.ag/images/branding/JupiterIcon.svg"
+                alt="Jupiter"
                 className="w-3 h-3"
               />
               <span className="text-gray-400 text-xs font-medium">Jupiter</span>
@@ -4215,37 +4785,44 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             {/* Success Title */}
             <h1 className="text-2xl font-normal mb-3">
-              Swap <span style={{ color: '#1e7cfa' }}>Successful!</span>
+              Swap <span style={{ color: "#1e7cfa" }}>Successful!</span>
             </h1>
-            
+
             {/* Transaction Details */}
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-xs">You Paid:</span>
                   <span className="text-white text-sm font-medium">
-                    {swapSuccessData.inputAmount.toFixed(4)} {swapSuccessData.inputToken}
+                    {swapSuccessData.inputAmount.toFixed(4)}{" "}
+                    {swapSuccessData.inputToken}
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-xs">You Received:</span>
                   <span className="text-green-400 text-sm font-medium">
-                    {swapSuccessData.outputAmount.toFixed(4)} {swapSuccessData.outputToken}
+                    {swapSuccessData.outputAmount.toFixed(4)}{" "}
+                    {swapSuccessData.outputToken}
                   </span>
                 </div>
 
                 {/* Platform fees removed - no longer charged on swaps */}
-                
+
                 <div className="border-t border-gray-700 pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-xs">Transaction ID:</span>
+                    <span className="text-gray-400 text-xs">
+                      Transaction ID:
+                    </span>
                     <button
-                      onClick={() => navigator.clipboard.writeText(swapSuccessData.txid)}
+                      onClick={() =>
+                        navigator.clipboard.writeText(swapSuccessData.txid)
+                      }
                       className="text-blue-400 hover:text-blue-300 text-xs font-mono truncate max-w-24"
                       title="Click to copy"
                     >
-                      {swapSuccessData.txid.slice(0, 6)}...{swapSuccessData.txid.slice(-6)}
+                      {swapSuccessData.txid.slice(0, 6)}...
+                      {swapSuccessData.txid.slice(-6)}
                     </button>
                   </div>
                 </div>
@@ -4254,7 +4831,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             {/* View on Explorer Button */}
             <button
-              onClick={() => window.open(`https://solscan.io/tx/${swapSuccessData.txid}`, '_blank')}
+              onClick={() =>
+                window.open(
+                  `https://solscan.io/tx/${swapSuccessData.txid}`,
+                  "_blank"
+                )
+              }
               className="w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors mb-3"
             >
               View on Solscan
@@ -4264,12 +4846,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             <button
               onClick={handleCloseSuccessModal}
               className="w-full text-black font-medium py-2 px-4 rounded-lg text-sm transition-colors"
-              style={{ backgroundColor: '#1e7cfa' }}
+              style={{ backgroundColor: "#1e7cfa" }}
               onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#1a6ce8';
+                (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
               }}
               onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#1e7cfa';
+                (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
               }}
             >
               Continue Trading
@@ -4285,9 +4867,9 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             {/* Loading Icon */}
             <div className="mb-6">
               <div className="relative w-20 h-20 mx-auto">
-                <img 
-                  src="https://i.imgur.com/fWVz5td.png" 
-                  alt="Pump Pumpkin Icon" 
+                <img
+                  src="https://i.imgur.com/fWVz5td.png"
+                  alt="Pump Pumpkin Icon"
                   className="w-full h-full object-cover rounded-lg"
                 />
                 <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-lg animate-spin"></div>
@@ -4296,24 +4878,33 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
 
             {/* Loading Text */}
             <h1 className="text-2xl font-normal mb-3">
-              Verifying Your <span style={{ color: '#1e7cfa' }}>Transaction</span>
+              Verifying Your{" "}
+              <span style={{ color: "#1e7cfa" }}>Transaction</span>
             </h1>
-            
+
             <p className="text-gray-400 text-lg mb-2">Please Wait...</p>
-            <p className="text-gray-500 text-sm">We are confirming your transaction on the Solana blockchain</p>
-            <p className="text-gray-500 text-sm mt-4">This usually takes a few seconds</p>
-            
+            <p className="text-gray-500 text-sm">
+              We are confirming your transaction on the Solana blockchain
+            </p>
+            <p className="text-gray-500 text-sm mt-4">
+              This usually takes a few seconds
+            </p>
+
             {/* Animated dots */}
             <div className="flex justify-center space-x-1 mt-6">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              <div
+                className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                style={{ animationDelay: "0.2s" }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                style={{ animationDelay: "0.4s" }}
+              ></div>
             </div>
           </div>
         </div>
       )}
-
-
 
       {/* Position Management Modal */}
       {showPositionModal && selectedPosition && (
@@ -4325,12 +4916,12 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           solPrice={solPrice}
         />
       )}
-      
+
       {/* Closing Trade Loading Modal */}
       <TradeLoadingModal
         isOpen={showClosingModal}
         type="closing"
-        tokenSymbol={closingTradeData?.tokenSymbol || ''}
+        tokenSymbol={closingTradeData?.tokenSymbol || ""}
         direction={closingTradeData?.direction}
         leverage={closingTradeData?.leverage}
         onClose={() => {
@@ -4339,16 +4930,16 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         }}
         canCancel={false} // Don't allow cancelling during anti-gaming delay
       />
-      
+
       {/* Trade Results Modal */}
       <TradeResultsModal
         isOpen={showTradeResults}
         onClose={() => {
           setShowTradeResults(false);
           setTradeResultsData(null);
-          
+
           // Reload positions to reflect changes
-          if (activeTab === 'positions') {
+          if (activeTab === "positions") {
             loadTradingPositions();
           }
         }}
@@ -4367,19 +4958,19 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
             try {
               await shareTradeResults(tradeResultsData, walletAddress);
             } catch (error) {
-              console.error('Error sharing trade results:', error);
+              console.error("Error sharing trade results:", error);
             }
           }
         }}
         isProfit={tradeResultsData ? tradeResultsData.finalPnL > 0 : false}
         pnlAmount={tradeResultsData ? tradeResultsData.finalPnL : 0}
-        tokenSymbol={tradeResultsData ? tradeResultsData.tokenSymbol : ''}
+        tokenSymbol={tradeResultsData ? tradeResultsData.tokenSymbol : ""}
         leverage={tradeResultsData ? tradeResultsData.leverage : 1}
-        direction={tradeResultsData ? tradeResultsData.direction : 'Long'}
-        collateralAmount={tradeResultsData ? tradeResultsData.collateralAmount : 0}
+        direction={tradeResultsData ? tradeResultsData.direction : "Long"}
+        collateralAmount={
+          tradeResultsData ? tradeResultsData.collateralAmount : 0
+        }
       />
-      
-
 
       {/* Trading Modal */}
       {showTradingModal && selectedTokenData && (
@@ -4399,7 +4990,7 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
           onNavigateToPositions={() => {
             setShowTradingModal(false);
             setSelectedTokenData(null);
-            setActiveTab('positions');
+            setActiveTab("positions");
           }}
         />
       )}
@@ -4441,7 +5032,6 @@ export default function Dashboard({ username, profilePicture, walletAddress, bal
         onClose={handleWelcomeClose}
         onOpenDeposit={() => setShowDepositModal(true)}
       />
-
     </div>
   );
 }
