@@ -393,7 +393,7 @@ const About: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pr-2 md:pr-0">
                   <h4 className="text-white font-bold text-lg mb-2">
                     Yonatan Badash
                   </h4>
@@ -417,9 +417,39 @@ const About: React.FC = () => {
                       Financial Innovation
                     </span>
                   </div>
+
+                  {/* Mobile social links - shown below content on mobile */}
+                  <div className="flex md:hidden justify-center items-center space-x-3 mt-4 pt-4 border-t border-gray-700/30">
+                    <a
+                      href="https://www.linkedin.com/in/yonatan-badash-a19aa1279"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
+                    >
+                      <Linkedin className="w-4 h-4 text-gray-400 hover:text-blue-400" />
+                    </a>
+                    <a
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      href="https://t.me/YonatanBad1"
+                      className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-600/20 transition-colors border border-gray-700/50"
+                    >
+                      <Send className="w-4 h-4 text-gray-400 hover:text-blue-400" />
+                    </a>
+                    <a
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      href="https://x.com/yonatanbadash1"
+                      className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center hover:bg-blue-500/20 transition-colors border border-gray-700/50"
+                    >
+                      <Twitter className="w-4 h-4 text-gray-400 hover:text-blue-500" />
+                    </a>
+                  </div>
                 </div>
               </div>
-              <div className="absolute top-4 right-4 flex items-center space-x-3">
+
+              {/* Desktop social links - absolute positioned on desktop only */}
+              <div className="hidden md:flex absolute top-4 right-4 items-center space-x-3">
                 <a
                   href="https://www.linkedin.com/in/yonatan-badash-a19aa1279"
                   target="_blank"
