@@ -106,7 +106,7 @@ interface DashboardProps {
   onShowTerms: () => void;
 }
 
-type TabType = "home" | "rewards" | "positions" | "orders";
+type TabType = "home" | "rewards" | "about" | "positions" | "orders";
 type SwapMode = "buy" | "sell";
 type ViewState = "dashboard" | "edit-profile";
 
@@ -2443,16 +2443,24 @@ export default function Dashboard({
       icon: Home,
       badgeCount: activePositions.length,
     },
+
     {
-      id: "about" as TabType,
-      label: "About Us",
-      icon: Info,
+      id: "rewards" as TabType,
+      label: "Rewards",
+      icon: DollarSign,
       badgeCount: 0,
     },
+
     {
       id: "orders" as TabType,
       label: "History",
       icon: History,
+      badgeCount: 0,
+    },
+    {
+      id: "about" as TabType,
+      label: "About Us",
+      icon: Info,
       badgeCount: 0,
     },
   ];
@@ -2815,6 +2823,194 @@ export default function Dashboard({
 
       case "about":
         return <About />;
+
+      case "rewards":
+        return (
+          <div className="text-center max-w-full w-full px-4">
+            {/* Character Icon - Smaller for mobile */}
+            <div className="mb-3">
+              <div className="w-12 h-12 mx-auto">
+                <img
+                  src="https://i.imgur.com/fWVz5td.png"
+                  alt="Pump Pumpkin Icon"
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              </div>
+            </div>
+
+            {/* Rewards Title - Smaller */}
+            <h1 className="text-lg font-normal mb-2">
+              Your <span style={{ color: "#1e7cfa" }}>Rewards</span>
+            </h1>
+
+            {/* Lifetime Rewards - Smaller */}
+            <p className="text-gray-400 text-xs mb-1">
+              Lifetime PPA Lock Earnings
+            </p>
+            {isLoadingEarnings ? (
+              <div className="flex items-center justify-center mb-3">
+                <Loader2 className="w-4 h-4 animate-spin text-white mr-2" />
+                <span className="text-lg font-bold text-white">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-lg font-bold text-white">
+                  {lifetimeSOLEarnings.toFixed(4)} SOL
+                </p>
+                <p className="text-gray-400 text-xs mb-3">
+                  {formatCurrency(lifetimeSOLEarnings * solPrice)}
+                </p>
+              </>
+            )}
+
+            {/* PPA Info - Compact */}
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-bold text-white mb-3">
+                Lock Your PPA Tokens And Get SOL To Trade With Immediately
+              </h3>
+              <p className="text-gray-400 text-xs mb-3">
+                Lock your PPA tokens for 7-30 days and receive SOL rewards
+                upfront immediately. Start trading with your SOL rewards right
+                away while your PPA earns more over time.
+              </p>
+
+              {/* PPA Stats - Compact */}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">
+                    {formatTokenAmount(userBalances.ppa)}
+                  </p>
+                  <p className="text-gray-500 text-xs">PPA In Wallet</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">
+                    {isLoadingEarnings
+                      ? "Loading..."
+                      : formatCurrency(lifetimeSOLEarnings * solPrice)}
+                  </p>
+                  <p className="text-gray-500 text-xs">Lock Earnings</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">
+                    {ppaPrice ? formatNumber(ppaPrice) : "0"}
+                  </p>
+                  <p className="text-gray-500 text-xs">PPA/SOL</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">
+                    {formatTokenAmount(totalPPALocked)}
+                  </p>
+                  <p className="text-gray-500 text-xs">PPA Locked</p>
+                </div>
+              </div>
+
+              {/* Lock Countdown - Wide across the card */}
+              {latestLockCountdown && (
+                <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 mb-4">
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs mb-1">
+                      Latest Lock Status
+                    </p>
+                    <p className="text-white font-bold text-sm">
+                      {latestLockCountdown}
+                    </p>
+                    {expiredLock && (
+                      <button
+                        onClick={handleUnlockClick}
+                        className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-500 transition-colors text-sm flex items-center justify-center space-x-2 mx-auto"
+                      >
+                        <Unlock className="w-4 h-4" />
+                        <span>Request Unlock</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons - Compact */}
+              <div
+                className="space-y-2 relative"
+                style={{ overflow: "visible" }}
+              >
+                <button
+                  onClick={() => {
+                    handleBuyPPA();
+                    hapticFeedback.medium();
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
+                  }}
+                  className="btn-premium w-full text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors"
+                  style={{ backgroundColor: "#1e7cfa" }}
+                >
+                  Buy PPA Tokens
+                </button>
+
+                {/* Earn SOL Button */}
+                <button
+                  onClick={() => {
+                    setShowLockingModal(true);
+                    hapticFeedback.medium();
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = "#1a6ce8";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLElement).style.backgroundColor = "#1e7cfa";
+                  }}
+                  className="btn-premium w-full text-black font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2"
+                  style={{ backgroundColor: "#1e7cfa" }}
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Earn SOL</span>
+                </button>
+
+                {/* Unlock Button with Tooltip */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      if (expiredLock) {
+                        setShowUnlockModal(true);
+                        hapticFeedback.medium();
+                      }
+                    }}
+                    disabled={!expiredLock}
+                    onMouseEnter={(e) => {
+                      if (!expiredLock) return;
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "#16a34a";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!expiredLock) return;
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "#22c55e";
+                    }}
+                    className="btn-premium w-full text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: expiredLock ? "#22c55e" : "#6b7280",
+                      color: "white",
+                    }}
+                  >
+                    <Unlock className="w-4 h-4" />
+                    <span>
+                      {expiredLock ? "Unlock PPA" : "No Unlocks Available"}
+                    </span>
+                  </button>
+
+                  {/* Unlock Info Text Below Button */}
+                  <div className="mt-2 text-center">
+                    <p className="text-gray-400 text-xs">
+                      {getUnlockTooltipText()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
 
       case "positions":
         const portfolioData = calculateTotalPortfolioValue();
