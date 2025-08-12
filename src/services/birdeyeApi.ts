@@ -1795,6 +1795,53 @@ export const formatMarketCap = (marketCap: number): string => {
   }
 };
 
+// Meme token detail (single) via Birdeye v3
+export interface MemeTokenDetailSingleResult {
+  address: string;
+  name: string;
+  symbol: string;
+  logoURI?: string;
+  price?: number;
+  liquidity?: number;
+  marketCap?: number;
+}
+
+export const fetchMemeTokenDetailSingle = async (
+  address: string
+): Promise<MemeTokenDetailSingleResult | null> => {
+  try {
+    const cleanAddress = cleanTokenAddress(address);
+    if (!cleanAddress) return null;
+
+    const response = await birdeyeApi.get('/defi/v3/token/meme/detail/single', {
+      params: { address: cleanAddress },
+      headers: { 'x-chain': 'solana' },
+      timeout: 10000,
+    });
+
+    const data = response.data?.data;
+    if (!data) return null;
+
+    return {
+      address: data.address || cleanAddress,
+      name: data.name || '',
+      symbol: data.symbol || '',
+      logoURI: data.logo_uri || data.logoURI || data.logo || data.image,
+      price: typeof data.price === 'number' ? data.price : undefined,
+      liquidity: typeof data.liquidity === 'number' ? data.liquidity : undefined,
+      marketCap:
+        typeof data.market_cap === 'number'
+          ? data.market_cap
+          : typeof data.fdv === 'number'
+          ? data.fdv
+          : undefined,
+    };
+  } catch (error: any) {
+    console.error('💥 Error fetching meme token detail single:', error.message);
+    return null;
+  }
+};
+
 // Add token search interface
 export interface SearchResult {
   address: string;

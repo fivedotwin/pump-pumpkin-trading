@@ -53,10 +53,10 @@ import {
   formatVolume,
   formatMarketCap,
   TrendingToken,
-  searchTokens,
-  SearchResult,
   fetchTokenSecurity,
   fetchPPAPriceInSOL,
+  fetchMemeTokenDetailSingle,
+  MemeTokenDetailSingleResult,
 } from "../services/birdeyeApi";
 import { jupiterSwapService, SwapDirection } from "../services/jupiterApi";
 import {
@@ -212,11 +212,11 @@ export default function Dashboard({
   const [currentProfilePicture, setCurrentProfilePicture] =
     useState(profilePicture);
 
-  // Add search state
+  // Address-only search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [memeDetail, setMemeDetail] = useState<MemeTokenDetailSingleResult | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // Add positions tab state
   const [positionsSubTab, setPositionsSubTab] = useState<"active" | "pending">(
@@ -2555,64 +2555,57 @@ export default function Dashboard({
     },
   ];
 
-  // Search tokens function
+  // Address-only search function using Meme Detail Single
   const handleTokenSearch = async (query: string) => {
     setSearchQuery(query);
+    setSearchError(null);
+    setMemeDetail(null);
 
-    if (query.length < 2) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
+    const trimmed = query.trim();
+    if (trimmed.length < 10) {
+      return; // Require plausible length before hitting API
     }
 
     setIsSearching(true);
-    setShowSearchResults(true);
-
     try {
-      const results = await searchTokens(query);
-      setSearchResults(results);
+      const detail = await fetchMemeTokenDetailSingle(trimmed);
+      if (!detail) {
+        setSearchError('Token not found');
+      }
+      setMemeDetail(detail);
     } catch (error) {
-      console.error("Search error:", error);
-      setSearchResults([]);
+      console.error('Search error:', error);
+      setSearchError('Failed to fetch token');
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Handle search result selection - go directly to trading modal
-  const handleSearchResultClick = async (result: SearchResult) => {
-    setSearchQuery("");
-    setShowSearchResults(false);
-    setSearchResults([]);
+  // Handle opening trading modal from meme detail
+  const handleOpenFromMemeDetail = async () => {
+    if (!memeDetail) return;
 
-    // Show modal immediately with loading state
     setSelectedTokenData({
-      address: result.address,
-      symbol: result.symbol,
-      name: result.name,
-      price: result.price || 0,
+      address: memeDetail.address,
+      symbol: memeDetail.symbol || '',
+      name: memeDetail.name || memeDetail.symbol || '',
+      price: memeDetail.price || 0,
       priceChange24h: 0,
-      // Minimal data for immediate display
-      marketCap: 0,
+      marketCap: memeDetail.marketCap || 0,
       volume24h: 0,
-      description: "", // Not displayed in UI
-      socialLinks: { website: "", twitter: "", telegram: "" },
-      isLoading: true, // Add loading flag
+      description: '',
+      socialLinks: { website: '', twitter: '', telegram: '' },
+      isLoading: true,
     });
     setShowTradingModal(true);
 
-    // Load full token data in background
     try {
-      const tokenData = await fetchTokenDetailCached(result.address);
+      const tokenData = await fetchTokenDetailCached(memeDetail.address);
       if (tokenData) {
-        setSelectedTokenData({
-          ...tokenData,
-          isLoading: false,
-        });
+        setSelectedTokenData({ ...tokenData, isLoading: false });
       }
     } catch (error) {
-      console.error("Error loading full token data:", error);
-      // Keep the modal open with basic data if full load fails
+      console.error('Error loading full token data:', error);
     }
   };
 
@@ -2738,11 +2731,11 @@ export default function Dashboard({
               {formatCurrency(homePortfolioData.totalValue)}
             </p>
 
-            {/* Token Search Bar */}
+            {/* Token Search Bar (address-only) */}
             <div className="mb-4 relative">
               <input
                 type="text"
-                placeholder="Search tokens by name or symbol..."
+                placeholder="Search by CA"
                 value={searchQuery}
                 onChange={(e) => handleTokenSearch(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400"
@@ -2753,55 +2746,40 @@ export default function Dashboard({
                 </div>
               )}
 
-              {/* Search Results */}
-              {showSearchResults && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-64 overflow-y-auto z-50">
-                  {searchResults.length > 0 ? (
-                    searchResults.map((result, index) => (
-                      <div
-                        key={result.address || index}
-                        onClick={() => handleSearchResultClick(result)}
-                        className="p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0 flex items-center space-x-3"
-                      >
-                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
-                          {result.logoURI ? (
-                            <img
-                              src={result.logoURI}
-                              alt={result.symbol}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <span className="text-xs font-bold text-white">
-                              {result.symbol.charAt(0)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-white font-bold text-sm">
-                            {result.symbol}
-                          </p>
-                          <p className="text-gray-400 text-xs truncate">
-                            {result.name}
-                          </p>
-                        </div>
-                        {result.price && (
-                          <div className="text-right">
-                            <p className="text-white text-sm font-bold">
-                              {formatPrice(result.price)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-3 text-center text-gray-400 text-sm">
-                      {isSearching ? "Searching..." : "No tokens found"}
+              {/* Result preview card (matches compact style) */}
+              {memeDetail && !isSearching && (
+                <div className="mt-2 bg-gray-800 border border-gray-600 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
+                      {memeDetail.logoURI ? (
+                        <img src={memeDetail.logoURI} alt={memeDetail.symbol} className="w-full h-full object-cover" />
+                      ) : null}
                     </div>
-                  )}
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-bold truncate">
+                        {memeDetail.symbol} <span className="text-gray-400 font-normal">{memeDetail.name}</span>
+                      </div>
+                      <div className="text-gray-400 text-xs truncate">
+                        {memeDetail.address.slice(0, 4)}…{memeDetail.address.slice(-4)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-6 text-right">
+                    <div className="text-xs text-gray-300">
+                      <div>LiQ</div>
+                      <div className="text-white font-semibold">{memeDetail.liquidity ? formatCurrency(memeDetail.liquidity) : 'N/A'}</div>
+                    </div>
+                    <div className="text-xs text-gray-300">
+                      <div>MC</div>
+                      <div className="text-white font-semibold">{memeDetail.marketCap ? formatCurrency(memeDetail.marketCap) : 'N/A'}</div>
+                    </div>
+                    <button onClick={handleOpenFromMemeDetail} className="px-3 py-1 bg-blue-500 text-black rounded-md text-xs font-bold">Trade</button>
+                  </div>
+                </div>
+              )}
+              {searchError && !isSearching && (
+                <div className="mt-2 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm text-red-400">
+                  {searchError}
                 </div>
               )}
             </div>
@@ -3166,11 +3144,11 @@ export default function Dashboard({
               )}
             </div>
 
-            {/* Token Search Bar */}
+            {/* Token Search Bar (address-only) */}
             <div className="mb-6 relative">
               <input
                 type="text"
-                placeholder="Search tokens to trade..."
+                placeholder="Search by CA"
                 value={searchQuery}
                 onChange={(e) => handleTokenSearch(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400"
@@ -3180,54 +3158,39 @@ export default function Dashboard({
                   <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
                 </div>
               )}
-              {showSearchResults && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-64 overflow-y-auto z-50">
-                  {searchResults.length > 0 ? (
-                    searchResults.map((result, index) => (
-                      <div
-                        key={result.address || index}
-                        onClick={() => handleSearchResultClick(result)}
-                        className="p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0 flex items-center space-x-3"
-                      >
-                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
-                          {result.logoURI ? (
-                            <img
-                              src={result.logoURI}
-                              alt={result.symbol}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <span className="text-xs font-bold text-white">
-                              {result.symbol.charAt(0)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-white font-bold text-sm">
-                            {result.symbol}
-                          </p>
-                          <p className="text-gray-400 text-xs truncate">
-                            {result.name}
-                          </p>
-                        </div>
-                        {result.price && (
-                          <div className="text-right">
-                            <p className="text-white text-sm font-bold">
-                              {formatPrice(result.price)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-3 text-center text-gray-400 text-sm">
-                      {isSearching ? "Searching..." : "No tokens found"}
+              {memeDetail && !isSearching && (
+                <div className="mt-2 bg-gray-800 border border-gray-600 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
+                      {memeDetail.logoURI ? (
+                        <img src={memeDetail.logoURI} alt={memeDetail.symbol} className="w-full h-full object-cover" />
+                      ) : null}
                     </div>
-                  )}
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-bold truncate">
+                        {memeDetail.symbol} <span className="text-gray-400 font-normal">{memeDetail.name}</span>
+                      </div>
+                      <div className="text-gray-400 text-xs truncate">
+                        {memeDetail.address.slice(0, 4)}…{memeDetail.address.slice(-4)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-6 text-right">
+                    <div className="text-xs text-gray-300">
+                      <div>LiQ</div>
+                      <div className="text-white font-semibold">{memeDetail.liquidity ? formatCurrency(memeDetail.liquidity) : 'N/A'}</div>
+                    </div>
+                    <div className="text-xs text-gray-300">
+                      <div>24h MC</div>
+                      <div className="text-white font-semibold">{memeDetail.marketCap ? formatCurrency(memeDetail.marketCap) : 'N/A'}</div>
+                    </div>
+                    <button onClick={handleOpenFromMemeDetail} className="px-3 py-1 bg-blue-500 text-black rounded-md text-xs font-bold">Trade</button>
+                  </div>
+                </div>
+              )}
+              {searchError && !isSearching && (
+                <div className="mt-2 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm text-red-400">
+                  {searchError}
                 </div>
               )}
             </div>
