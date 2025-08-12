@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { openBaseQuotePriceStream } from "../services/birdeyeWebSocket";
 import {
   Settings,
   Copy,
@@ -84,6 +85,7 @@ import { initializeBusinessPlanOptimizations } from "../services/birdeyeApi";
 import TradeLoadingModal from "./TradeLoadingModal";
 import TradeResultsModal from "./TradeResultsModal";
 import TradingModal from "./TradingModal";
+import TradeDetailsModal from "./TradeDetailsModal";
 import LockingModal from "./LockingModal";
 import UnlockModal from "./UnlockModal";
 import WelcomePopup from "./WelcomePopup";
@@ -257,6 +259,8 @@ export default function Dashboard({
   // Real-time price feed for positions
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [priceUpdateCount, setPriceUpdateCount] = useState(0);
+  // Throttle PnL recomputations from WS ticks
+  const wsPnLThrottleRef = useRef<number>(0);
 
   // Position modal state
   const [showPositionModal, setShowPositionModal] = useState(false);
@@ -296,6 +300,9 @@ export default function Dashboard({
   // Trading modal state for direct token trading
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [selectedTokenData, setSelectedTokenData] = useState<any | null>(null);
+  // Trade details modal (for history items)
+  const [showTradeDetailsModal, setShowTradeDetailsModal] = useState(false);
+  const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null);
 
   // Trade results modal state
   const [showTradeResults, setShowTradeResults] = useState(false);
@@ -525,6 +532,89 @@ export default function Dashboard({
       console.error("❌ Error updating position P&L:", error);
     }
   };
+
+  // WebSocket-based live price updates for open positions (minimal, additive)
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const openPositionTokens = Array.from(
+      new Set(
+        tradingPositions
+          .filter((p) => p.status === "open" || p.status === "opening")
+          .map((p) => p.token_address)
+      )
+    );
+
+    if (openPositionTokens.length === 0) {
+      console.log("📡 WS-Positions: no open tokens to subscribe");
+      return;
+    }
+
+    const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    console.log(
+      `📡 WS-Positions: subscribing to ${openPositionTokens.length} tokens →`,
+      openPositionTokens.map((a) => a.slice(0, 8) + "...").join(", ")
+    );
+
+    const closeFns: Array<() => void> = [];
+
+    openPositionTokens.forEach((address) => {
+      try {
+        const close = openBaseQuotePriceStream(address, USDC_MINT, "1m", (d) => {
+          const price = typeof d?.c === "number" ? d.c : NaN;
+          if (!Number.isFinite(price) || price <= 0) return;
+
+          // Update local price cache
+          setTokenPrices((prev) => {
+            const prevPrice = prev[address];
+            if (typeof prevPrice === "number" && Math.abs(prevPrice - price) < 1e-12) {
+              return prev; // no-op to avoid needless renders
+            }
+            return { ...prev, [address]: price };
+          });
+
+          // Light throttling of PnL recomputation
+          const now = Date.now();
+          if (now - (wsPnLThrottleRef.current || 0) > 200) {
+            wsPnLThrottleRef.current = now;
+            try {
+              console.debug(
+                `📈 WS-Positions tick ${address.slice(0, 8)}... → $${price.toFixed(6)}`
+              );
+              updatePositionPnLFromCachedPrices();
+            } catch (e) {
+              console.error("❌ WS-Positions: PnL update error", e);
+            }
+          }
+        });
+        closeFns.push(close);
+        console.log(`✅ WS-Positions: subscribed ${address.slice(0, 8)}...`);
+      } catch (e) {
+        console.warn("⚠️ WS-Positions: subscribe failed", address, e);
+      }
+    });
+
+    return () => {
+      console.log("📴 WS-Positions: unsubscribing from all tokens");
+      closeFns.forEach((fn) => {
+        try {
+          fn();
+        } catch {}
+      });
+    };
+  }, [
+    walletAddress,
+    // Depend on the set of open-position token addresses only
+    JSON.stringify(
+      Array.from(
+        new Set(
+          tradingPositions
+            .filter((p) => p.status === "open" || p.status === "opening")
+            .map((p) => p.token_address)
+        )
+      ).sort()
+    )
+  ]);
 
   // Periodic refreshes - SOL balance every 10 seconds (faster refresh)
   useEffect(() => {
@@ -3758,18 +3848,9 @@ export default function Dashboard({
                       <div
                         key={trade.id}
                         onClick={() => {
-                          // Navigate to trading modal when clicked
-                          handleTokenClick({
-                            address: trade.token_address,
-                            symbol: trade.token_symbol,
-                            name: trade.token_symbol,
-                            logoURI: trade.token_image || undefined,
-                            price: trade.close_price || trade.entry_price,
-                            priceChange24h: 0,
-                            volume24h: 0,
-                            marketCap: 0,
-                            liquidity: 0,
-                          });
+                          // Open details modal for closed trade
+                          setSelectedTradeId(trade.id);
+                          setShowTradeDetailsModal(true);
                         }}
                         className={`rounded-lg p-3 border transition-all relative overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-lg ${
                           wasLiquidated
@@ -5187,6 +5268,17 @@ export default function Dashboard({
             setShowTradingModal(false);
             setSelectedTokenData(null);
             setActiveTab("positions");
+          }}
+        />
+      )}
+
+      {/* Trade Details Modal */}
+      {showTradeDetailsModal && selectedTradeId !== null && (
+        <TradeDetailsModal
+          positionId={selectedTradeId}
+          onClose={() => {
+            setShowTradeDetailsModal(false);
+            setSelectedTradeId(null);
           }}
         />
       )}

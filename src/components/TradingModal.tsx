@@ -3,7 +3,7 @@ import { X, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, Wallet, Calcul
 import { formatPrice, fetchSOLPrice, fetchTokenDetailCached, TokenDetailData } from '../services/birdeyeApi';
 import { positionService, CreatePositionData } from '../services/positionService';
 import { userProfileService } from '../services/supabaseClient';
-import webSocketService from '../services/birdeyeWebSocket';
+import webSocketService, { openBaseQuotePriceStream } from '../services/birdeyeWebSocket';
 import priceService from '../services/businessPlanPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeSuccessModal from './TradeSuccessModal';
@@ -60,6 +60,8 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   const [priceError, setPriceError] = useState<string | null>(null);
   
   const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null); // Track selected percentage
+  // Live price via WS for focused token
+  const [livePrice, setLivePrice] = useState<number>(tokenData.price);
 
   // CRITICAL FIX: Function to refresh user's SOL balance when balance mismatch detected
   const refreshUserBalance = async () => {
@@ -78,6 +80,34 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
 
   // Subscribe to simplified price service for token price updates
   // Note: Price tracking is now handled automatically by the price service when subscribing
+
+  // WebSocket live price for focused token (SOL quoted)
+  useEffect(() => {
+    const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    let closeFn: (() => void) | null = null;
+    try {
+      closeFn = openBaseQuotePriceStream(
+        tokenData.address,
+        USDC_MINT,
+        '1m',
+        (d) => {
+          if (typeof d?.c === 'number' && isFinite(d.c) && d.c > 0) {
+            setLivePrice(d.c);
+          }
+        }
+      );
+      console.log('📡 WS live price stream started for', tokenData.symbol);
+    } catch (e) {
+      console.warn('WS stream failed, staying on REST polling', e);
+    }
+    return () => {
+      if (closeFn) {
+        try { closeFn(); } catch {}
+        console.log('📡 WS live price stream closed for', tokenData.symbol);
+      }
+    };
+    // re-open if token changes
+  }, [tokenData.address, tokenData.symbol]);
 
   // Load SOL price on component mount - CRITICAL FOR LIVE TRADING
   useEffect(() => {
@@ -140,10 +170,9 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
   // Get the reference price for validation
   const getReferencePrice = (): number => {
     if (orderType === 'Market Order') {
-      return tokenData.price;
-    } else {
-      return parseFloat(price) || tokenData.price;
+      return livePrice;
     }
+    return parseFloat(price) || livePrice;
   };
 
   // SIMPLIFIED: Calculate position value and collateral directly in SOL (no fees when opening)
@@ -854,7 +883,7 @@ export default function TradingModal({ tokenData, onClose, userSOLBalance = 0, w
               <div>
                 <h2 className="text-2xl font-bold">{tokenData.symbol}</h2>
                 <div className="flex items-center space-x-2">
-                <p className="text-gray-400 text-lg">{formatPrice(tokenData.price)}</p>
+                <p className="text-gray-400 text-lg">{formatPrice(livePrice)}</p>
                   {tokenData.isLoading && (
                     <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
                   )}

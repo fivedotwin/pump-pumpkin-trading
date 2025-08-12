@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { TradingPosition } from '../services/positionService';
 import { formatPrice } from '../services/birdeyeApi';
-import webSocketService from '../services/birdeyeWebSocket';
+import { openBaseQuotePriceStream } from '../services/birdeyeWebSocket';
 import priceService from '../services/businessPlanPriceService';
 import TradeLoadingModal from './TradeLoadingModal';
 import TradeResultsModal from './TradeResultsModal';
@@ -110,6 +110,34 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     return () => {
       console.log(`🔌 PositionModal: Unsubscribing from price service for ${position.token_symbol}`);
       unsubscribe();
+    };
+  }, [position.token_address, position.token_symbol]);
+
+  // Add WS live price specifically for the modal (faster than REST); keep REST as fallback
+  useEffect(() => {
+    const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    let closeFn: (() => void) | null = null;
+    try {
+      closeFn = openBaseQuotePriceStream(
+        position.token_address,
+        USDC_MINT,
+        '1m',
+        (d) => {
+          const p = typeof d?.c === 'number' ? d.c : NaN;
+          if (!Number.isFinite(p) || p <= 0) return;
+          setRealtimePrice(p);
+          console.debug(`📈 PositionModal WS tick ${position.token_symbol} → $${p.toFixed(6)}`);
+        }
+      );
+      console.log('📡 PositionModal WS started for', position.token_symbol);
+    } catch (e) {
+      console.warn('⚠️ PositionModal WS failed, relying on REST polling', e);
+    }
+    return () => {
+      if (closeFn) {
+        try { closeFn(); } catch {}
+        console.log('📴 PositionModal WS closed for', position.token_symbol);
+      }
     };
   }, [position.token_address, position.token_symbol]);
 
