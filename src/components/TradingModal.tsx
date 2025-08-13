@@ -93,6 +93,9 @@ export default function TradingModal({
     null
   );
 
+  // Mobile: toggle between Trade and Chart views
+  const [mobileTab, setMobileTab] = useState<"trade" | "chart">("trade");
+
   // Live price via WS for focused token
 
   const [livePrice, setLivePrice] = useState<number>(tokenData.price);
@@ -643,7 +646,7 @@ export default function TradingModal({
         TRADE_SIZE_USD: tradeSizeUSD,
         FEE_BREAKDOWN: {
           trading_fee_sol: solCalculation.tradingFeeSOL,
-          trading_fee_usd: solCalculation.tradingFeeSOL * solPrice,
+          trading_fee_usd: solCalculation.tradingFeeSOL * (solPrice ?? 0),
           fee_rate: TRADING_FEE_RATE,
         },
         VALIDATION: {
@@ -683,7 +686,7 @@ export default function TradingModal({
         FEE_DETAILS: {
           trading_fee_rate: TRADING_FEE_RATE,
           expected_fee_sol: solCalculation.tradingFeeSOL,
-          expected_fee_usd: solCalculation.tradingFeeSOL * solPrice,
+          expected_fee_usd: solCalculation.tradingFeeSOL * (solPrice ?? 0),
         },
       });
 
@@ -967,10 +970,47 @@ export default function TradingModal({
   // Get liquidation price calculation for display
   const liquidationPrice = calculateLiquidationPrice();
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 text-white flex items-center justify-center p-4 z-50">
-      <div className="bg-black border border-gray-800 rounded-xl w-full max-w-lg max-h-[95vh] overflow-y-auto">
-        <div className="p-6">
+	return (
+		<div className="fixed inset-0 bg-black bg-opacity-90 text-white flex items-center justify-center p-4 z-50">
+			<div className="bg-black border border-gray-800 rounded-xl w-full max-w-[96vw] max-h-[95vh] overflow-hidden">
+				<div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 h-full">
+					{/* Mobile tabs: switch between Trade and Chart */}
+					<div className="md:hidden col-span-1">
+						<div className="flex bg-gray-900 rounded-xl p-1">
+							<button
+								className={`flex-1 py-3 rounded-lg text-sm font-bold ${
+								  mobileTab === "trade"
+								    ? "bg-blue-600 text-white"
+								    : "text-gray-300"
+								}`}
+								onClick={() => setMobileTab("trade")}
+							>
+								Trade
+							</button>
+							<button
+								className={`flex-1 py-3 rounded-lg text-sm font-bold ${
+								  mobileTab === "chart"
+								    ? "bg-blue-600 text-white"
+								    : "text-gray-300"
+								}`}
+								onClick={() => setMobileTab("chart")}
+							>
+								Chart
+							</button>
+						</div>
+					</div>
+					{/* Left: Dynamic Birdeye Chart */}
+					<div className={`rounded-xl overflow-hidden bg-gray-900 border border-gray-800 md:col-span-8 col-span-1 ${mobileTab === "chart" ? "block" : "hidden"} md:block`}>
+						<iframe
+							title={`Chart-${tokenData.symbol}`}
+							src={`https://birdeye.so/tv-widget/${tokenData.address}?chain=solana&theme=dark`}
+							className="w-full h-[360px] md:h-[80vh]"
+							frameBorder="0"
+							allowFullScreen
+						/>
+					</div>
+					{/* Right: Existing trade UI */}
+					<div className={`md:col-span-4 col-span-1 pr-1 md:max-h-[80vh] max-h-[70dvh] overflow-y-auto ${mobileTab === "trade" ? "block" : "hidden"} md:block`}>
           {/* Header with close button */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-4">
@@ -1415,43 +1455,44 @@ export default function TradingModal({
               border: 2px solid #ffffff;
             }
           `}</style>
-        </div>
-      </div>
+					</div>
+				</div>
+				</div>
 
-      {/* Trade Loading Modal */}
-      <TradeLoadingModal
-        isOpen={showTradeLoading}
-        type={loadingTradeData?.type || "opening"}
-        tokenSymbol={loadingTradeData?.tokenSymbol || ""}
-        direction={loadingTradeData?.direction}
-        leverage={loadingTradeData?.leverage}
-        onClose={() => {
-          setShowTradeLoading(false);
-          setLoadingTradeData(null);
-          onClose();
-        }}
-        canCancel={false}
-      />
+				{/* Trade Loading Modal */}
+				<TradeLoadingModal
+					isOpen={showTradeLoading}
+					type={loadingTradeData?.type || "opening"}
+					tokenSymbol={loadingTradeData?.tokenSymbol || ""}
+					direction={loadingTradeData?.direction}
+					leverage={loadingTradeData?.leverage}
+					onClose={() => {
+						setShowTradeLoading(false);
+						setLoadingTradeData(null);
+						onClose();
+					}}
+					canCancel={false}
+				/>
 
-      {/* Trade Success Modal */}
-      <TradeSuccessModal
-        isOpen={showTradeSuccess}
-        tokenSymbol={tokenData.symbol}
-        direction={tradeDirection}
-        leverage={leverage}
-        amount={amount}
-        onManagePosition={() => {
-          setShowTradeSuccess(false);
-          onClose();
-          if (onNavigateToPositions) {
-            onNavigateToPositions();
-          }
-        }}
-        onClose={() => {
-          setShowTradeSuccess(false);
-          onClose();
-        }}
-      />
-    </div>
-  );
-}
+				{/* Trade Success Modal */}
+				<TradeSuccessModal
+					isOpen={showTradeSuccess}
+					tokenSymbol={tokenData.symbol}
+					direction={tradeDirection}
+					leverage={leverage}
+					amount={amount}
+					onManagePosition={() => {
+						setShowTradeSuccess(false);
+						onClose();
+						if (onNavigateToPositions) {
+							onNavigateToPositions();
+						}
+					}}
+					onClose={() => {
+						setShowTradeSuccess(false);
+						onClose();
+					}}
+				/>
+			</div>
+		);
+	}
