@@ -35,6 +35,7 @@ const formatCompactNumber = (num: number): string => {
 export default function PositionModal({ position, onClose, onClosePosition, isClosingPosition = false, solPrice = 98.45 }: PositionModalProps) {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [realtimePrice, setRealtimePrice] = useState<number | null>(null);
+  const [mobileTab, setMobileTab] = useState<'details' | 'chart'>('details');
   
   // Closing trade loading modal state
   const [showClosingModal, setShowClosingModal] = useState(false);
@@ -301,7 +302,7 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
 
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center p-2 z-50">
-      <div className="text-center max-w-sm w-full">
+      <div className="text-center w-full max-w-[96vw]">
         <div className="flex justify-between items-center mb-3">
           <button
             onClick={onClose}
@@ -317,125 +318,157 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Token Icon */}
-        <div className="mb-3">
-          <div className="w-12 h-12 mx-auto">
-            {position.token_image ? (
-              <img 
-                src={position.token_image} 
-                alt={position.token_symbol}
-                className="w-full h-full object-cover rounded-lg"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) {
-                    fallback.style.display = 'flex';
-                  }
-                }}
-              />
-            ) : null}
-            <div className={`w-full h-full bg-gray-800 rounded-lg flex items-center justify-center ${position.token_image ? 'hidden' : 'flex'}`}>
-              <span className="text-white text-lg font-bold">
-                {position.token_symbol.charAt(0)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Title - More Compact */}
-        <h1 className="text-lg font-normal mb-1 truncate">
-          <span style={{ color: '#1e7cfa' }}>{position.token_symbol}</span> Position
-        </h1>
-        
-        {/* Position Details - More Compact */}
-        <div className="flex items-center justify-center space-x-1 mb-1">
-          <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${
-            position.direction === 'Long' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
-          }`}>
-            {position.direction === 'Long' ? 
-              <TrendingUp className="w-3 h-3" /> : 
-              <TrendingDown className="w-3 h-3" />
-            }
-            <span>{position.direction} {position.leverage}x</span>
-          </div>
-        </div>
-
-        {/* P&L Display - More Compact */}
-        <div className={`border rounded-lg p-2 mb-2 ${
-          isProfit ? 'bg-green-900 border-green-700' : 'bg-red-900 border-red-700'
-        }`}>
-          <p className="text-gray-300 text-xs mb-1">Unrealized P&L</p>
-          <p className={`text-xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-            {formatPnL(currentPnL)}
-          </p>
-          <p className={`text-xs ${isProfit ? 'text-green-300' : 'text-red-300'}`}>
-            {formatPnLPercentage(currentPnL, position.collateral_sol)}
-          </p>
-        </div>
-
-        {/* Price Info - More Compact */}
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-2">
+        {/* Mobile-only tabs */}
+        <div className="mb-3 md:hidden">
           <div className="grid grid-cols-2 gap-2">
-            <div className="text-center">
-              <p className="text-gray-400 text-xs mb-1 flex items-center justify-center space-x-1">
-                <span>Current</span>
-                {realtimePrice && (
-                  <span className="text-green-400 text-xs">●</span>
-                )}
-              </p>
-              <p className="text-white text-sm font-bold truncate">
-                {formatPrice(realtimePrice || position.current_price || position.entry_price)}
-              </p>
-              {realtimePrice && (
-                <p className="text-green-400 text-xs">Live</p>
-              )}
-            </div>
-            <div className="text-center">
-              <p className="text-gray-400 text-xs mb-1">Entry</p>
-              <p className="text-white text-sm font-bold truncate">
-                {formatPrice(position.entry_price)}
-              </p>
-            </div>
+            <button
+              className={`flex-1 py-2 rounded-lg text-sm font-bold ${mobileTab === 'details' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+              onClick={() => setMobileTab('details')}
+            >
+              Details
+            </button>
+            <button
+              className={`flex-1 py-2 rounded-lg text-sm font-bold ${mobileTab === 'chart' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+              onClick={() => setMobileTab('chart')}
+            >
+              Chart
+            </button>
           </div>
         </div>
 
+        {/* Desktop grid: chart left, details right. On mobile, show one based on tab. */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          {/* Chart */}
+          <div className={`rounded-xl overflow-hidden bg-gray-900 border border-gray-800 md:col-span-8 col-span-1 ${mobileTab === 'chart' ? 'block' : 'hidden'} md:block`}>
+            <iframe
+              title={`Chart-${position.token_symbol}`}
+              src={`https://birdeye.so/tv-widget/${position.token_address}?chain=solana&theme=dark`}
+              className="w-full h-[360px] md:h-[80vh]"
+              frameBorder="0"
+              allowFullScreen
+            />
+          </div>
 
+          {/* Details panel */}
+          <div className={`md:col-span-4 col-span-1 ${mobileTab === 'details' ? 'block' : 'hidden'} md:block md:max-h-[80vh] max-h-[70dvh] overflow-y-auto`}>
+            {/* Token Icon */}
+            <div className="mb-3">
+              <div className="w-12 h-12 mx-auto">
+                {position.token_image ? (
+                  <img 
+                    src={position.token_image} 
+                    alt={position.token_symbol}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) {
+                        fallback.style.display = 'flex';
+                      }
+                    }}
+                  />
+                ) : null}
+                <div className={`w-full h-full bg-gray-800 rounded-lg flex items-center justify-center ${position.token_image ? 'hidden' : 'flex'}`}>
+                  <span className="text-white text-lg font-bold">
+                    {position.token_symbol.charAt(0)}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Position Details - More Compact */}
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-3">
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Size:</span>
-              <span className="text-white truncate max-w-24">{position.amount.toFixed(3)} {position.token_symbol}</span>
+            {/* Title - More Compact */}
+            <h1 className="text-lg font-normal mb-1 truncate">
+              <span style={{ color: '#1e7cfa' }}>{position.token_symbol}</span> Position
+            </h1>
+            
+            {/* Position Details - More Compact */}
+            <div className="flex items-center justify-center space-x-1 mb-1">
+              <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${
+                position.direction === 'Long' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
+              }`}>
+                {position.direction === 'Long' ? 
+                  <TrendingUp className="w-3 h-3" /> : 
+                  <TrendingDown className="w-3 h-3" />
+                }
+                <span>{position.direction} {position.leverage}x</span>
+              </div>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Collateral:</span>
-              <span className="text-white">{position.collateral_sol.toFixed(3)} SOL</span>
+
+            {/* P&L Display - More Compact */}
+            <div className={`border rounded-lg p-2 mb-2 ${
+              isProfit ? 'bg-green-900 border-green-700' : 'bg-red-900 border-red-700'
+            }`}>
+              <p className="text-gray-300 text-xs mb-1">Unrealized P&L</p>
+              <p className={`text-xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                {formatPnL(currentPnL)}
+              </p>
+              <p className={`text-xs ${isProfit ? 'text-green-300' : 'text-red-300'}`}>
+                {formatPnLPercentage(currentPnL, position.collateral_sol)}
+              </p>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Liquidation:</span>
-              <span className="text-red-400 truncate max-w-24">{formatPrice(position.liquidation_price)}</span>
+
+            {/* Price Info - More Compact */}
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="text-center">
+                  <p className="text-gray-400 text-xs mb-1 flex items-center justify-center space-x-1">
+                    <span>Current</span>
+                    {realtimePrice && (
+                      <span className="text-green-400 text-xs">●</span>
+                    )}
+                  </p>
+                  <p className="text-white text-sm font-bold truncate">
+                    {formatPrice(realtimePrice || position.current_price || position.entry_price)}
+                  </p>
+                  {realtimePrice && (
+                    <p className="text-green-400 text-xs">Live</p>
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-400 text-xs mb-1">Entry</p>
+                  <p className="text-white text-sm font-bold truncate">
+                    {formatPrice(position.entry_price)}
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* Position Details - More Compact */}
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 mb-3">
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Size:</span>
+                  <span className="text-white truncate max-w-24">{position.amount.toFixed(3)} {position.token_symbol}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Collateral:</span>
+                  <span className="text-white">{position.collateral_sol.toFixed(3)} SOL</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Liquidation:</span>
+                  <span className="text-red-400 truncate max-w-24">{formatPrice(position.liquidation_price)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons - More Compact */}
+            <button
+              onClick={() => setShowCloseConfirm(true)}
+              disabled={isClosingPosition || position.status === 'closing' || position.status === 'opening'}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-medium py-2 px-3 rounded-lg text-sm transition-colors disabled:cursor-not-allowed mb-2"
+            >
+              Close Position
+            </button>
+            
+            <button
+              onClick={onClose}
+              className="w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-400 hover:text-gray-300 font-medium py-2 px-3 rounded-lg text-sm transition-colors"
+            >
+              Back to Dashboard
+            </button>
           </div>
         </div>
-
-        {/* Action Buttons - More Compact */}
-        <button
-          onClick={() => setShowCloseConfirm(true)}
-          disabled={isClosingPosition || position.status === 'closing' || position.status === 'opening'}
-          className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-medium py-2 px-3 rounded-lg text-sm transition-colors disabled:cursor-not-allowed mb-2"
-        >
-          Close Position
-        </button>
-        
-        <button
-          onClick={onClose}
-          className="w-full bg-transparent border border-gray-600 hover:border-gray-500 text-gray-400 hover:text-gray-300 font-medium py-2 px-3 rounded-lg text-sm transition-colors"
-        >
-          Back to Dashboard
-        </button>
       </div>
       
       {/* Closing Trade Loading Modal */}
