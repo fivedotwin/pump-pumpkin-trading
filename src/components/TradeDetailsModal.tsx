@@ -96,6 +96,7 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
   const [showPnlPreview, setShowPnlPreview] = useState(false);
   const [pnlCardImage, setPnlCardImage] = useState<string | null>(null);
   const [pnlCardData, setPnlCardData] = useState<any>(null);
+  const [isPnlCardGenerating, setIsPnlCardGenerating] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -198,13 +199,19 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
         return;
       }
 
+      // Show loading state
+      setIsPnlCardGenerating(true);
+      setShowPnlPreview(true);
+
       const blob = await generatePnlCard(pnlData);
       const imageUrl = URL.createObjectURL(blob);
       setPnlCardData(pnlData);
       setPnlCardImage(imageUrl);
-      setShowPnlPreview(true);
+      setIsPnlCardGenerating(false); // Hide loading
     } catch (error) {
       console.error('Error generating PNL card:', error);
+      setIsPnlCardGenerating(false);
+      setShowPnlPreview(false);
       alert('Failed to generate PNL card. Please try again.');
     }
   };
@@ -227,6 +234,7 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
   // Close PNL preview
   const closePnlPreview = () => {
     setShowPnlPreview(false);
+    setIsPnlCardGenerating(false);
     if (pnlCardImage) {
       URL.revokeObjectURL(pnlCardImage);
       setPnlCardImage(null);
@@ -451,6 +459,7 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
         onClose={closePnlPreview}
         pnlCardImage={pnlCardImage}
         pnlCardData={pnlCardData}
+        isLoading={isPnlCardGenerating}
       />
     </div>
   );

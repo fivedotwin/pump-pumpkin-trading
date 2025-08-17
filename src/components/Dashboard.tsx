@@ -314,6 +314,7 @@ export default function Dashboard({
   const [showPnlCardPreview, setShowPnlCardPreview] = useState(false);
   const [pnlCardImage, setPnlCardImage] = useState<string | null>(null);
   const [pnlCardData, setPnlCardData] = useState<any>(null);
+  const [isPnlCardGenerating, setIsPnlCardGenerating] = useState(false);
 
   // Trade results modal state
   const [showTradeResults, setShowTradeResults] = useState(false);
@@ -1115,6 +1116,10 @@ export default function Dashboard({
   const showPnlCardAfterClose = async (positionId: number) => {
     console.log('🎯 Generating PNL card for position:', positionId);
     try {
+      // Show loading state immediately
+      setIsPnlCardGenerating(true);
+      setShowPnlCardPreview(true);
+      
       // Wait a moment for the position to be fully updated in DB
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -1128,6 +1133,8 @@ export default function Dashboard({
       
       if (!position) {
         console.log('❌ No position found for PNL card');
+        setIsPnlCardGenerating(false);
+        setShowPnlCardPreview(false);
         return;
       }
 
@@ -1149,6 +1156,8 @@ export default function Dashboard({
 
       if (!tradeResults) {
         console.log('❌ No trade results available for PNL card');
+        setIsPnlCardGenerating(false);
+        setShowPnlCardPreview(false);
         return;
       }
 
@@ -1174,11 +1183,13 @@ export default function Dashboard({
       
       setPnlCardData(cardData);
       setPnlCardImage(imageUrl);
-      setShowPnlCardPreview(true);
+      setIsPnlCardGenerating(false); // Hide loading
       
       console.log('✅ PNL card popup should now be visible');
     } catch (error) {
       console.error('💥 Error generating PNL card:', error);
+      setIsPnlCardGenerating(false);
+      setShowPnlCardPreview(false);
     }
   };
 
@@ -5399,6 +5410,7 @@ export default function Dashboard({
         onClose={closePnlCardPreview}
         pnlCardImage={pnlCardImage}
         pnlCardData={pnlCardData}
+        isLoading={isPnlCardGenerating}
       />
 
       {/* Welcome Popup */}
