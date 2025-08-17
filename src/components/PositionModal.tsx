@@ -196,8 +196,8 @@ export default function PositionModal({ position, onClose, onClosePosition, isCl
     setShowCloseConfirm(false);
     onClose();
     
-    // Check for trade results immediately
-    await checkForTradeResults(position.id);
+    // Let Dashboard handle PNL card popup - no need for PositionModal to show TradeResultsModal
+    // await checkForTradeResults(position.id); // REMOVED - Dashboard will handle this
   };
 
   const formatPnL = (pnl: number) => {

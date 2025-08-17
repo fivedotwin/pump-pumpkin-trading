@@ -88,10 +88,13 @@ import TradingModal from "./TradingModal";
 import TradeDetailsModal from "./TradeDetailsModal";
 import LockingModal from "./LockingModal";
 import UnlockModal from "./UnlockModal";
+import PnlCardModal from "./PnlCardModal";
+import { generatePnlCard, downloadPnlCard } from "../services/pnlCardService";
 import WelcomePopup from "./WelcomePopup";
 import ShareGainsPopup from "./ShareGainsPopup";
 import { soundManager } from "../services/soundManager";
 import { hapticFeedback } from "../utils/animations";
+
 
 import LivePrice from "./LivePrice";
 import About from "./About";
@@ -259,6 +262,7 @@ export default function Dashboard({
   // Real-time price feed for positions
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [priceUpdateCount, setPriceUpdateCount] = useState(0);
+  const [lastPositionsLoadTime, setLastPositionsLoadTime] = useState(0);
   // Throttle PnL recomputations from WS ticks
   const wsPnLThrottleRef = useRef<number>(0);
 
@@ -288,6 +292,8 @@ export default function Dashboard({
     new Set()
   );
 
+
+
   // Closing trade loading modal state
   const [showClosingModal, setShowClosingModal] = useState(false);
   const [closingTradeData, setClosingTradeData] = useState<{
@@ -303,6 +309,11 @@ export default function Dashboard({
   // Trade details modal (for history items)
   const [showTradeDetailsModal, setShowTradeDetailsModal] = useState(false);
   const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null);
+  
+  // PNL Card popup (minimal - just for auto-show after close)
+  const [showPnlCardPreview, setShowPnlCardPreview] = useState(false);
+  const [pnlCardImage, setPnlCardImage] = useState<string | null>(null);
+  const [pnlCardData, setPnlCardData] = useState<any>(null);
 
   // Trade results modal state
   const [showTradeResults, setShowTradeResults] = useState(false);
@@ -672,10 +683,10 @@ export default function Dashboard({
   // Load positions when positions tab is selected (with smart caching)
   useEffect(() => {
     if (activeTab === "positions") {
-      // Only reload if positions are empty or data is stale (older than 30 seconds)
+      // Only reload if positions are empty or data is stale (older than 10 seconds)
       const shouldReload =
         tradingPositions.length === 0 ||
-        (tradingPositions.length > 0 && Date.now() - priceUpdateCount > 30000);
+        (tradingPositions.length > 0 && Date.now() - lastPositionsLoadTime > 10000);
 
       if (shouldReload) {
         console.log("⚡ Loading positions for positions tab...");
@@ -1095,6 +1106,93 @@ export default function Dashboard({
     }
   };
 
+  const forceRefreshPositions = async () => {
+    setLastPositionsLoadTime(0); // Force cache invalidation
+    await loadTradingPositions();
+  };
+
+  // Generate PNL card after trade close (minimal version)
+  const showPnlCardAfterClose = async (positionId: number) => {
+    console.log('🎯 Generating PNL card for position:', positionId);
+    try {
+      // Wait a moment for the position to be fully updated in DB
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Get position and user data
+      const [{ data: position }, userProfile] = await Promise.all([
+        supabase.from('trading_positions').select('*').eq('id', positionId).single(),
+        userProfileService.getProfile(walletAddress).catch(() => null)
+      ]);
+
+      console.log('📊 Position data:', position);
+      
+      if (!position) {
+        console.log('❌ No position found for PNL card');
+        return;
+      }
+
+      // Parse trade results
+      let tradeResults = position.trade_results ? JSON.parse(position.trade_results) : null;
+      
+      if (!tradeResults && position.entry_price && position.close_price) {
+        console.log('🔧 Using fallback calculation for PNL card');
+        // Quick fallback calculation
+        const entryPrice = Number(position.entry_price);
+        const exitPrice = Number(position.close_price);
+        const positionSize = Number(position.amount);
+        const positionValueUSD = positionSize * entryPrice;
+        const pnlPercent = ((exitPrice - entryPrice) / entryPrice) * Number(position.leverage);
+        const finalPnL = (pnlPercent / 100) * positionValueUSD * (position.direction === 'Short' ? -1 : 1);
+        
+        tradeResults = { finalPnL, pnlPercentage: pnlPercent, positionSize, entryPrice };
+      }
+
+      if (!tradeResults) {
+        console.log('❌ No trade results available for PNL card');
+        return;
+      }
+
+      console.log('📈 Trade results:', tradeResults);
+
+      // Generate PNL card data
+      const cardData = {
+        tokenSymbol: position.token_symbol,
+        direction: position.direction,
+        leverage: position.leverage,
+        profitLossAmount: tradeResults.finalPnL,
+        pnlPercentage: tradeResults.pnlPercentage,
+        totalBoughtUSD: tradeResults.positionSize * tradeResults.entryPrice,
+        totalSoldUSD: (tradeResults.positionSize * tradeResults.entryPrice) + tradeResults.finalPnL,
+        username: userProfile?.username || 'Trader'
+      };
+
+      console.log('🎨 Generating PNL card with data:', cardData);
+
+      // Generate and show PNL card
+      const blob = await generatePnlCard(cardData);
+      const imageUrl = URL.createObjectURL(blob);
+      
+      setPnlCardData(cardData);
+      setPnlCardImage(imageUrl);
+      setShowPnlCardPreview(true);
+      
+      console.log('✅ PNL card popup should now be visible');
+    } catch (error) {
+      console.error('💥 Error generating PNL card:', error);
+    }
+  };
+
+  const closePnlCardPreview = () => {
+    setShowPnlCardPreview(false);
+    if (pnlCardImage) {
+      URL.revokeObjectURL(pnlCardImage);
+      setPnlCardImage(null);
+    }
+    setPnlCardData(null);
+  };
+
+
+
   const loadTradingPositions = async () => {
     if (!walletAddress) return;
 
@@ -1209,6 +1307,7 @@ export default function Dashboard({
       }));
 
       setTradingPositions(positionsWithImages);
+      setLastPositionsLoadTime(Date.now()); // Update timestamp for caching logic
 
       const loadTime = Date.now() - startTime;
       console.log(
@@ -2067,9 +2166,15 @@ export default function Dashboard({
     setShowPositionModal(false);
     setSelectedPosition(null);
     setIsClosingPosition(false);
+    
+    // Force refresh positions when modal closes (in case position was closed)
+    if (activeTab === "positions") {
+      forceRefreshPositions();
+    }
   };
 
   const handleClosePosition = async (positionId: number) => {
+    console.log('🔥 handleClosePosition called for position:', positionId);
     // Check if position is already in closing status
     const position = tradingPositions.find((p) => p.id === positionId);
     if (position?.status === "closing") {
@@ -2098,8 +2203,8 @@ export default function Dashboard({
       // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
       console.log("🎯 FORCING ShareGainsPopup after trade completion");
 
-      // Reload positions to get updated data
-      await loadTradingPositions();
+      // Force reload positions to get updated data (bypass cache)
+      await forceRefreshPositions();
 
       // Try to get the real trade results data from the closed position
       try {
@@ -2221,11 +2326,16 @@ export default function Dashboard({
 
       await positionService.closePosition(positionId, "manual");
 
-      // Reload positions to reflect the change
-      await loadTradingPositions();
+      // Force reload positions to reflect the change (bypass cache)
+      await forceRefreshPositions();
 
       // ADDED: Refresh SOL balance immediately after closing position (user should see returned collateral)
       refreshSOLBalance();
+
+      // Show PNL card popup after position is closed
+      console.log('🚀 About to call showPnlCardAfterClose for position:', positionId);
+      await showPnlCardAfterClose(positionId);
+      console.log('🎉 Finished calling showPnlCardAfterClose');
 
       console.log("Position closed successfully with fresh price");
     } catch (error) {
@@ -5219,6 +5329,10 @@ export default function Dashboard({
           onClose={() => {
             setShowTradingModal(false);
             setSelectedTokenData(null);
+            // Reload positions when trading modal closes (in case user executed a trade)
+            if (activeTab === "positions") {
+              loadTradingPositions();
+            }
           }}
           userSOLBalance={currentSOLBalance}
           walletAddress={walletAddress}
@@ -5231,6 +5345,8 @@ export default function Dashboard({
             setShowTradingModal(false);
             setSelectedTokenData(null);
             setActiveTab("positions");
+            // Reload positions to show the new trade immediately
+            loadTradingPositions();
           }}
         />
       )}
@@ -5275,6 +5391,14 @@ export default function Dashboard({
           // Refresh active locks after unlock request
           loadActivePPALocks();
         }}
+      />
+
+      {/* PNL Card Modal */}
+      <PnlCardModal
+        isOpen={showPnlCardPreview}
+        onClose={closePnlCardPreview}
+        pnlCardImage={pnlCardImage}
+        pnlCardData={pnlCardData}
       />
 
       {/* Welcome Popup */}

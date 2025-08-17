@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { CheckCircle, XCircle, TrendingUp, TrendingDown, X, Share2, Download } from 'lucide-react';
+import { useRef } from 'react';
+import { CheckCircle, XCircle, TrendingUp, TrendingDown, X, Share2 } from 'lucide-react';
 
 interface TradeResultsModalProps {
   isOpen: boolean;
