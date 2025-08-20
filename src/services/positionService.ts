@@ -908,7 +908,7 @@ class PositionService {
         totalReturn: actualReturnAmount,
       };
 
-      // STEP 7: Update position status and store trade results in a single operation
+      // STEP 7: Update position status (working with current schema)
       const { error } = await supabase
         .from("trading_positions")
         .update({
@@ -918,7 +918,6 @@ class PositionService {
           current_pnl: finalPnL.pnl,
           close_reason,
           updated_at: new Date().toISOString(),
-          trade_results: JSON.stringify(tradeResults),
         })
         .eq("id", position_id);
 
