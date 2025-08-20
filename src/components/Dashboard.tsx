@@ -2206,105 +2206,15 @@ export default function Dashboard({
     setIsClosingPosition(true);
     setClosingPositions((prev) => new Set(prev).add(positionId));
 
-    // Position closes immediately - check for results and reload
-    if (position) {
-      // Check for trade results immediately
-      await checkForTradeResults(positionId);
 
-      // FORCE: Show ShareGainsPopup after trade completion with REAL P&L
-      console.log("🎯 FORCING ShareGainsPopup after trade completion");
-
-      // Force reload positions to get updated data (bypass cache)
-      await forceRefreshPositions();
-
-      // Try to get the real trade results data from the closed position
-      try {
-        const { data: closedPosition, error } = await supabase
-          .from("trading_positions")
-          .select("*")
-          .eq("id", positionId)
-          .eq("status", "closed")
-          .single();
-
-        if (closedPosition && !error) {
-          console.log(
-            "📊 Found closed position with real P&L:",
-            closedPosition
-          );
-
-          // Calculate REAL P&L using actual entry and exit prices
-          const entryPrice = parseFloat(closedPosition.entry_price) || 0;
-          const exitPrice =
-            parseFloat(
-              closedPosition.close_price || closedPosition.current_price
-            ) || entryPrice;
-          const amount = parseFloat(closedPosition.amount) || 0;
-          const leverage = parseInt(closedPosition.leverage) || 1;
-          const direction = closedPosition.direction;
-
-          // Calculate real P&L (same logic as in positionService)
-          let realPnL = 0;
-
-          // Try to use stored current_pnl first (most accurate)
-          if (
-            closedPosition.current_pnl !== null &&
-            closedPosition.current_pnl !== undefined
-          ) {
-            realPnL = parseFloat(closedPosition.current_pnl);
-            console.log("🎯 Using stored current_pnl:", realPnL);
-          } else {
-            // Fallback calculation
-            if (direction === "Long") {
-              realPnL = (exitPrice - entryPrice) * amount;
-            } else {
-              realPnL = (entryPrice - exitPrice) * amount;
-            }
-            console.log("🎯 Calculated P&L from prices:", realPnL);
-          }
-
-          // Calculate return percentage
-          const sol_price = (await fetchSOLPrice()) || 200; // Fallback SOL price
-          const pnlPercentage =
-            (realPnL / sol_price / closedPosition.collateral_sol) * 100;
-
-          console.log("🎯 Final P&L calculations:", {
-            realPnL,
-            pnlPercentage,
-            entryPrice,
-            exitPrice,
-            amount,
-            leverage,
-            direction,
-          });
-
-          // Show ShareGainsPopup with REAL P&L data
-          console.log("🎯 Position closed with P&L:", {
-            tokenSymbol: closedPosition.token_symbol,
-            direction: direction,
-            leverage: leverage,
-            entryPrice: entryPrice,
-            exitPrice: exitPrice,
-            pnlAmount: realPnL,
-            pnlPercentage: pnlPercentage,
-          });
-          setShowShareGainsPopup(true);
-        } else {
-          console.log(
-            "❌ Could not fetch closed position data, using fallback"
-          );
-          console.log("Position closed successfully! Check your balance.");
-        }
-      } catch (error) {
-        console.error("❌ Error fetching trade results:", error);
-        console.log("Position closed successfully! Check your balance.");
-      }
-    }
 
     try {
       console.log("🔄 Closing position with FRESH price:", positionId);
 
-      // 🚨 CRITICAL: Get FRESH price right before closing for maximum accuracy
+      // 🚨 CRITICAL: Get FRESH price and optimize close flow
       const position = tradingPositions.find((p) => p.id === positionId);
+      let freshPrice: number | undefined;
+      
       if (position) {
         console.log("GETTING FRESH PRICE FOR POSITION CLOSE...");
 
@@ -2313,7 +2223,7 @@ export default function Dashboard({
             position.token_address
           );
           if (freshTokenData) {
-            const freshPrice = freshTokenData.price;
+            freshPrice = freshTokenData.price;
             console.log("FRESH PRICE FETCHED FOR CLOSE:", {
               position_id: positionId,
               token: position.token_symbol,
@@ -2335,13 +2245,15 @@ export default function Dashboard({
         }
       }
 
-      await positionService.closePosition(positionId, "manual");
-
-      // Force reload positions to reflect the change (bypass cache)
-      await forceRefreshPositions();
-
-      // ADDED: Refresh SOL balance immediately after closing position (user should see returned collateral)
-      refreshSOLBalance();
+      // Close position first, then refresh data
+      await positionService.closePosition(positionId, "manual", freshPrice);
+      console.log(`✅ Position ${positionId} closed successfully, now refreshing data...`);
+      
+      // Refresh data after position is closed
+      await Promise.all([
+        forceRefreshPositions(), // Refresh positions after close
+        refreshSOLBalance()      // Refresh balance in parallel
+      ]);
 
       // Show PNL card popup after position is closed
       console.log('🚀 About to call showPnlCardAfterClose for position:', positionId);
@@ -2350,7 +2262,12 @@ export default function Dashboard({
 
       console.log("Position closed successfully with fresh price");
     } catch (error) {
-      console.error("Error closing position:", error);
+      console.error("❌ Error in handleClosePosition:", error);
+      console.error("Error details:", {
+        positionId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
     } finally {
       setIsClosingPosition(false);
       setClosingPositions((prev) => {
@@ -2459,52 +2376,7 @@ export default function Dashboard({
     }
   };
 
-  // Check for trade results after closing modal completes
-  const checkForTradeResults = async (positionId: number) => {
-    try {
-      console.log("🔍 Checking for trade results for position", positionId);
 
-      // Get the position from database to check for trade results
-      const { data: position, error } = await supabase
-        .from("trading_positions")
-        .select("trade_results")
-        .eq("id", positionId)
-        .single();
-
-      if (error) {
-        console.error("Error fetching position for trade results:", error);
-        return;
-      }
-
-      if (position?.trade_results) {
-        const tradeResults = JSON.parse(position.trade_results);
-        console.log(
-          "Found trade results for position",
-          positionId,
-          ":",
-          tradeResults
-        );
-
-        setTradeResultsData(tradeResults);
-        setShowTradeResults(true);
-
-        // Clear trade results from database after displaying
-        await supabase
-          .from("trading_positions")
-          .update({ trade_results: null })
-          .eq("id", positionId);
-
-        console.log(
-          "Cleared trade results from database for position",
-          positionId
-        );
-      } else {
-        console.log("No trade results found for position", positionId);
-      }
-    } catch (error) {
-      console.error("Error checking for trade results:", error);
-    }
-  };
 
   // Debug function to check profile status
   const debugProfile = async () => {

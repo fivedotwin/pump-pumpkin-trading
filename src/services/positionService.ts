@@ -759,41 +759,63 @@ class PositionService {
   // Close a position immediately
   async closePosition(
     position_id: number,
-    close_reason: "manual" | "stop_loss" | "take_profit" | "liquidation"
+    close_reason: "manual" | "stop_loss" | "take_profit" | "liquidation",
+    precomputedPrice?: number  // Allow Dashboard to pass fresh price to avoid double fetch
   ): Promise<void> {
     try {
       console.log(`🔒 CLOSING POSITION ${position_id} IMMEDIATELY 🔒`);
+      console.log('🔍 Starting closePosition with precomputedPrice:', precomputedPrice);
 
-      // STEP 1: Get the position details
+      // STEP 1: First get position details, then parallel fetch price data
       const { data: position, error: fetchError } = await supabase
         .from("trading_positions")
         .select("*")
         .eq("id", position_id)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('❌ Error fetching position from database:', fetchError);
+        throw fetchError;
+      }
+      
+      if (!position) {
+        console.error('❌ Position not found in database');
+        throw new Error(`Position ${position_id} not found`);
+      }
+      
+      console.log('✅ Position fetched successfully:', {
+        id: position.id,
+        status: position.status,
+        token: position.token_symbol,
+        direction: position.direction
+      });
 
-      // STEP 2: Get current token price
-      const tokenData = await fetchTokenDetailCached(position.token_address);
-      if (!tokenData) {
-        throw new Error(
-          `Failed to fetch current price for ${position.token_symbol}`
-        );
+      // STEP 2: Parallel fetch token price and SOL price
+      const [tokenData, sol_price] = await Promise.all([
+        precomputedPrice ? null : fetchTokenDetailCached(position.token_address),
+        fetchSOLPrice()
+      ]);
+
+      // STEP 3: Use precomputed price if available, otherwise fetch
+      let close_price: number;
+      if (precomputedPrice) {
+        close_price = precomputedPrice;
+        console.log(`💰 Using precomputed close price: $${close_price}`);
+      } else {
+        if (!tokenData) {
+          throw new Error(
+            `Failed to fetch current price for ${position.token_symbol}`
+          );
+        }
+        close_price = tokenData.price;
+        console.log(`💰 Current market price: $${close_price}`);
       }
 
-      let close_price = tokenData.price;
-      console.log(`💰 Current market price: $${close_price}`);
-
-      console.log(`💰 Closing position at market price: $${close_price}`);
-
-      // STEP 3: Calculate final P&L
+      // STEP 4: Calculate final P&L
       const finalPnL = await this.calculatePositionPnLWithPrice(
         position,
         close_price
       );
-
-      // STEP 4: Calculate returns and fees - FIXED LOGIC
-      const sol_price = await fetchSOLPrice();
       const pnlSOL = finalPnL.pnl / sol_price;
 
       // Calculate return amount: original collateral + P&L
@@ -869,25 +891,7 @@ class PositionService {
         }
       }
 
-      // STEP 6: Update position status to closed
-      const { error } = await supabase
-        .from("trading_positions")
-        .update({
-          status: "closed",
-          closed_at: new Date().toISOString(),
-          close_price: close_price,
-          current_pnl: finalPnL.pnl,
-          close_reason,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", position_id);
-
-      if (error) {
-        console.error("Error finalizing position close:", error);
-        throw error;
-      }
-
-      // STEP 7: Create trade results for the frontend
+      // STEP 6: Create trade results for the frontend
       const tradeResults = {
         tokenSymbol: position.token_symbol,
         direction: position.direction as "Long" | "Short",
@@ -904,20 +908,36 @@ class PositionService {
         totalReturn: actualReturnAmount,
       };
 
-      // Store results in the position record
-      const { error: resultsError } = await supabase
+      // STEP 7: Update position status and store trade results in a single operation
+      const { error } = await supabase
         .from("trading_positions")
         .update({
+          status: "closed",
+          closed_at: new Date().toISOString(),
+          close_price: close_price,
+          current_pnl: finalPnL.pnl,
+          close_reason,
+          updated_at: new Date().toISOString(),
           trade_results: JSON.stringify(tradeResults),
         })
         .eq("id", position_id);
 
-      if (resultsError) {
-        console.error("Error storing trade results:", resultsError);
+      if (error) {
+        console.error("❌ Error finalizing position close:", error);
+        throw error;
       }
 
-      console.log(`✅ Position ${position_id} closed immediately`);
+      console.log(`🎉 Position ${position_id} successfully closed and marked as 'closed' in database`);
       console.log("📊 Trade Results:", tradeResults);
+      
+      // Verify the position was actually closed
+      const { data: verifyPosition } = await supabase
+        .from("trading_positions")
+        .select("status")
+        .eq("id", position_id)
+        .single();
+      
+      console.log(`🔍 Verification: Position ${position_id} status is now:`, verifyPosition?.status);
     } catch (error) {
       console.error("Error closing position:", error);
       throw error;
