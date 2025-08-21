@@ -952,13 +952,12 @@ class PositionService {
     const amount = position.amount;
     const leverage = position.leverage;
 
-    // Calculate P&L in USD
-    // FIXED: Don't multiply by leverage - amount already represents the leveraged position
+    // Calculate P&L in USD - CORRECTED: Apply leverage for proper P&L calculation
     let pnl_usd = 0;
     if (position.direction === "Long") {
-      pnl_usd = (price - entry_price) * amount;
+      pnl_usd = (price - entry_price) * amount * leverage;
     } else {
-      pnl_usd = (entry_price - price) * amount;
+      pnl_usd = (entry_price - price) * amount * leverage;
     }
 
     // Get REAL-TIME SOL price instead of hardcoded value

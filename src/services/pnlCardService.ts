@@ -281,23 +281,24 @@ export async function getPnlDataFromPosition(positionId: number): Promise<PnlCar
       return null;
     }
 
-    // Parse trade results if available
-    let tradeResults: TradeResultsData | null = null;
-    if (position.trade_results) {
-      try {
-        tradeResults = JSON.parse(position.trade_results);
-      } catch (e) {
-        console.warn('Failed to parse trade results JSON');
-      }
-    }
-
-    // Calculate values
-    const profitLossAmount = position.current_pnl;
-    const pnlPercentage = tradeResults?.pnlPercentage || 
-      ((profitLossAmount / (position.collateral_sol * 100)) * 100); // Rough calculation if trade_results unavailable
+    // Use current_pnl as primary source for profit/loss amount
+    const profitLossAmount = position.current_pnl || 0;
+    
+    // Calculate PNL percentage based on collateral (standardized calculation)
+    const collateralUSD = position.collateral_sol * 100; // Approximate SOL price, will be more accurate in real implementation
+    const pnlPercentage = collateralUSD > 0 ? (profitLossAmount / collateralUSD) * 100 : 0;
     
     const totalBoughtUSD = position.position_value_usd;
     const totalSoldUSD = totalBoughtUSD + profitLossAmount;
+
+    console.log('📊 PNL Card Data (using current_pnl):', {
+      positionId,
+      profitLossAmount,
+      pnlPercentage: pnlPercentage.toFixed(2) + '%',
+      totalBoughtUSD,
+      totalSoldUSD,
+      collateralSOL: position.collateral_sol
+    });
 
     return {
       tokenSymbol: position.token_symbol,

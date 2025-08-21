@@ -1138,21 +1138,27 @@ export default function Dashboard({
         return;
       }
 
-      // Parse trade results
-      let tradeResults = position.trade_results ? JSON.parse(position.trade_results) : null;
+      // Use current_pnl as primary source for PNL card
+      const finalPnL = position.current_pnl || 0;
+      const collateralUSD = Number(position.collateral_sol) * solPrice;
+      const pnlPercentage = collateralUSD > 0 ? (finalPnL / collateralUSD) * 100 : 0;
       
-      if (!tradeResults && position.entry_price && position.close_price) {
-        console.log('🔧 Using fallback calculation for PNL card');
-        // Quick fallback calculation
-        const entryPrice = Number(position.entry_price);
-        const exitPrice = Number(position.close_price);
-        const positionSize = Number(position.amount);
-        const positionValueUSD = positionSize * entryPrice;
-        const pnlPercent = ((exitPrice - entryPrice) / entryPrice) * Number(position.leverage);
-        const finalPnL = (pnlPercent / 100) * positionValueUSD * (position.direction === 'Short' ? -1 : 1);
-        
-        tradeResults = { finalPnL, pnlPercentage: pnlPercent, positionSize, entryPrice };
-      }
+      console.log('📊 Dashboard PNL Card: Using current_pnl as primary source', {
+        positionId: position.id,
+        current_pnl: finalPnL,
+        pnlPercentage: pnlPercentage.toFixed(2) + '%',
+        collateralSOL: position.collateral_sol,
+        solPrice
+      });
+      
+      // Create standardized trade results object
+      const tradeResults = {
+        finalPnL,
+        pnlPercentage,
+        positionSize: Number(position.amount),
+        entryPrice: Number(position.entry_price || 0),
+        exitPrice: Number(position.close_price || 0)
+      };
 
       if (!tradeResults) {
         console.log('❌ No trade results available for PNL card');
@@ -1486,13 +1492,12 @@ export default function Dashboard({
       );
     }
 
-    // Calculate P&L in USD
-    // FIXED: Remove leverage double-counting - amount is position size, leverage affects collateral only
+    // Calculate P&L in USD - FIXED: Apply leverage correctly
     let pnl_usd = 0;
     if (position.direction === "Long") {
-      pnl_usd = (current_price - entry_price) * amount; // No leverage multiplication!
+      pnl_usd = (current_price - entry_price) * amount * leverage; // WITH leverage multiplication!
     } else {
-      pnl_usd = (entry_price - current_price) * amount; // No leverage multiplication!
+      pnl_usd = (entry_price - current_price) * amount * leverage; // WITH leverage multiplication!
     }
 
     console.log(`🧮 FRONTEND P&L Debug for Position ${position.id}:`, {
@@ -1503,7 +1508,7 @@ export default function Dashboard({
       price_diff: (current_price - entry_price).toFixed(8),
       direction: position.direction,
       leverage: leverage,
-      pnl_usd_FIXED: pnl_usd.toFixed(2),
+      pnl_usd_CORRECTED: pnl_usd.toFixed(2),
     });
 
     // Calculate margin ratio in SOL terms (CORRECT WAY)

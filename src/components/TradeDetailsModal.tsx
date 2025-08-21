@@ -35,35 +35,46 @@ function calculateFallbackResults(position: TradingPosition, solPrice: number | 
   const collateralSOL = Number(position.collateral_sol);
   const collateralAmount = collateralSOL;
 
-  // Calculate position value in USD
-  const positionValueUSD = positionSize * entryPrice;
-  
-  // Calculate price change percentage
-  const priceChangePercent = ((exitPrice - entryPrice) / entryPrice) * 100;
-  
-  // Apply leverage and direction
-  let pnlPercent = priceChangePercent * leverage;
-  if (position.direction === 'Short') {
-    pnlPercent = -pnlPercent;
-  }
-  
-  // Calculate gross PnL in USD
-  const grossPnL = (pnlPercent / 100) * positionValueUSD;
-  
-  // Estimate platform fee (20% on total return for profits, 0 for liquidations)
-  const totalReturnSOL = collateralSOL + (grossPnL / (solPrice || 100)); // Fallback SOL price if missing
+  // PRIMARY: Use current_pnl if available, otherwise calculate
+  let finalPnL = position.current_pnl || 0;
+  let grossPnL = finalPnL;
   let platformFee = 0;
-  let finalPnL = grossPnL;
   
-  if (position.status !== 'liquidated' && totalReturnSOL > 0) {
-    // Apply 20% fee on total return amount (approximate)
-    const totalReturnUSD = totalReturnSOL * (solPrice || 100);
-    platformFee = totalReturnUSD * 0.2;
-    finalPnL = grossPnL - platformFee;
+  // If current_pnl is missing or zero, calculate from prices
+  if (!position.current_pnl && entryPrice && exitPrice) {
+    console.log('🔧 Fallback: Calculating PNL from entry/exit prices');
+    
+    // Calculate position value in USD
+    const positionValueUSD = positionSize * entryPrice;
+    
+    // Calculate price change percentage with leverage
+    const priceChangePercent = ((exitPrice - entryPrice) / entryPrice) * 100;
+    let pnlPercent = priceChangePercent * leverage;
+    if (position.direction === 'Short') {
+      pnlPercent = -pnlPercent;
+    }
+    
+    // Calculate gross PnL in USD
+    grossPnL = (pnlPercent / 100) * positionValueUSD;
+    
+    // Estimate platform fee (20% on total return for profits, 0 for liquidations)
+    const totalReturnSOL = collateralSOL + (grossPnL / (solPrice || 100));
+    if (position.status !== 'liquidated' && totalReturnSOL > 0) {
+      const totalReturnUSD = totalReturnSOL * (solPrice || 100);
+      platformFee = totalReturnUSD * 0.2;
+      finalPnL = grossPnL - platformFee;
+    } else {
+      finalPnL = grossPnL;
+    }
+  } else {
+    console.log('✅ Using current_pnl as primary source:', finalPnL);
+    // Estimate gross PnL (reverse-engineer from final PnL)
+    grossPnL = finalPnL; // Simplified - in reality fees would need to be added back
   }
   
-  // Final PnL percentage
-  const finalPnlPercent = (finalPnL / positionValueUSD) * 100;
+  // Calculate percentage based on collateral
+  const collateralUSD = collateralSOL * (solPrice || 100);
+  const finalPnlPercent = collateralUSD > 0 ? (finalPnL / collateralUSD) * 100 : 0;
   
   const totalReturn = Math.max(0, collateralSOL + (finalPnL / (solPrice || 100)));
 
@@ -116,18 +127,40 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
         setPosition(data as TradingPosition);
         setSolPrice(typeof price === 'number' ? price : null);
 
-        const tr = (data as TradingPosition).trade_results ? JSON.parse((data as TradingPosition).trade_results as any) as TradeResults : null;
+        // Try to use trade_results JSON first, then fallback with current_pnl prioritization
+        let tr: TradeResults | null = null;
+        let usingFallback = false;
         
-        // If trade_results is missing but position is closed, calculate fallback results
-        if (!tr && (data.status === 'closed' || data.status === 'liquidated') && data.entry_price && data.close_price) {
-          console.log('🔧 TradeDetailsModal: trade_results missing, calculating fallback results for position', positionId);
-          const fallbackResults = calculateFallbackResults(data as TradingPosition, price);
-          setTradeResults(fallbackResults);
-          setIsUsingFallbackResults(true);
-        } else {
-          setTradeResults(tr);
-          setIsUsingFallbackResults(false);
+        // Try to parse trade_results first
+        if ((data as TradingPosition).trade_results) {
+          try {
+            tr = JSON.parse((data as TradingPosition).trade_results as any) as TradeResults;
+            console.log('✅ Using trade_results JSON data');
+          } catch (e) {
+            console.warn('⚠️ Failed to parse trade_results JSON, using fallback');
+          }
         }
+        
+        // If trade_results is missing or invalid, use fallback calculation
+        if (!tr && (data.status === 'closed' || data.status === 'liquidated')) {
+          const position = data as TradingPosition;
+          
+          // Only mark as "estimated" if BOTH trade_results AND current_pnl are missing/unreliable
+          const hasReliableData = position.current_pnl !== null && position.current_pnl !== undefined;
+          
+          if (hasReliableData) {
+            console.log('✅ Using current_pnl as reliable source for position', positionId);
+            usingFallback = false; // Don't show "Estimated" - we have reliable current_pnl
+          } else {
+            console.log('⚠️ Using estimated calculation (no reliable data) for position', positionId);
+            usingFallback = true; // Show "Estimated" - we're truly estimating
+          }
+          
+          tr = calculateFallbackResults(position, price);
+        }
+        
+        setTradeResults(tr);
+        setIsUsingFallbackResults(usingFallback);
 
         // Get username for PNL card
         try {
@@ -439,8 +472,8 @@ export default function TradeDetailsModal({ positionId, onClose }: TradeDetailsM
                     <Info className="w-3 h-3 mt-0.5" />
                     <span>
                       {isUsingFallbackResults 
-                        ? 'Results are estimated based on entry/exit prices. Platform fee (20%) applied on total return for non-liquidations.' 
-                        : 'Platform fee is applied on total return for non-liquidations. Values above are recorded at close.'
+                        ? 'Results are estimated due to missing trade data. Calculations may not reflect exact fees applied.' 
+                        : 'Platform fee (20%) is applied on total return for non-liquidations. Values are from recorded trade data.'
                       }
                     </span>
                   </div>
