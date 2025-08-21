@@ -34,6 +34,7 @@ import {
   Unlock,
   MessageCircle,
   ArrowUpRight,
+  ArrowDown,
   Info,
 } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -68,6 +69,7 @@ import { shareTradeResults, TradeShareData } from "../utils/shareUtils";
 import {
   userProfileService,
   WithdrawalRequest,
+  DepositTransaction,
   supabase,
   ppaLocksService,
   PPALock,
@@ -111,7 +113,7 @@ interface DashboardProps {
   onShowTerms: () => void;
 }
 
-type TabType = "home" | "rewards" | "about" | "positions" | "orders";
+type TabType = "home" | "rewards" | "about" | "positions" | "orders" | "history";
 type SwapMode = "buy" | "sell";
 type ViewState = "dashboard" | "edit-profile";
 
@@ -203,6 +205,12 @@ export default function Dashboard({
   const [withdrawalHistory, setWithdrawalHistory] = useState<
     WithdrawalRequest[]
   >([]);
+
+  // Deposit History state
+  const [depositHistory, setDepositHistory] = useState<
+    DepositTransaction[]
+  >([]);
+  const [isLoadingDeposits, setIsLoadingDeposits] = useState(false);
 
   // Local SOL balance state for immediate UI updates
   const [currentSOLBalance, setCurrentSOLBalance] = useState(solBalance);
@@ -704,6 +712,7 @@ export default function Dashboard({
       loadPendingOrders();
       loadTradeHistory();
       loadWithdrawalHistory();
+      loadDepositHistory();
     }
   }, [activeTab]);
 
@@ -1464,6 +1473,27 @@ export default function Dashboard({
     }
   };
 
+  const loadDepositHistory = async () => {
+    if (!walletAddress) return;
+
+    setIsLoadingDeposits(true);
+    try {
+      console.log("Loading deposit history...");
+      const deposits = await userProfileService.getDepositHistory(
+        walletAddress
+      );
+
+      // Sort by created date, most recent first (already sorted by DB query)
+      setDepositHistory(deposits);
+      console.log("Deposit history loaded:", deposits.length);
+    } catch (error) {
+      console.error("Failed to load deposit history:", error);
+      setDepositHistory([]);
+    } finally {
+      setIsLoadingDeposits(false);
+    }
+  };
+
   // Calculate P&L using cached real-time prices
   const calculatePositionPnLWithCachedPrice = (position: TradingPosition) => {
     const cached_price = tokenPrices[position.token_address];
@@ -1998,6 +2028,24 @@ export default function Dashboard({
 
         // Update database with the new platform SOL balance
         onUpdateSOLBalance(newPlatformSOLBalance);
+
+        // Create deposit transaction record
+        try {
+          const depositRecord = await userProfileService.createDepositRecord(
+            walletAddress,
+            amount
+          );
+          if (depositRecord) {
+            console.log("✅ Deposit record created:", depositRecord.id);
+            // Refresh deposit history if we're on the orders tab (contains history)
+            if (activeTab === "orders") {
+              loadDepositHistory();
+            }
+          }
+        } catch (recordError) {
+          console.error("⚠️ Failed to create deposit record:", recordError);
+          // Don't fail the deposit for this - it's just for history tracking
+        }
 
         // Clear form and close modal
         setDepositAmount("");
@@ -3910,6 +3958,120 @@ export default function Dashboard({
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
                   >
                     Start Trading
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Deposit History Section */}
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4 mt-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ArrowDown className="w-5 h-5 text-green-400" />
+                  <h3 className="text-lg font-semibold text-white">
+                    Deposit History
+                  </h3>
+                </div>
+              </div>
+
+              {/* Transaction List */}
+              {isLoadingDeposits ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-800/50 border border-gray-600/30 rounded-lg p-3 animate-pulse"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gray-700 rounded-full"></div>
+                          <div>
+                            <div className="w-24 h-3 bg-gray-700 rounded mb-1"></div>
+                            <div className="w-16 h-2 bg-gray-600 rounded"></div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-16 h-3 bg-gray-700 rounded mb-1"></div>
+                          <div className="w-12 h-2 bg-gray-600 rounded"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : depositHistory.length > 0 ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                  {depositHistory.map((deposit, index) => {
+                    // Format date - more compact for mobile
+                    const depositDate = new Date(deposit.created_at);
+                    const now = new Date();
+                    const diffTime = Math.abs(
+                      now.getTime() - depositDate.getTime()
+                    );
+                    const diffDays = Math.ceil(
+                      diffTime / (1000 * 60 * 60 * 24)
+                    );
+
+                    let timeAgo = "";
+                    if (diffDays === 1) {
+                      timeAgo = "Today";
+                    } else if (diffDays === 2) {
+                      timeAgo = "Yesterday";
+                    } else if (diffDays <= 7) {
+                      timeAgo = `${diffDays}d ago`;
+                    } else {
+                      timeAgo = depositDate.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      });
+                    }
+
+                    return (
+                      <div
+                        key={index}
+                        className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-3 hover:bg-gray-700/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-green-500/20 p-2 rounded-full">
+                              <ArrowDown className="w-4 h-4 text-green-400" />
+                            </div>
+                            <div>
+                              <p className="text-white text-sm font-medium">
+                                SOL Deposit
+                              </p>
+                              <p className="text-gray-400 text-xs">{timeAgo}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-green-400 text-sm font-semibold">
+                              +{deposit.amount.toFixed(4)} SOL
+                            </p>
+                            <p className="text-gray-500 text-xs">
+                              {deposit.status === "completed" ? "✅ Completed" : "❌ Failed"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <ArrowDown className="w-8 h-8 text-gray-500" />
+                  </div>
+                  <h4 className="text-white font-semibold text-lg mb-2">
+                    No Deposit History
+                  </h4>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Your SOL deposits will appear here once completed
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("positions")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
+                  >
+                    Make First Deposit
                   </button>
                 </div>
               )}

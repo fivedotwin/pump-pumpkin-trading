@@ -58,6 +58,21 @@ export interface CreateWithdrawalRequestData {
   amount: number;
 }
 
+export interface DepositTransaction {
+  id: string;
+  wallet_address: string;
+  amount: number;
+  platform_wallet: string;
+  status: 'completed' | 'failed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDepositTransactionData {
+  wallet_address: string;
+  amount: number;
+}
+
 // User profile service
 export class UserProfileService {
   /**
@@ -473,6 +488,90 @@ export class UserProfileService {
     } catch (error) {
       console.error('💥 Error in hasPendingWithdrawalRequest:', error);
       return false;
+    }
+  }
+
+  /**
+   * Create a deposit transaction record after successful blockchain transfer
+   */
+  async createDepositRecord(
+    walletAddress: string,
+    amount: number
+  ): Promise<DepositTransaction | null> {
+    try {
+      console.log('💰 Creating deposit record for:', walletAddress, 'amount:', amount);
+      
+      const { data: depositRecord, error: recordError } = await supabase
+        .from('deposit_transactions')
+        .insert([{
+          wallet_address: walletAddress,
+          amount: amount,
+          status: 'completed'
+        }])
+        .select()
+        .single();
+
+      if (recordError) {
+        console.error('❌ Error creating deposit record:', recordError);
+        return null;
+      }
+
+      console.log('✅ Deposit record created successfully:', depositRecord.id);
+      return depositRecord;
+    } catch (error) {
+      console.error('💥 Error in createDepositRecord:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get deposit history for a user
+   */
+  async getDepositHistory(walletAddress: string): Promise<DepositTransaction[]> {
+    try {
+      console.log('📋 Fetching deposit history for:', walletAddress);
+      
+      const { data: deposits, error } = await supabase
+        .from('deposit_transactions')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching deposit history:', error);
+        return [];
+      }
+
+      console.log(`✅ Found ${deposits?.length || 0} deposit transactions`);
+      return deposits || [];
+    } catch (error) {
+      console.error('💥 Error in getDepositHistory:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get total deposited amount for a user
+   */
+  async getTotalDeposits(walletAddress: string): Promise<number> {
+    try {
+      const { data: deposits, error } = await supabase
+        .from('deposit_transactions')
+        .select('amount')
+        .eq('wallet_address', walletAddress)
+        .eq('status', 'completed');
+
+      if (error) {
+        console.error('❌ Error calculating total deposits:', error);
+        return 0;
+      }
+
+      const total = deposits?.reduce((sum, deposit) => sum + Number(deposit.amount), 0) || 0;
+      console.log(`💰 Total deposits for ${walletAddress}: ${total.toFixed(4)} SOL`);
+      return total;
+    } catch (error) {
+      console.error('💥 Error in getTotalDeposits:', error);
+      return 0;
     }
   }
 }
