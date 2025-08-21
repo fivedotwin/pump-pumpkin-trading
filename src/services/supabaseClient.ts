@@ -367,8 +367,26 @@ export class UserProfileService {
         return null;
       }
 
-      if (profile.sol_balance < amount) {
-        console.error('❌ Insufficient SOL balance for withdrawal request');
+      // Check for locked collateral in active positions
+      const { data: activePositions } = await supabase
+        .from('trading_positions')
+        .select('collateral_sol')
+        .eq('wallet_address', walletAddress)
+        .in('status', ['pending', 'opening', 'open', 'closing']);
+
+      const lockedCollateral = activePositions?.reduce((total, pos) => total + (pos.collateral_sol || 0), 0) || 0;
+      const availableBalance = profile.sol_balance - lockedCollateral;
+
+      console.log('💰 Withdrawal validation:', {
+        totalBalance: profile.sol_balance,
+        lockedCollateral,
+        availableBalance,
+        requestedAmount: amount
+      });
+
+      if (availableBalance < amount) {
+        console.error('❌ Insufficient available balance for withdrawal request');
+        console.error(`Available: ${availableBalance.toFixed(4)} SOL, Requested: ${amount.toFixed(4)} SOL`);
         return null;
       }
 
