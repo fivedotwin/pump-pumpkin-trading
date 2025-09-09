@@ -1,6 +1,6 @@
 // Maintenance Mode Configuration
 // Set this to false to restore normal app functionality
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false;
 
 // Optional: Add a message that will be displayed
 export const MAINTENANCE_MESSAGE = "We're working hard to bring you something amazing! 🚀";
